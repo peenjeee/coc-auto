@@ -34,6 +34,7 @@ ACTIONS = {
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
+OCR_ALIGN_RATIO = 0.2
 OCR_MIN_CONFIDENCE = 50
 OCR_SCALES = (3, 4, 5)
 DIGIT_HEIGHT, DIGIT_WIDTH = 24, 20
@@ -42,13 +43,16 @@ TARGET_MAX_SCORE = 0.2
 ANCHOR_MAX_MARGIN = 40
 TARGET_MAX_OFFSET = 200
 TARGET_MIN_SCALE, TARGET_MAX_SCALE = 0.5, 2.0
-PAN_DURATION_MS = 800
-PAN_SETTLE_SECONDS = 1.5
+PAN_DURATION_MS = 300
+PAN_SETTLE_SECONDS = 2
 PAN_MAX_ATTEMPTS = 4
 VILLAGES = ('home', 'builder')
 TOUCH_DEVICE = re.compile(r'/dev/input/event\d{1,2}')
 PINCH_STEPS = 10
-ZOOM_SETTLE_SECONDS = 0.8
+PINCH_STEP_SECONDS = 0.02
+ZOOM_SETTLE_SECONDS = 1.5
+STILL_DIFF = 1.5
+CAPTURE_RETRIES = 2
 ZOOM_MAX_PINCHES = 6
 ZOOM_CLEAR_ATTEMPTS = 2
 CARD_ABOVE, CARD_BELOW, CARD_HALF_WIDTH = 38, 50, 40
@@ -63,8 +67,8 @@ FULL_RATIO, STORAGE_RUN_RATIO, STORAGE_MIN_VALUE = 0.95, 0.8, 150
 RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
 POPUPS = ('star_bonus', 'builder_star_bonus')
 OPTIONAL_SCREENS = ('builder_cart',)
-CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 1, 5
-TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 0.8, 4
+CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
+TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
 STAGE_SETTLE_SECONDS = 4
 LOG = logging.getLogger(__name__)
 
@@ -295,25 +299,28 @@ class ADB:
         self.resolution, self.live, self.touch = resolution, live, touch
         self.event_files: set = set()
 
-    def inject(self, steps: list) -> None:
+    def inject(self, steps: list, device: str | None = None) -> None:
         """Replay touch steps by cat-ing prepared event files: one whole write() per frame."""
         if not self.live:
             raise BotError('Input perangkat dinonaktifkan dalam dry-run')
-        if not self.touch or not TOUCH_DEVICE.fullmatch(self.touch):
+        device = device or self.touch
+        if not device or not TOUCH_DEVICE.fullmatch(device):
             raise BotError('Device sentuh tidak valid')
         files, lines = {}, []
         for step in steps:
             if step[0] == 'sleep':
                 lines.append(f'sleep {step[1]}')
                 continue
-            if step[0] == 'down':
+            if step[0] == 'frame':
+                name, files[step[1]] = step[1], step[2]
+            elif step[0] == 'down':
                 x, y = point(list(step[1:]), self.resolution, 'touch')
                 name = f'd_{x}_{y}'
                 files[name] = [(3, 47, 0), (3, 57, 1), (3, 53, x), (3, 54, y), (3, 58, 1), (1, 330, 1), (0, 0, 0)]
             else:
                 name = 'up'
                 files[name] = [(3, 47, 0), (3, 57, -1), (1, 330, 0), (0, 0, 0)]
-            lines.append(f'cat {EVENT_DIR}/{name} > {self.touch}')
+            lines.append(f'cat {EVENT_DIR}/{name} > {device}')
         missing = {name: events for name, events in files.items() if name not in self.event_files}
         if missing:
             writes = [f'echo {base64.b64encode(event_bytes(events)).decode()} | base64 -d > {EVENT_DIR}/{name}'
@@ -334,7 +341,14 @@ class ADB:
 
     def capture(self) -> np.ndarray:
         """Raw RGBA framebuffer; skips on-device PNG encoding, which costs ~0.5 s."""
-        raw = self.command('exec-out', 'screencap')
+        for attempt in range(CAPTURE_RETRIES + 1):
+            try:
+                return self.decode(self.command('exec-out', 'screencap'))
+            except BotError:
+                if attempt == CAPTURE_RETRIES:
+                    raise
+
+    def decode(self, raw: bytes) -> np.ndarray:
         if len(raw) < RAW_HEADER_MIN:
             raise BotError('Screenshot gagal/resolusi berubah')
         width, height, pixel_format = struct.unpack('<III', raw[:12])
@@ -403,20 +417,17 @@ class ADB:
         def fingers(gap: float) -> tuple[int, int]:
             return max(0, round(cx - gap / 2)), min(width, round(cx + gap / 2))
 
-        def event(kind: int, code: int, value: int) -> str:
-            return f'sendevent {device} {kind} {code} {value}'
-
         left, right = fingers(start_gap)
-        lines = [event(3, 47, 0), event(3, 57, 1), event(3, 53, left), event(3, 54, cy), event(3, 58, 1),
-                 event(3, 47, 1), event(3, 57, 2), event(3, 53, right), event(3, 54, cy), event(3, 58, 1),
-                 event(1, 330, 1), event(0, 0, 0)]
+        steps = [('frame', f'p_{left}_{right}_{cy}', [
+            (3, 47, 0), (3, 57, 1), (3, 53, left), (3, 54, cy), (3, 58, 1),
+            (3, 47, 1), (3, 57, 2), (3, 53, right), (3, 54, cy), (3, 58, 1), (1, 330, 1), (0, 0, 0)])]
         for step in range(1, PINCH_STEPS + 1):
             left, right = fingers(start_gap + (end_gap - start_gap) * step / PINCH_STEPS)
-            lines += [event(3, 47, 0), event(3, 53, left), event(3, 47, 1), event(3, 53, right),
-                      event(0, 0, 0), 'sleep 0.02']
-        lines += [event(3, 47, 0), event(3, 57, -1), event(3, 47, 1), event(3, 57, -1),
-                  event(1, 330, 0), event(0, 0, 0)]
-        self.command('shell', '; '.join(lines))
+            steps += [('frame', f'm_{left}_{right}', [(3, 47, 0), (3, 53, left), (3, 47, 1), (3, 53, right),
+                                                     (0, 0, 0)]), ('sleep', PINCH_STEP_SECONDS)]
+        steps.append(('frame', 'pinch_up', [(3, 47, 0), (3, 57, -1), (3, 47, 1), (3, 57, -1),
+                                            (1, 330, 0), (0, 0, 0)]))
+        self.inject(steps, device)
 
 
 class Detector:
@@ -489,7 +500,12 @@ def digit_mask(image: np.ndarray) -> np.ndarray:
         raise BotError('Angka loot tidak terlihat; hentikan tanpa input')
     heights = stats[1:, cv2.CC_STAT_HEIGHT]
     tall = 1 + np.flatnonzero(heights >= OCR_MIN_HEIGHT_RATIO * heights.max())
-    return np.where(np.isin(labels, tall), 0, 255).astype(np.uint8)
+    tops = stats[tall, cv2.CC_STAT_TOP]
+    bottoms = tops + stats[tall, cv2.CC_STAT_HEIGHT]
+    top, bottom = float(np.median(tops)), float(np.median(bottoms))
+    slack = OCR_ALIGN_RATIO * (bottom - top)
+    aligned = tall[(np.abs(tops - top) <= slack) & (np.abs(bottoms - bottom) <= slack)]
+    return np.where(np.isin(labels, aligned), 0, 255).astype(np.uint8)
 
 
 def glyphs(image: np.ndarray) -> list:
@@ -521,6 +537,11 @@ def storage_fill(image: np.ndarray, bar: dict) -> float:
         if colored[start] and colored[start:].mean() >= STORAGE_RUN_RATIO:
             return (len(colored) - start) / len(colored)
     return 0.0
+
+
+def small_gray(image: np.ndarray) -> np.ndarray:
+    return cv2.resize(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), None, fx=0.25, fy=0.25,
+                      interpolation=cv2.INTER_AREA)
 
 
 def event_bytes(events: list) -> bytes:
@@ -603,7 +624,7 @@ def ocr_resource(image: np.ndarray, program: str) -> int:
 
 class Bot:
     def __init__(self, config: dict, root: Path, device: ADB, live: bool = False,
-                 reader: Callable | None = None, timeout: float = 240, poll: float = 0.3) -> None:
+                 reader: Callable | None = None, timeout: float = 240, poll: float = 0.05) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.detector = Detector(config, root)
         self.timeout, self.poll = timeout, poll
@@ -651,9 +672,19 @@ class Bot:
             raise BotError(f'Aksi dibatalkan: layar berubah menjadi {state}')
         resolved = location(image) if callable(location) else location
         if self.live:
-            self.device.tap(resolved)
-            time.sleep(self.poll)
+            self.device.tap_many([resolved])
         return state
+
+    def wait_still(self, limit: float) -> np.ndarray:
+        """Return as soon as two consecutive frames match (camera stopped); give up after limit."""
+        deadline = time.monotonic() + limit
+        previous = small_gray(self.device.capture())
+        while True:
+            image = self.device.capture()
+            current = small_gray(image)
+            if float(cv2.absdiff(previous, current).mean()) < STILL_DIFF or time.monotonic() >= deadline:
+                return image
+            previous = current
 
     def action(self, state: str, name: str) -> None:
         screen = self.config['screens'][state]
@@ -703,7 +734,7 @@ class Bot:
             raise BotError(f'Geser kamera dibatalkan: layar {observed}')
         if self.live:
             self.device.swipe(*vector)
-            time.sleep(PAN_SETTLE_SECONDS if self.poll else 0)
+            self.wait_still(PAN_SETTLE_SECONDS if self.poll else 0)
 
     def navigate(self, village: str) -> None:
         state = self.wait(set(VILLAGES), set(), 30)
@@ -745,7 +776,7 @@ class Bot:
     def pinch_once(self, zoom: dict) -> None:
         start_gap, end_gap = zoom['gap']
         self.device.pinch(zoom['device'], zoom['center'], start_gap, end_gap)
-        time.sleep(ZOOM_SETTLE_SECONDS if self.poll else 0)
+        self.wait_still(ZOOM_SETTLE_SECONDS if self.poll else 0)
 
     def deploy(self, screen_name: str, allowed: set) -> str | None:
         screen = self.config['screens'][screen_name]
@@ -892,12 +923,13 @@ class Bot:
             LOG.warning('Popup Gerobak Eliksir tidak muncul; lanjut tanpa klaim')
             return
         self.action('builder_cart', 'claim')
-        time.sleep(CART_CLAIM_SECONDS if self.poll else 0)
         self.cart_full = False
         if self.wait({'builder_cart', 'builder'}, set(), 15) == 'builder_cart':
             text, bar = self.config.get('cart_text'), self.config.get('cart_bar')
             if text:
-                current, maximum = read_fraction(crop(self.observe()[1], text), self.templates())
+                current, maximum = self.read_stable(
+                    lambda image: read_fraction(crop(image, text), self.templates()),
+                    CART_CLAIM_SECONDS if self.poll else 0)
                 self.cart_full = maximum > 0 and current >= maximum
                 LOG.info('Isi Gerobak Eliksir: %s/%s', f'{current:,}', f'{maximum:,}')
             elif bar:
@@ -920,7 +952,7 @@ class Bot:
         state = self.wait({'builder_stage2', 'builder_result'},
                           {'builder_scout', 'builder_battle', 'builder_battle2'})
         if state == 'builder_stage2':
-            time.sleep(STAGE_SETTLE_SECONDS if self.poll else 0)
+            self.wait_still(STAGE_SETTLE_SECONDS if self.poll else 0)
             self.deploy('builder_stage2', stage2)
             self.wait({'builder_result'}, stage2)
         self.action('builder_result', 'return')
@@ -931,12 +963,10 @@ class Bot:
         cached = self.capacity.get((village, key))
         if cached:
             return cached
-        _, image = self.observe()
         if self.live:
             self.guarded_tap({village}, spec['tap'])
-            time.sleep(TOOLTIP_SHOW_SECONDS if self.poll else 0)
-            _, image = self.observe()
-        maximum = read_number(crop(image, spec['max']), self.templates())
+        maximum = self.read_until(lambda image: read_number(crop(image, spec['max']), self.templates()),
+                                  TOOLTIP_SHOW_SECONDS)
         if maximum <= 0:
             raise BotError('Kapasitas gudang tidak terbaca')
         self.capacity[(village, key)] = maximum
@@ -948,11 +978,31 @@ class Bot:
                 read_number(crop(self.observe()[1], spec['max']), self.templates())
             except BotError:
                 break
-            time.sleep(self.poll)
         else:
             if self.poll:
                 raise BotError('Tooltip gudang tidak hilang; tidak ada input lanjutan')
         return maximum
+
+    def read_until(self, reader: Callable, limit: float):
+        """Read from fresh screenshots until the value appears; no fixed wait."""
+        deadline = time.monotonic() + limit
+        while True:
+            try:
+                return reader(self.observe()[1])
+            except BotError:
+                if time.monotonic() >= deadline:
+                    raise
+
+    def read_stable(self, reader: Callable, limit: float):
+        """Read until two consecutive screenshots give the same value (claim animation finished)."""
+        deadline = time.monotonic() + limit
+        previous = reader(self.observe()[1])
+        while time.monotonic() < deadline:
+            current = reader(self.observe()[1])
+            if current == previous:
+                return current
+            previous = current
+        return previous
 
     def templates(self) -> dict:
         return load_digit_templates(self.root, self.config['digits'])

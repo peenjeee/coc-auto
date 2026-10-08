@@ -239,6 +239,20 @@ class BotTests(unittest.TestCase):
             with self.assertRaises(bot.BotError):
                 device.capture()
 
+    def test_adb_capture_retries_transient_failure(self):
+        pixels = np.zeros((90, 160, 4), dtype=np.uint8)
+        ok = type('R', (), {'stdout': struct.pack('<IIII', 160, 90, 1, 0) + pixels.tobytes()})()
+        device = bot.ADB('adb.exe', 'emulator-5554', [160, 90])
+        failure = bot.subprocess.CalledProcessError(1, 'adb')
+        with patch('bot.subprocess.run', side_effect=[failure, ok]):
+            self.assertEqual(device.capture().shape, (90, 160, 3))
+        with patch('bot.subprocess.run', side_effect=[failure] * 3):
+            with self.assertRaises(bot.BotError):
+                device.capture()
+        short = type('R', (), {'stdout': ok.stdout[:1000]})()
+        with patch('bot.subprocess.run', side_effect=[short, ok]):
+            self.assertEqual(device.capture().shape, (90, 160, 3))
+
     def test_star_bonus_popup_is_dismissed_while_waiting(self):
         popup = np.random.default_rng(3).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
@@ -402,6 +416,12 @@ class BotTests(unittest.TestCase):
         self.assertIs(device.frames['home'], frame)
         self.assertFalse(runner.village_full('home', with_number(frame, '139', 22)))
         self.assertEqual(device.inputs, [(100, 10), (100, 10)])
+
+    def test_digit_reader_ignores_unaligned_background_blobs(self):
+        image = self.rendered('504 548')
+        image = np.pad(image, ((0, 0), (40, 0), (0, 0)))
+        cv2.line(image, (5, 2), (25, 18), (255, 255, 255), 2)
+        self.assertEqual(bot.read_number(image, self.digit_templates()), 504548)
 
     def test_digit_reader_rejects_unknown_glyph(self):
         with self.assertRaises(bot.BotError):
@@ -611,6 +631,34 @@ class BotTests(unittest.TestCase):
         runner.home_attack(0)
         self.assertEqual(device.inputs.count((140, 60)), 25)
         self.assertIn((40, 40), device.inputs)
+
+    def test_guarded_tap_has_no_fixed_sleep(self):
+        device = Device(self.frames)
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0.3)
+        with patch('bot.time.sleep') as sleep:
+            runner.guarded_tap({'home'}, [10, 75])
+        sleep.assert_not_called()
+        self.assertEqual(device.bursts, [[(10, 75)]])
+
+    def test_wait_still_returns_once_two_frames_match(self):
+        moving = [self.frames['home'], self.frames['builder'], self.frames['home'], self.frames['home']]
+        shots = iter(moving)
+        device = Device(self.frames)
+        device.capture = lambda: next(shots).copy()
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0.3)
+        with patch('bot.time.sleep') as sleep:
+            runner.wait_still(5)
+        sleep.assert_not_called()
+        self.assertIsNone(next(shots, None))
+
+    def test_wait_still_gives_up_after_limit_without_error(self):
+        frames = [self.frames['home'], self.frames['builder']]
+        count = []
+        device = Device(self.frames)
+        device.capture = lambda: frames[len(count) % 2].copy() if not count.append(1) else None
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.wait_still(0.05)
+        self.assertGreaterEqual(len(count), 2)
 
     def test_tap_only_card_presses_hero_ability(self):
         scout = {**self.config['screens']['home_scout'],
@@ -842,11 +890,15 @@ class BotTests(unittest.TestCase):
         device = bot.ADB('adb.exe', 'emulator-5554', [1280, 720], live=True)
         with patch('bot.subprocess.run') as run:
             device.pinch('/dev/input/event4', [640, 360], 600, 100)
-        args = run.call_args.args[0]
-        self.assertEqual(args[:4], ['adb.exe', '-s', 'emulator-5554', 'shell'])
-        self.assertIn('sendevent /dev/input/event4 3 47 1', args[4])
-        self.assertIn('sendevent /dev/input/event4 1 330 0', args[4])
+        prepare, gesture = (call.args[0] for call in run.call_args_list)
+        self.assertEqual(gesture[:4], ['adb.exe', '-s', 'emulator-5554', 'shell'])
+        self.assertIn('base64 -d', prepare[4])
+        self.assertNotIn('sendevent', gesture[4])
+        self.assertEqual(gesture[4].count('> /dev/input/event4'), bot.PINCH_STEPS + 2)
         self.assertIs(run.call_args.kwargs.get('shell'), False)
+        with patch('bot.subprocess.run') as run:
+            device.pinch('/dev/input/event4', [640, 360], 600, 100)
+        self.assertEqual(run.call_count, 1)
         with self.assertRaises(bot.BotError):
             bot.ADB('adb.exe', 'emulator-5554', [1280, 720]).pinch('/dev/input/event4', [640, 360], 600, 100)
 
