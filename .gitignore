@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+config.json
+calibration/
+captures/
+.coverage
+.claude/
+.omc/
+*.png
+*.log
