@@ -63,7 +63,7 @@ FULL_RATIO, STORAGE_RUN_RATIO, STORAGE_MIN_VALUE = 0.95, 0.8, 150
 RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
 POPUPS = ('star_bonus', 'builder_star_bonus')
 OPTIONAL_SCREENS = ('builder_cart',)
-CART_CLAIM_SECONDS = 1
+CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 1, 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 0.8, 4
 STAGE_SETTLE_SECONDS = 4
 LOG = logging.getLogger(__name__)
@@ -178,9 +178,18 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
         if set(screen.get('actions', {})) - set(allowed) or set(targets) - set(allowed):
             raise BotError(f'{name}: aksi tidak diizinkan')
         for target in targets.values():
-            template = cv2.imread(str(asset_path(root, target['file'])))
-            if template is None or float(template.std()) < 5:
-                raise BotError(f'{name}: template target hilang/terlalu polos')
+            alternatives = target.get('alt_files', [])
+            if not isinstance(alternatives, list) or len(alternatives) > 4:
+                raise BotError(f'{name}: alt_files target tidak valid')
+            for alt in alternatives:
+                if isinstance(alt, dict):
+                    for value in alt.get('offset', [0, 0]):
+                        integer(value, -TARGET_MAX_OFFSET, TARGET_MAX_OFFSET, 'offset')
+            files = [target['file'], *[alt['file'] if isinstance(alt, dict) else alt for alt in alternatives]]
+            for file in files:
+                template = cv2.imread(str(asset_path(root, file)))
+                if template is None or float(template.std()) < 5:
+                    raise BotError(f'{name}: template target hilang/terlalu polos')
             if not isinstance(target['max_score'], float) or not 0 < target['max_score'] <= TARGET_MAX_SCORE:
                 raise BotError(f'{name}: max_score target tidak valid')
             if 'pan' in target:
@@ -652,21 +661,15 @@ class Bot:
         if target is None:
             self.guarded_tap({state}, screen['actions'][name])
             return
-        template = cv2.imread(str(asset_path(self.root, target['file'])))
-        dx, dy = target.get('offset', [0, 0])
-        scales = tuple(target.get('scales', [1.0]))
-
         def locate(image: np.ndarray) -> list:
-            (x, y), scale = find_target(image, template, target['max_score'], scales)
-            tap = point([round(x + dx * scale), round(y + dy * scale)], self.config['resolution'], 'target')
-            for ax, ay, aw, ah in target.get('avoid', []):
-                if ax <= tap[0] < ax + aw and ay <= tap[1] < ay + ah:
-                    raise TargetMissing('Titik target jatuh di zona tombol UI; tidak ada input dikirim')
-            return tap
+            return self.locate_target(image, target)
 
         attempts = target.get('pan_attempts', 1) if 'pan' in target else 1
+        search_first = target.get('search_first', False)
+        if search_first and 'pan' in target:
+            attempts += 1
         for attempt in range(attempts):
-            if 'pan' in target:
+            if 'pan' in target and not (search_first and attempt == 0):
                 self.pan(state, target['pan'])
             try:
                 self.guarded_tap({state}, locate)
@@ -674,6 +677,25 @@ class Bot:
             except TargetMissing:
                 if attempt + 1 == attempts:
                     raise
+
+    def locate_target(self, image: np.ndarray, target: dict) -> list:
+        """Tap point for a target; alt_files cover other looks, e.g. the cart with an elixir bubble."""
+        scales = tuple(target.get('scales', [1.0]))
+        looks = [(target['file'], target.get('offset', [0, 0]))]
+        looks += [(alt['file'], alt.get('offset', [0, 0])) if isinstance(alt, dict) else (alt, [0, 0])
+                  for alt in target.get('alt_files', [])]
+        for name, (dx, dy) in looks:
+            template = cv2.imread(str(asset_path(self.root, name)))
+            try:
+                (x, y), scale = find_target(image, template, target['max_score'], scales)
+            except TargetMissing:
+                continue
+            tap = point([round(x + dx * scale), round(y + dy * scale)], self.config['resolution'], 'target')
+            for ax, ay, aw, ah in target.get('avoid', []):
+                if ax <= tap[0] < ax + aw and ay <= tap[1] < ay + ah:
+                    raise TargetMissing('Titik target jatuh di zona tombol UI; tidak ada input dikirim')
+            return tap
+        raise TargetMissing('Target tidak ditemukan; tidak ada input dikirim')
 
     def pan(self, state: str, vector: list) -> None:
         observed, _ = self.observe()
@@ -862,7 +884,13 @@ class Bot:
         except TargetMissing:
             LOG.warning('Gerobak Eliksir tidak terlihat; lewati klaim')
             return
-        self.wait({'builder_cart'}, {'builder'}, 15)
+        try:
+            self.wait({'builder_cart'}, {'builder'}, CART_OPEN_SECONDS)
+        except BotError:
+            if self.observe()[0] != 'builder':
+                raise
+            LOG.warning('Popup Gerobak Eliksir tidak muncul; lanjut tanpa klaim')
+            return
         self.action('builder_cart', 'claim')
         time.sleep(CART_CLAIM_SECONDS if self.poll else 0)
         self.cart_full = False

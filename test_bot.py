@@ -286,6 +286,20 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs, [(66, 45), (100, 80), (150, 10)])
         self.assertEqual(device.state, 'builder')
 
+    def test_target_alt_file_matches_changed_look(self):
+        config, _ = self.cart_config()
+        missing = self.frames['home'][0:1, 0:1]
+        cv2.imwrite(str(self.root / 'cart-empty-look.png'), np.random.default_rng(11).integers(0, 256, (10, 12, 3), dtype=np.uint8))
+        cart = {'file': 'cart-empty-look.png', 'alt_files': ['cart-icon.png'], 'max_score': 0.12}
+        builder = {**config['screens']['builder'], 'targets': {'cart': cart}}
+        config = {**config, 'screens': {**config['screens'], 'builder': builder}}
+        bot.validate_config(config, self.root, 'builder')
+        device = Device(self.frames, 'builder')
+        bot.Bot(config, self.root, device, live=True, timeout=1, poll=0).guarded_tap(
+            {'builder'}, lambda image: bot.Bot(config, self.root, device).locate_target(image, cart))
+        self.assertEqual(device.inputs, [(66, 45)])
+        self.assertIsNotNone(missing)
+
     def test_collect_cart_skips_when_cart_not_visible(self):
         config, _ = self.cart_config()
         hidden = self.frames['builder'].copy()
