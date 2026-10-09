@@ -48,6 +48,7 @@ PAN_DURATION_MS = 300
 PAN_SETTLE_SECONDS = 2
 PAN_MAX_ATTEMPTS = 4
 VILLAGES = ('home', 'builder')
+BATTLE_STATES = ('home_battle', 'builder_battle', 'builder_battle2')
 TOUCH_DEVICE = re.compile(r'/dev/input/event\d{1,2}')
 PINCH_STEPS = 10
 PINCH_STEP_SECONDS = 0.02
@@ -263,6 +264,13 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
             point(spec.get('tap'), resolution, 'capacity tap')
     if config.get('cart_text'):
         rectangle(config['cart_text'], resolution)
+    button = config.get('speed_button')
+    if button:
+        rectangle(button.get('region'), resolution)
+        template = cv2.imread(str(asset_path(root, button.get('file'))))
+        score = button.get('max_score')
+        if template is None or not isinstance(score, float) or not 0 < score <= TARGET_MAX_SCORE:
+            raise BotError('speed_button tidak valid')
     touch = config.get('touch_device')
     if touch is not None and (not isinstance(touch, str) or not TOUCH_DEVICE.fullmatch(touch)):
         raise BotError('touch_device harus /dev/input/eventN')
@@ -655,14 +663,17 @@ class Bot:
 
     def wait(self, targets: set, allowed: set, timeout: float | None = None) -> str:
         deadline = time.monotonic() + (self.timeout if timeout is None else timeout)
+        sped_up = False
         while time.monotonic() < deadline:
             try:
-                state, _ = self.observe()
+                state, image = self.observe()
             except UnknownScreen:
                 time.sleep(self.poll)
                 continue
             if state in targets:
                 return state
+            if not sped_up:
+                sped_up = self.try_speed_up(image, state)
             if state in POPUPS:
                 self.action(state, 'ok')
                 continue
@@ -673,6 +684,22 @@ class Bot:
                 raise BotError(f'Layar tidak diharapkan saat menunggu: {state}')
             time.sleep(self.poll)
         raise BotError('Timeout; tidak mencoba input pemulihan')
+
+    def try_speed_up(self, image: np.ndarray, state: str) -> bool:
+        """Tap the battle speed button while it shows 1x (it toggles 1x <-> 4x); at most once per wait."""
+        button = self.config.get('speed_button')
+        if not button or not self.live or state not in BATTLE_STATES:
+            return False
+        x, y, _, _ = button['region']
+        template = cv2.imread(str(asset_path(self.root, button['file'])))
+        try:
+            (px, py), _ = find_target(crop(image, button['region']), template, button['max_score'],
+                                      tuple(button.get('scales', [1.0])))
+        except BotError:
+            return False
+        self.device.tap_many([[x + px, y + py]])
+        LOG.info('Kecepatan battle dinaikkan ke 4x')
+        return True
 
     def guarded_tap(self, states: set, location: list | Callable, terminal: set | None = None) -> str:
         state, image = self.observe()

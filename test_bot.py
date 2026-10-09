@@ -173,8 +173,10 @@ class BotTests(unittest.TestCase):
 
     def test_search_limit_prevents_unbounded_skipping(self):
         device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 3)
+        runner = self.make_bot(device, True)
+        runner.timeout = 1
         with self.assertRaises(bot.BotError):
-            self.make_bot(device, True).run('home', 1, 3)
+            runner.run('home', 1, 3)
         self.assertEqual(device.inputs.count((140, 60)), 2)
         self.assertNotIn((40, 40), device.inputs)
 
@@ -358,6 +360,38 @@ class BotTests(unittest.TestCase):
             with self.subTest(village=village):
                 getattr(runner, attack)(0) if village == 'home' else runner.builder_attack(collect=False)
                 self.assertNotIn((f'{village}_result', 'return'), actions)
+
+    def speed_config(self, frame):
+        icon = frame[40:52, 100:114]
+        cv2.imwrite(str(self.root / 'speed1x.png'), icon)
+        return {**self.config, 'speed_button': {'file': 'speed1x.png', 'max_score': 0.08, 'region': [90, 30, 40, 40]}}
+
+    def test_wait_taps_1x_speed_button_once_during_battle(self):
+        frame = self.frames['home_battle']
+        config = self.speed_config(frame)
+        bot.validate_config(config, self.root, 'both')
+        device = Device(self.frames, 'home_battle')
+        shots = []
+        def capture():
+            shots.append(1)
+            if len(shots) >= 4:
+                device.state = 'home_result'
+            return device.frames[device.state].copy()
+        device.capture = capture
+        runner = bot.Bot(config, self.root, device, live=True, timeout=2, poll=0)
+        self.assertEqual(runner.wait({'home_result'}, {'home_battle'}), 'home_result')
+        self.assertEqual(device.inputs, [(107, 46)])
+
+    def test_speed_button_not_tapped_when_absent_or_outside_battle(self):
+        config = self.speed_config(self.frames['home_battle'])
+        changed = self.frames['home_battle'].copy()
+        changed[40:52, 100:114] = 255 - changed[40:52, 100:114]
+        for frames, state in (({**self.frames, 'home_battle': changed}, 'home_battle'), (self.frames, 'home')):
+            device = Device(frames, state)
+            runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+            with self.subTest(state=state):
+                runner.try_speed_up(device.capture(), state)
+                self.assertEqual(device.inputs, [])
 
     def test_wait_closes_leftover_cart_popup(self):
         config, popup = self.cart_config()
