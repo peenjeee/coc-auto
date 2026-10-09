@@ -177,6 +177,9 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
             if float(template.std()) < 5:
                 raise BotError(f'{name}: anchor terlalu polos')
             integer(anchor.get('margin', 0), 0, ANCHOR_MAX_MARGIN, 'anchor margin')
+        overrides = screen.get('overrides', [])
+        if not isinstance(overrides, list) or set(overrides) - set(SCREEN_NAMES) or name in overrides:
+            raise BotError(f'{name}: overrides tidak valid')
         allowed = ACTIONS.get(name, ())
         targets = screen.get('targets', {})
         if set(screen.get('actions', {})) - set(allowed) or set(targets) - set(allowed):
@@ -438,6 +441,7 @@ class Detector:
                    for a in screen['anchors']]
             for name, screen in config['screens'].items()
         }
+        self.overrides = {name: set(screen.get('overrides', [])) for name, screen in config['screens'].items()}
 
     def score(self, image: np.ndarray, roi: list, template: np.ndarray, margin: int) -> float:
         x, y, w, h = roi
@@ -456,6 +460,8 @@ class Detector:
                 matches.append(name)
         if not matches:
             raise UnknownScreen('Layar tidak dikenal; tidak ada input dikirim')
+        overridden = set().union(*(self.overrides.get(name, set()) for name in matches))
+        matches = [name for name in matches if name not in overridden]
         if len(matches) != 1:
             raise BotError('Layar ambigu; tidak ada input dikirim')
         return matches[0]
@@ -658,6 +664,9 @@ class Bot:
                 return state
             if state in POPUPS:
                 self.action(state, 'ok')
+                continue
+            if state == 'builder_cart' and state not in targets | allowed:
+                self.action(state, 'close')
                 continue
             if state not in allowed | {'loading'}:
                 raise BotError(f'Layar tidak diharapkan saat menunggu: {state}')
@@ -975,7 +984,7 @@ class Bot:
         deadline = time.monotonic() + (TOOLTIP_CLEAR_SECONDS if self.poll else 0)
         while time.monotonic() < deadline:
             try:
-                read_number(crop(self.observe()[1], spec['max']), self.templates())
+                read_number(crop(self.device.capture(), spec['max']), self.templates())
             except BotError:
                 break
         else:
@@ -988,21 +997,27 @@ class Bot:
         deadline = time.monotonic() + limit
         while True:
             try:
-                return reader(self.observe()[1])
+                return reader(self.device.capture())
             except BotError:
                 if time.monotonic() >= deadline:
                     raise
 
     def read_stable(self, reader: Callable, limit: float):
-        """Read until two consecutive screenshots give the same value (claim animation finished)."""
+        """Read until two consecutive screenshots give the same value; animation frames are skipped."""
         deadline = time.monotonic() + limit
-        previous = reader(self.observe()[1])
-        while time.monotonic() < deadline:
-            current = reader(self.observe()[1])
-            if current == previous:
+        previous = None
+        while True:
+            try:
+                current = reader(self.device.capture())
+            except BotError:
+                current = None
+            if current is not None and current == previous:
                 return current
+            if time.monotonic() >= deadline:
+                if current is None and previous is None:
+                    raise BotError('Angka tidak terbaca; tidak ada input lanjutan')
+                return current if current is not None else previous
             previous = current
-        return previous
 
     def templates(self) -> dict:
         return load_digit_templates(self.root, self.config['digits'])

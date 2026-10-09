@@ -314,6 +314,30 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs, [(66, 45)])
         self.assertIsNotNone(missing)
 
+    def test_read_stable_tolerates_animation_frames(self):
+        blank = np.zeros((90, 160, 3), dtype=np.uint8)
+        shots = iter([blank, self.frames['home'], self.frames['home']])
+        device = Device(self.frames)
+        device.capture = lambda: next(shots).copy()
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0.3)
+
+        def reader(image):
+            if not image.any():
+                raise bot.BotError('animasi')
+            return 7
+        self.assertEqual(runner.read_stable(reader, 5), 7)
+        shots = iter([blank, self.frames['home']])
+        device.capture = lambda: next(shots).copy()
+        self.assertEqual(runner.read_until(reader, 5), 7)
+
+    def test_wait_closes_leftover_cart_popup(self):
+        config, popup = self.cart_config()
+        device = Device({**self.frames, 'builder_cart': popup}, 'builder_cart')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'builder'))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        self.assertEqual(runner.wait(set(bot.VILLAGES), set(), 1), 'builder')
+        self.assertEqual(device.inputs, [(150, 10)])
+
     def test_collect_cart_skips_when_cart_not_visible(self):
         config, _ = self.cart_config()
         hidden = self.frames['builder'].copy()
@@ -483,6 +507,21 @@ class BotTests(unittest.TestCase):
     def test_duplicate_anchor_is_not_two_independent_checks(self):
         config = copy.deepcopy(self.config)
         config['screens']['home']['anchors'][1] = config['screens']['home']['anchors'][0]
+        with self.assertRaises(bot.BotError):
+            bot.validate_config(config, self.root, 'both')
+
+    def test_overriding_screen_wins_when_both_match(self):
+        config = copy.deepcopy(self.config)
+        frame = self.frames['builder_battle2'].copy()
+        config['screens']['builder_stage2']['anchors'] = copy.deepcopy(config['screens']['builder_battle2']['anchors'])
+        config['screens']['builder_stage2']['anchors'][1] = {'roi': [60, 60, 15, 12], 'file': 'card7.png'}
+        cv2.imwrite(str(self.root / 'card7.png'), frame[60:72, 60:75])
+        with self.assertRaises(bot.BotError):
+            bot.Detector(config, self.root).detect(frame)
+        config['screens']['builder_stage2']['overrides'] = ['builder_battle2']
+        bot.validate_config(config, self.root, 'both')
+        self.assertEqual(bot.Detector(config, self.root).detect(frame), 'builder_stage2')
+        config['screens']['builder_stage2']['overrides'] = ['nope']
         with self.assertRaises(bot.BotError):
             bot.validate_config(config, self.root, 'both')
 
