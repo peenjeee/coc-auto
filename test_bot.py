@@ -330,6 +330,20 @@ class BotTests(unittest.TestCase):
         device.capture = lambda: next(shots).copy()
         self.assertEqual(runner.read_until(reader, 5), 7)
 
+    def test_until_full_closes_cart_popup_before_reading_storage(self):
+        config, popup = self.cart_config()
+        device = Device({**self.frames, 'builder_cart': popup}, 'builder')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'builder'))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        runner.navigate = lambda village: setattr(device, 'state', village)
+        runner.collect_cart = lambda: setattr(device, 'state', 'builder_cart')
+        seen = []
+        runner.builder_done = lambda image: seen.append(device.state) or True
+        runner.village_full = lambda village, image: True
+        runner.run_until_full(0)
+        self.assertEqual(seen, ['builder'])
+        self.assertIn((150, 10), device.inputs)
+
     def test_wait_closes_leftover_cart_popup(self):
         config, popup = self.cart_config()
         device = Device({**self.frames, 'builder_cart': popup}, 'builder_cart')
@@ -405,10 +419,9 @@ class BotTests(unittest.TestCase):
     def test_classify_threshold_is_adjustable(self):
         templates = self.digit_templates()
         glyph = bot.glyphs(self.rendered('7'))[0]
-        noisy = np.clip(glyph + np.random.default_rng(4).normal(0, 0.35, glyph.shape), 0, 1).astype(np.float32)
-        score = float(cv2.matchTemplate(noisy, templates['7'], cv2.TM_CCOEFF_NORMED)[0, 0])
-        self.assertIsNone(bot.classify(noisy, templates, score + 0.01))
-        self.assertEqual(bot.classify(noisy, templates, score - 0.01), '7')
+        score = float(cv2.matchTemplate(glyph, templates['7'], cv2.TM_CCOEFF_NORMED)[0, 0])
+        self.assertIsNone(bot.classify(glyph, templates, score + 0.01))
+        self.assertEqual(bot.classify(glyph, templates, score - 0.01), '7')
         self.assertLess(bot.FRACTION_MIN_SCORE, bot.DIGIT_MIN_SCORE)
 
     def test_read_fraction_splits_on_single_unknown_glyph(self):

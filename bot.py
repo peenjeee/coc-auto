@@ -1052,6 +1052,7 @@ class Bot:
             self.navigate(village)
             if village == 'builder':
                 self.collect_cart()
+            self.wait({village}, set(), 30)
             _, image = self.observe()
             full[village] = self.builder_done(image) if village == 'builder' else self.village_full(village, image)
             if full[village]:
