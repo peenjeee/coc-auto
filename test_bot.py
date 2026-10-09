@@ -344,6 +344,21 @@ class BotTests(unittest.TestCase):
         self.assertEqual(seen, ['builder'])
         self.assertIn((150, 10), device.inputs)
 
+    def test_battle_ending_back_in_village_is_not_an_error(self):
+        for village, attack in (('builder', 'builder_attack'), ('home', 'home_attack')):
+            device = Device(self.frames, village)
+            runner = bot.Bot(self.config, self.root, device, live=True, reader=lambda i, s: {'gold': 100, 'elixir': 200},
+                             timeout=1, poll=0)
+            steps = {(village, 'attack'): f'{village}_menu', (f'{village}_menu', 'find'):
+                     'home_army' if village == 'home' else 'builder_scout', ('home_army', 'attack'): 'home_scout'}
+            actions = []
+            runner.action = lambda s, n: (actions.append((s, n)), setattr(device, 'state', steps.get((s, n), device.state)))
+            runner.deploy = lambda screen, allowed: setattr(device, 'state', village)
+            runner.collect_cart = lambda: None
+            with self.subTest(village=village):
+                getattr(runner, attack)(0) if village == 'home' else runner.builder_attack(collect=False)
+                self.assertNotIn((f'{village}_result', 'return'), actions)
+
     def test_wait_closes_leftover_cart_popup(self):
         config, popup = self.cart_config()
         device = Device({**self.frames, 'builder_cart': popup}, 'builder_cart')

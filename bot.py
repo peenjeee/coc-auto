@@ -906,7 +906,9 @@ class Bot:
             LOG.info('Loot terbaca: %s', loot)
             if meets_minimum(loot, self.config.get('minimum', {})):
                 self.deploy('home_scout', {'home_scout', 'home_battle'})
-                self.wait({'home_result'}, {'home_scout', 'home_battle'})
+                if self.wait({'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':
+                    LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
+                    return
                 self.action('home_result', 'return')
                 self.wait({'home'}, {'home_result'}, 30)
                 return
@@ -959,12 +961,15 @@ class Bot:
         self.wait({'builder_scout'}, {'builder_menu'}, 60)
         self.deploy('builder_scout', {'builder_scout', 'builder_battle'})
         stage2 = {'builder_stage2', 'builder_battle2'}
-        state = self.wait({'builder_stage2', 'builder_result'},
+        state = self.wait({'builder_stage2', 'builder_result', 'builder'},
                           {'builder_scout', 'builder_battle', 'builder_battle2'})
         if state == 'builder_stage2':
             self.wait_still(STAGE_SETTLE_SECONDS if self.poll else 0)
             self.deploy('builder_stage2', stage2)
-            self.wait({'builder_result'}, stage2)
+            state = self.wait({'builder_result', 'builder'}, stage2)
+        if state == 'builder':
+            LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
+            return
         self.action('builder_result', 'return')
         self.wait({'builder'}, {'builder_result'}, 30)
 
