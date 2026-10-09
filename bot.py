@@ -39,6 +39,7 @@ OCR_MIN_CONFIDENCE = 50
 OCR_SCALES = (3, 4, 5)
 DIGIT_HEIGHT, DIGIT_WIDTH = 24, 20
 DIGIT_MIN_SCORE, DIGIT_MIN_MARGIN = 0.75, 0.15
+FRACTION_MIN_SCORE = 0.65
 TARGET_MAX_SCORE = 0.2
 ANCHOR_MAX_MARGIN = 40
 TARGET_MAX_OFFSET = 200
@@ -564,12 +565,12 @@ def card_empty(image: np.ndarray, slot: list) -> bool:
     return float(cv2.cvtColor(card, cv2.COLOR_BGR2HSV)[..., 1].mean()) < CARD_EMPTY_SATURATION
 
 
-def classify(glyph: np.ndarray, templates: dict) -> str | None:
+def classify(glyph: np.ndarray, templates: dict, min_score: float = DIGIT_MIN_SCORE) -> str | None:
     """Digit for a glyph, or None when the best match is weak or too close to the second best."""
     scores = sorted(((float(cv2.matchTemplate(glyph, template, cv2.TM_CCOEFF_NORMED)[0, 0]), digit)
                      for digit, template in templates.items()), reverse=True)
     (best, digit), (second, _) = scores[0], scores[1]
-    if not math.isfinite(best) or best < DIGIT_MIN_SCORE or best - second < DIGIT_MIN_MARGIN:
+    if not math.isfinite(best) or best < min_score or best - second < DIGIT_MIN_MARGIN:
         return None
     return digit
 
@@ -590,7 +591,7 @@ def read_fraction(image: np.ndarray, templates: dict) -> tuple[int, int]:
     found = glyphs(image)
     if not 3 <= len(found) <= 21:
         raise BotError('Teks isi/maks tidak wajar; hentikan tanpa input')
-    digits = [classify(glyph, templates) for glyph in found]
+    digits = [classify(glyph, templates, FRACTION_MIN_SCORE) for glyph in found]
     unknown = [index for index, digit in enumerate(digits) if digit is None]
     if len(unknown) != 1 or unknown[0] in (0, len(digits) - 1):
         raise BotError('Teks isi/maks meragukan; hentikan tanpa input')

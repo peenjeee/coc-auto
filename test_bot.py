@@ -402,6 +402,15 @@ class BotTests(unittest.TestCase):
     def test_digit_reader_reads_grouped_number(self):
         self.assertEqual(bot.read_number(self.rendered('504 548'), self.digit_templates()), 504548)
 
+    def test_classify_threshold_is_adjustable(self):
+        templates = self.digit_templates()
+        glyph = bot.glyphs(self.rendered('7'))[0]
+        noisy = np.clip(glyph + np.random.default_rng(4).normal(0, 0.35, glyph.shape), 0, 1).astype(np.float32)
+        score = float(cv2.matchTemplate(noisy, templates['7'], cv2.TM_CCOEFF_NORMED)[0, 0])
+        self.assertIsNone(bot.classify(noisy, templates, score + 0.01))
+        self.assertEqual(bot.classify(noisy, templates, score - 0.01), '7')
+        self.assertLess(bot.FRACTION_MIN_SCORE, bot.DIGIT_MIN_SCORE)
+
     def test_read_fraction_splits_on_single_unknown_glyph(self):
         templates = self.digit_templates()
         image = self.rendered('120 / 1600')
