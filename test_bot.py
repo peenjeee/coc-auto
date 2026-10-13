@@ -589,6 +589,15 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.BotError):
             bot.validate_config({**config, 'capacity': {'home': {'gold': {**cap, 'maximum': -5}}}}, self.root, 'both')
 
+    def test_read_number_threshold_is_adjustable(self):
+        templates = self.digit_templates()
+        image = self.rendered('7')
+        glyph = bot.glyphs(image)[0]
+        score = float(cv2.matchTemplate(glyph, templates['7'], cv2.TM_CCOEFF_NORMED)[0, 0])
+        with self.assertRaises(bot.BotError):
+            bot.read_number(image, templates, score + 0.01)
+        self.assertEqual(bot.read_number(image, templates, score - 0.01), 7)
+
     def test_digit_reader_rejects_unknown_glyph(self):
         with self.assertRaises(bot.BotError):
             bot.read_number(self.rendered('509'), self.digit_templates('0123456785'.replace('9', '')))

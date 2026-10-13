@@ -590,12 +590,12 @@ def classify(glyph: np.ndarray, templates: dict, min_score: float = DIGIT_MIN_SC
     return digit
 
 
-def read_number(image: np.ndarray, templates: dict) -> int:
+def read_number(image: np.ndarray, templates: dict, min_score: float = DIGIT_MIN_SCORE) -> int:
     """Template-match each glyph; a weak or close second-best match stops the bot."""
     found = glyphs(image)
     if not 1 <= len(found) <= 10:
         raise BotError('Jumlah angka loot tidak wajar; hentikan tanpa input')
-    digits = [classify(glyph, templates) for glyph in found]
+    digits = [classify(glyph, templates, min_score) for glyph in found]
     if None in digits:
         raise BotError('Angka loot meragukan; hentikan tanpa input')
     return int(''.join(digits))
@@ -1076,7 +1076,8 @@ class Bot:
     def village_full(self, village: str, image: np.ndarray) -> bool:
         capacity = self.config.get('capacity', {}).get(village)
         if capacity:
-            amounts = {key: read_number(crop(image, spec['bar']), self.templates()) for key, spec in capacity.items()}
+            amounts = {key: read_number(crop(image, spec['bar']), self.templates(), FRACTION_MIN_SCORE)
+                       for key, spec in capacity.items()}
             maxima = {key: self.storage_max(village, key, spec) for key, spec in capacity.items()}
             LOG.info('Gudang %s: %s', village, {key: f'{amounts[key]:,}/{maxima[key]:,}' for key in capacity})
             return all(amounts[key] >= maxima[key] for key in capacity)
