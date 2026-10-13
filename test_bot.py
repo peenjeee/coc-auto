@@ -271,6 +271,28 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
         self.assertEqual(device.inputs, [(70, 70)])
 
+    def test_reward_chest_and_card_are_tapped_through_to_village(self):
+        rng = np.random.default_rng(13)
+        frames = {name: rng.integers(0, 256, (90, 160, 3), dtype=np.uint8) for name in ('reward_chest', 'reward_card')}
+        screens = dict(self.config['screens'])
+        for name, frame in frames.items():
+            anchors = []
+            for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
+                x, y, w, h = roi
+                cv2.imwrite(str(self.root / f'{name}-{number}.png'), frame[y:y+h, x:x+w])
+                anchors.append({'roi': roi, 'file': f'{name}-{number}.png'})
+            screens[name] = {'anchors': anchors, 'actions': {'open' if name == 'reward_chest' else 'continue':
+                                                              [70, 40] if name == 'reward_chest' else [70, 80]}}
+        config = {**self.config, 'screens': screens}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, **frames}, 'reward_chest')
+        flow = iter(['reward_chest', 'reward_card', 'home'])
+        next(flow)
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', next(flow)))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        self.assertEqual(runner.wait({'home'}, {'home_result'}, 1), 'home')
+        self.assertEqual(device.inputs, [(70, 40), (70, 80)])
+
     def cart_config(self):
         popup = np.random.default_rng(5).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
@@ -517,6 +539,21 @@ class BotTests(unittest.TestCase):
         image = np.pad(image, ((0, 0), (40, 0), (0, 0)))
         cv2.line(image, (5, 2), (25, 18), (255, 255, 255), 2)
         self.assertEqual(bot.read_number(image, self.digit_templates()), 504548)
+
+    def test_configured_maximum_skips_tooltip(self):
+        cap = {'bar': [20, 22, 100, 30], 'tap': [100, 10], 'max': [20, 55, 100, 30], 'maximum': 140}
+        config = {**self.config, 'digits': 'digits', 'capacity': {'home': {'gold': cap}}}
+        folder = self.root / 'digits'
+        folder.mkdir()
+        for digit, glyph in self.digit_templates().items():
+            cv2.imwrite(str(folder / f'{digit}.png'), (glyph * 255).astype(np.uint8))
+        bot.validate_config(config, self.root, 'both')
+        device = Device(self.frames)
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        self.assertEqual(runner.storage_max('home', 'gold', cap), 140)
+        self.assertEqual(device.inputs, [])
+        with self.assertRaises(bot.BotError):
+            bot.validate_config({**config, 'capacity': {'home': {'gold': {**cap, 'maximum': -5}}}}, self.root, 'both')
 
     def test_digit_reader_rejects_unknown_glyph(self):
         with self.assertRaises(bot.BotError):

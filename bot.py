@@ -30,7 +30,8 @@ ACTIONS = {
     'home_menu': ('find',), 'builder_menu': ('find',), 'home_army': ('attack',),
     'home_scout': ('next',), 'home_result': ('return',),
     'builder_result': ('return',), 'star_bonus': ('ok',), 'builder_star_bonus': ('ok',),
-    'builder_cart': ('claim', 'close'),
+    'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
+    'layout_blocked': ('ok',),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -67,7 +68,9 @@ EVENT_DIR = '/data/local/tmp/cocbot'
 UNKNOWN_RETRIES = 3
 FULL_RATIO, STORAGE_RUN_RATIO, STORAGE_MIN_VALUE = 0.95, 0.8, 150
 RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
-POPUPS = ('star_bonus', 'builder_star_bonus')
+POPUP_ACTIONS = {'star_bonus': 'ok', 'builder_star_bonus': 'ok', 'reward_chest': 'open', 'reward_card': 'continue',
+                 'layout_blocked': 'ok'}
+POPUPS = tuple(POPUP_ACTIONS)
 OPTIONAL_SCREENS = ('builder_cart',)
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
@@ -262,6 +265,8 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
             rectangle(spec.get('bar'), resolution)
             rectangle(spec.get('max'), resolution)
             point(spec.get('tap'), resolution, 'capacity tap')
+            if 'maximum' in spec:
+                integer(spec['maximum'], 1, 999_999_999, 'capacity maximum')
     if config.get('cart_text'):
         rectangle(config['cart_text'], resolution)
     button = config.get('speed_button')
@@ -675,7 +680,7 @@ class Bot:
             if not sped_up:
                 sped_up = self.try_speed_up(image, state)
             if state in POPUPS:
-                self.action(state, 'ok')
+                self.action(state, POPUP_ACTIONS[state])
                 continue
             if state == 'builder_cart' and state not in targets | allowed:
                 self.action(state, 'close')
@@ -1002,6 +1007,8 @@ class Bot:
 
     def storage_max(self, village: str, key: str, spec: dict) -> int:
         """Tap the storage bar once per session and read 'Maks' from its tooltip."""
+        if spec.get('maximum'):
+            return spec['maximum']
         cached = self.capacity.get((village, key))
         if cached:
             return cached
