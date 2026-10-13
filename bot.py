@@ -58,6 +58,7 @@ STILL_DIFF = 1.5
 CAPTURE_RETRIES = 2
 ZOOM_MAX_PINCHES = 6
 ZOOM_CLEAR_ATTEMPTS = 2
+ZOOM_WAIT_SECONDS = 20
 CARD_ABOVE, CARD_BELOW, CARD_HALF_WIDTH = 38, 50, 40
 CARD_EMPTY_SATURATION = 20
 DEPLOY_BURST = 4
@@ -806,9 +807,7 @@ class Bot:
             return
         if state not in VILLAGES:
             raise BotError('Zoom hanya di layar desa; tidak ada input dikirim')
-        observed, _ = self.observe()
-        if observed != state:
-            raise BotError(f'Zoom dibatalkan: layar {observed}')
+        self.wait({state}, set(), ZOOM_WAIT_SECONDS)
         if not self.live:
             return
         for _ in range(zoom['pinches']):

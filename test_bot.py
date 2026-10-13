@@ -1050,6 +1050,14 @@ class BotTests(unittest.TestCase):
             bot.Bot(config, self.root, stuck, live=True, timeout=0.02, poll=0).zoom_out('home')
         self.assertTrue(all(i[0] == 'pinch' for i in stuck.inputs))
 
+    def test_zoom_out_waits_through_transition_frames(self):
+        blank = np.zeros((90, 160, 3), dtype=np.uint8)
+        shots = iter([blank, blank] + [self.frames['home']] * 10)
+        device = Device(self.frames)
+        device.capture = lambda: next(shots).copy()
+        bot.Bot(self.zoom_config(), self.root, device, live=True, timeout=1, poll=0).zoom_out('home')
+        self.assertEqual(sum(1 for i in device.inputs if i[0] == 'pinch'), 2)
+
     def test_zoom_out_never_pinches_during_battle(self):
         runner = bot.Bot(self.zoom_config(), self.root, Device(self.frames, 'builder_stage2'),
                          live=True, timeout=0.02, poll=0)
