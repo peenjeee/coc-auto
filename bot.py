@@ -681,7 +681,10 @@ class Bot:
             if not sped_up:
                 sped_up = self.try_speed_up(image, state)
             if state in POPUPS:
-                self.action(state, POPUP_ACTIONS[state])
+                try:
+                    self.action(state, POPUP_ACTIONS[state])
+                except BotError:
+                    LOG.info('Popup %s sudah tertutup sendiri', state)
                 continue
             if state == 'builder_cart' and state not in targets | allowed:
                 self.action(state, 'close')

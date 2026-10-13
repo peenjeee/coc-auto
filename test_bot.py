@@ -312,6 +312,21 @@ class BotTests(unittest.TestCase):
         runner.guarded_tap({'home'}, [10, 75])
         self.assertEqual(device.inputs, [(70, 70), (10, 75)])
 
+    def test_wait_ignores_popup_that_closes_itself(self):
+        popup = np.random.default_rng(23).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        anchors = []
+        for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'star-{number}.png'), popup[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'star-{number}.png'})
+        screens = {**self.config['screens'], 'star_bonus': {'anchors': anchors, 'actions': {'ok': [70, 70]}}}
+        config = {**self.config, 'screens': screens}
+        shots = iter([popup, self.frames['home'], self.frames['home'], self.frames['home']])
+        device = Device(self.frames)
+        device.capture = lambda: next(shots).copy()
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
+
     def cart_config(self):
         popup = np.random.default_rng(5).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
