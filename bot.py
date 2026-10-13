@@ -71,6 +71,7 @@ RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
 POPUP_ACTIONS = {'star_bonus': 'ok', 'builder_star_bonus': 'ok', 'reward_chest': 'open', 'reward_card': 'continue',
                  'layout_blocked': 'ok'}
 POPUPS = tuple(POPUP_ACTIONS)
+POPUP_CLEAR_ATTEMPTS = 3
 OPTIONAL_SCREENS = ('builder_cart',)
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
@@ -708,6 +709,14 @@ class Bot:
 
     def guarded_tap(self, states: set, location: list | Callable, terminal: set | None = None) -> str:
         state, image = self.observe()
+        for _ in range(POPUP_CLEAR_ATTEMPTS):
+            if state not in POPUPS or state in states:
+                break
+            popup = self.config['screens'][state]['actions'][POPUP_ACTIONS[state]]
+            if self.live:
+                self.device.tap_many([popup])
+            time.sleep(self.poll)
+            state, image = self.observe()
         if terminal and state in terminal:
             return state
         if state not in states:
