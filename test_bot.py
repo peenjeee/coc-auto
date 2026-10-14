@@ -638,6 +638,19 @@ class BotTests(unittest.TestCase):
             bot.read_number(image, templates, score + 0.01)
         self.assertEqual(bot.read_number(image, templates, score - 0.01), 7)
 
+    def test_digit_variants_extend_templates(self):
+        base = self.digit_templates()
+        folder = self.root / 'digits'
+        folder.mkdir()
+        for digit, glyph in base.items():
+            cv2.imwrite(str(folder / f'{digit}.png'), (glyph * 255).astype(np.uint8))
+        thick = cv2.dilate(bot.glyphs(self.rendered('9'))[0], np.ones((3, 3), np.uint8))
+        cv2.imwrite(str(folder / '9-ui2.png'), (thick * 255).astype(np.uint8))
+        templates = bot.load_digit_templates(self.root, 'digits')
+        self.assertIn('9-ui2', templates)
+        self.assertEqual(bot.classify(thick, templates), '9')
+        self.assertEqual(bot.classify(base['4'], templates), '4')
+
     def test_digit_reader_rejects_unknown_glyph(self):
         with self.assertRaises(bot.BotError):
             bot.read_number(self.rendered('509'), self.digit_templates('0123456785'.replace('9', '')))

@@ -308,12 +308,16 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
 
 
 def load_digit_templates(root: Path, folder: str) -> dict:
+    """One template per digit ('7.png') plus optional font variants ('7-ui2.png')."""
+    directory = asset_path(root, f'{folder}/0.png').parent
     templates = {}
     for digit in '0123456789':
-        image = cv2.imread(str(asset_path(root, f'{folder}/{digit}.png')), cv2.IMREAD_GRAYSCALE)
-        if image is None or image.shape != (DIGIT_HEIGHT, DIGIT_WIDTH):
-            raise BotError(f'Template angka {digit} hilang/ukuran salah')
-        templates[digit] = image.astype(np.float32) / 255
+        paths = [directory / f'{digit}.png'] + sorted(directory.glob(f'{digit}-*.png'))
+        for path in paths:
+            image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+            if image is None or image.shape != (DIGIT_HEIGHT, DIGIT_WIDTH):
+                raise BotError(f'Template angka {path.name} hilang/ukuran salah')
+            templates[path.stem] = image.astype(np.float32) / 255
     return templates
 
 
@@ -588,9 +592,10 @@ def card_empty(image: np.ndarray, slot: list) -> bool:
 
 def classify(glyph: np.ndarray, templates: dict, min_score: float = DIGIT_MIN_SCORE) -> str | None:
     """Digit for a glyph, or None when the best match is weak or too close to the second best."""
-    scores = sorted(((float(cv2.matchTemplate(glyph, template, cv2.TM_CCOEFF_NORMED)[0, 0]), digit)
-                     for digit, template in templates.items()), reverse=True)
-    (best, digit), (second, _) = scores[0], scores[1]
+    scores = sorted(((float(cv2.matchTemplate(glyph, template, cv2.TM_CCOEFF_NORMED)[0, 0]), name[0])
+                     for name, template in templates.items()), reverse=True)
+    best, digit = scores[0]
+    second = next((score for score, other in scores[1:] if other != digit), -1.0)
     if not math.isfinite(best) or best < min_score or best - second < DIGIT_MIN_MARGIN:
         return None
     return digit
