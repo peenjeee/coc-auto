@@ -903,6 +903,65 @@ class BotTests(unittest.TestCase):
         runner.wait_still(0.05)
         self.assertGreaterEqual(len(count), 2)
 
+    def test_resilient_run_relaunches_closed_game_and_resumes(self):
+        device = Device(self.frames)
+        device.front = True
+        device.launches = []
+        device.game_in_front = lambda: device.front
+        device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        calls = []
+
+        def flaky(searches):
+            calls.append(searches)
+            if len(calls) == 1:
+                device.front = False
+                raise bot.BotError('Layar tidak dikenal')
+            return 3
+        runner.run_until_full = flaky
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2), 3)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
+
+    def test_resilient_run_starts_game_that_is_not_open(self):
+        device = Device(self.frames)
+        device.front = False
+        device.launches = []
+        device.game_in_front = lambda: device.front
+        device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.run_until_full = lambda searches: 1
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2), 1)
+        self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
+
+    def test_resilient_run_stops_on_real_errors_and_after_limit(self):
+        device = Device(self.frames)
+        device.game_in_front = lambda: True
+        device.launch = lambda activity: None
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.run_until_full = lambda searches: (_ for _ in ()).throw(bot.BotError('Angka loot meragukan'))
+        with self.assertRaises(bot.BotError):
+            runner.run_until_full_resilient(0, max_recoveries=5)
+        attempts = []
+        runner.run_until_full = lambda searches: (attempts.append(1), (_ for _ in ()).throw(bot.DeviceError('ADB gagal')))[1]
+        with self.assertRaises(bot.DeviceError):
+            runner.run_until_full_resilient(0, max_recoveries=2)
+        self.assertEqual(len(attempts), 3)
+
+    def test_adb_command_failure_is_device_error(self):
+        device = bot.ADB('adb.exe', 'emulator-5554', [160, 90])
+        with patch('bot.subprocess.run', side_effect=OSError('offline')):
+            with self.assertRaises(bot.DeviceError):
+                device.command('shell', 'true')
+        with patch('bot.subprocess.run') as run:
+            run.return_value.stdout = b'  mCurrentFocus=Window{1 u0 com.supercell.clashofclans/x}'
+            self.assertTrue(device.game_in_front())
+            run.return_value.stdout = b'  mCurrentFocus=Window{1 u0 com.android.launcher3/x}'
+            self.assertFalse(device.game_in_front())
+
     def test_tap_only_card_presses_hero_ability(self):
         scout = {**self.config['screens']['home_scout'],
                  'troops': [{'slot': [20, 60], 'count': 1}, {'slot': [20, 60], 'count': 1, 'tap_only': True}]}

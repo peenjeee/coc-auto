@@ -73,6 +73,9 @@ POPUP_ACTIONS = {'star_bonus': 'ok', 'builder_star_bonus': 'ok', 'reward_chest':
                  'layout_blocked': 'ok'}
 POPUPS = tuple(POPUP_ACTIONS)
 POPUP_CLEAR_ATTEMPTS = 3
+GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
+RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
+MAX_RECOVERIES = 20
 OPTIONAL_SCREENS = ('builder_cart',)
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
@@ -82,6 +85,10 @@ LOG = logging.getLogger(__name__)
 
 class BotError(RuntimeError):
     """Stop without attempting recovery input."""
+
+
+class DeviceError(BotError):
+    """ADB lost the emulator; the game may need to reconnect."""
 
 
 class UnknownScreen(BotError):
@@ -366,7 +373,25 @@ class ADB:
             )
             return result.stdout
         except (OSError, subprocess.SubprocessError) as exc:
-            raise BotError('ADB gagal/disconnect; periksa instance dan serial') from exc
+            raise DeviceError('ADB gagal/disconnect; periksa instance dan serial') from exc
+
+    def connected(self) -> bool:
+        try:
+            listing = subprocess.run([self.executable, 'devices'], capture_output=True, text=True,
+                                     timeout=15, shell=False).stdout
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return f'{self.serial}	device' in listing
+
+    def game_in_front(self) -> bool:
+        focus = self.command('shell', 'dumpsys window | grep mCurrentFocus')
+        return GAME_ACTIVITY.split('/')[0].encode() in focus
+
+    def launch(self, activity: str) -> None:
+        """Start the game app; used only to recover from a crash or a closed game."""
+        if not self.live:
+            raise BotError('Input perangkat dinonaktifkan dalam dry-run')
+        self.command('shell', 'am', 'start', '-n', activity)
 
     def capture(self) -> np.ndarray:
         """Raw RGBA framebuffer; skips on-device PNG encoding, which costs ~0.5 s."""
@@ -1150,6 +1175,47 @@ class Bot:
             attacks += 1
             LOG.info('Serangan selesai: %s (%s)', village, attacks)
 
+    def recover(self) -> None:
+        """Wait for ADB, start the game if it is not in front, and wait for a village screen."""
+        deadline = time.monotonic() + RECOVER_ADB_SECONDS
+        while not self.device.connected():
+            if time.monotonic() >= deadline:
+                raise DeviceError('ADB tidak kembali; pemulihan dihentikan')
+            time.sleep(RECOVER_POLL_SECONDS if self.poll else 0)
+        if not self.device.game_in_front():
+            LOG.warning('CoC tidak terbuka; membuka ulang game')
+            self.device.launch(GAME_ACTIVITY)
+        self.wait(set(VILLAGES), set(), RECOVER_LOAD_SECONDS if self.poll else self.timeout)
+        LOG.info('Game siap kembali di layar desa')
+
+    def run_until_full_resilient(self, searches: int, max_recoveries: int = MAX_RECOVERIES) -> int:
+        """until-full that reopens the game after a crash, closed app or ADB drop; other errors still stop."""
+        integer(max_recoveries, 0, 1000, 'max_recoveries')
+        recoveries = 0
+        if not self.device.game_in_front():
+            self.recover()
+        while True:
+            try:
+                return self.run_until_full(searches)
+            except BotError as exc:
+                lost = isinstance(exc, DeviceError)
+                if not lost:
+                    try:
+                        lost = not self.device.game_in_front()
+                    except DeviceError:
+                        lost = True
+                if not lost or recoveries >= max_recoveries:
+                    raise
+                recoveries += 1
+                LOG.warning('Game tertutup/terputus (%s); pemulihan %s/%s', exc, recoveries, max_recoveries)
+                touch_up = getattr(self.device, 'touch_up', None)
+                if callable(touch_up) and getattr(self.device, 'touch', True):
+                    try:
+                        touch_up()
+                    except BotError:
+                        pass
+                self.recover()
+
     def run(self, mode: str, cycles: int, searches: int) -> int:
         integer(cycles, 1, 100, 'cycles')
         integer(searches, 0, 1_000_000, 'searches')
@@ -1194,6 +1260,8 @@ def main() -> int:
     parser.add_argument('--searches', type=int, default=0, help='Batas pencarian lawan desa asal; 0 = tanpa batas')
     parser.add_argument('--until-full', action='store_true',
                         help='Serang desa yang emas/elixirnya belum penuh; berhenti saat kedua desa penuh')
+    parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
+                        help='--until-full: berapa kali boleh membuka ulang CoC setelah crash/DC')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -1207,7 +1275,7 @@ def main() -> int:
                      touch=config.get('touch_device'))
         runner = Bot(config, args.config.parent, device, live=args.live)
         if args.until_full and args.live:
-            runner.run_until_full(args.searches)
+            runner.run_until_full_resilient(args.searches, args.max_recoveries)
         else:
             runner.run(args.mode, args.cycles, args.searches)
         return 0
