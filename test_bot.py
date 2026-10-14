@@ -977,6 +977,25 @@ class BotTests(unittest.TestCase):
         self.assertEqual(Emulator.starts, 1)
         self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
 
+    def test_recover_retries_launch_when_game_does_not_open(self):
+        device = Device(self.frames)
+        device.front = False
+        device.launches = []
+        device.connected = lambda: True
+        device.game_in_front = lambda: device.front
+        def launch(activity):
+            device.launches.append(activity)
+            device.front = len(device.launches) >= 2
+        device.launch = launch
+        shots = []
+        def capture():
+            shots.append(1)
+            return (self.frames['home'] if device.front else np.zeros((90, 160, 3), dtype=np.uint8)).copy()
+        device.capture = capture
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.recover()
+        self.assertEqual(len(device.launches), 2)
+
     def test_emulator_console_commands(self):
         emulator = bot.Emulator('ldconsole.exe', 0)
         with patch('bot.subprocess.run') as run:

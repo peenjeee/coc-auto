@@ -76,6 +76,7 @@ POPUP_CLEAR_ATTEMPTS = 3
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
+LAUNCH_ATTEMPTS, LAUNCH_WAIT_SECONDS = 4, 90
 OPTIONAL_SCREENS = ('builder_cart',)
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
@@ -1216,11 +1217,18 @@ class Bot:
             if time.monotonic() >= deadline:
                 raise DeviceError('ADB tidak kembali; pemulihan dihentikan')
             time.sleep(RECOVER_POLL_SECONDS if self.poll else 0)
-        if not self.device.game_in_front():
-            LOG.warning('CoC tidak terbuka; membuka ulang game')
-            self.device.launch(GAME_ACTIVITY)
-        self.wait(set(VILLAGES), set(), RECOVER_LOAD_SECONDS if self.poll else self.timeout)
-        LOG.info('Game siap kembali di layar desa')
+        for attempt in range(LAUNCH_ATTEMPTS):
+            if not self.device.game_in_front():
+                LOG.warning('CoC tidak terbuka; membuka game (percobaan %s)', attempt + 1)
+                self.device.launch(GAME_ACTIVITY)
+            try:
+                self.wait(set(VILLAGES), set(), LAUNCH_WAIT_SECONDS if self.poll else self.timeout)
+                LOG.info('Game siap kembali di layar desa')
+                return
+            except BotError:
+                if self.device.game_in_front() and attempt + 1 == LAUNCH_ATTEMPTS:
+                    raise
+        raise DeviceError('CoC tidak bisa dibuka; pemulihan dihentikan')
 
     def run_until_full_resilient(self, searches: int, max_recoveries: int = MAX_RECOVERIES) -> int:
         """until-full that reopens the game after a crash, closed app or ADB drop; other errors still stop."""
