@@ -81,6 +81,13 @@ Enable ADB in LDPlayer (**Settings → Other settings → ADB debugging → Open
 C:\LDPlayer\LDPlayer14\adb.exe devices
 ```
 
+> [!IMPORTANT]
+> The bundled calibration was built and tested with the game language set to **Bahasa Indonesia**
+> on LDPlayer at **1280×720**. Screens are recognised from on-screen text and icons, so a different
+> language, resolution, UI scale, or army layout will not match out of the box.
+> If the bot stops with *"Layar tidak dikenal"* (unknown screen) or taps the wrong place,
+> recalibrate it for your own setup — see [Calibration](#calibration).
+
 ## Quick start
 
 The repository ships with the calibration that was used to build and test the bot (`config.json` + `calibration/`).
