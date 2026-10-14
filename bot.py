@@ -291,6 +291,9 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
         score = button.get('max_score')
         if template is None or not isinstance(score, float) or not 0 < score <= TARGET_MAX_SCORE:
             raise BotError('speed_button tidak valid')
+    if config.get('ldconsole') is not None and not isinstance(config['ldconsole'], str):
+        raise BotError('ldconsole harus path ke ldconsole.exe')
+    integer(config.get('ld_index', 0), 0, 99, 'ld_index')
     touch = config.get('touch_device')
     if touch is not None and (not isinstance(touch, str) or not TOUCH_DEVICE.fullmatch(touch)):
         raise BotError('touch_device harus /dev/input/eventN')
@@ -382,6 +385,12 @@ class ADB:
         except (OSError, subprocess.SubprocessError):
             return False
         return f'{self.serial}	device' in listing
+
+    def booted(self) -> bool:
+        try:
+            return self.command('shell', 'getprop sys.boot_completed').strip() == b'1'
+        except DeviceError:
+            return False
 
     def game_in_front(self) -> bool:
         focus = self.command('shell', 'dumpsys window | grep mCurrentFocus')
@@ -482,6 +491,26 @@ class ADB:
         steps.append(('frame', 'pinch_up', [(3, 47, 0), (3, 57, -1), (3, 47, 1), (3, 57, -1),
                                             (1, 330, 0), (0, 0, 0)]))
         self.inject(steps, device)
+
+
+class Emulator:
+    """LDPlayer instance control through ldconsole; used only to start a stopped emulator."""
+
+    def __init__(self, console: str, index: int) -> None:
+        self.console, self.index = console, index
+
+    def run(self, *args: str) -> str:
+        try:
+            return subprocess.run([self.console, *args, '--index', str(self.index)], capture_output=True,
+                                  text=True, timeout=60, shell=False).stdout
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise DeviceError('ldconsole gagal; periksa path LDPlayer') from exc
+
+    def running(self) -> bool:
+        return self.run('isrunning').strip() == 'running'
+
+    def launch(self) -> None:
+        self.run('launch')
 
 
 class Detector:
@@ -682,8 +711,10 @@ def ocr_resource(image: np.ndarray, program: str) -> int:
 
 class Bot:
     def __init__(self, config: dict, root: Path, device: ADB, live: bool = False,
-                 reader: Callable | None = None, timeout: float = 240, poll: float = 0.05) -> None:
+                 reader: Callable | None = None, timeout: float = 240, poll: float = 0.05,
+                 emulator: 'Emulator | None' = None) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
+        self.emulator = emulator
         self.detector = Detector(config, root)
         self.timeout, self.poll = timeout, poll
         self.reader = reader or self.read_loot
@@ -1177,8 +1208,11 @@ class Bot:
 
     def recover(self) -> None:
         """Wait for ADB, start the game if it is not in front, and wait for a village screen."""
+        if self.emulator and not self.device.connected() and not self.emulator.running():
+            LOG.warning('LDPlayer belum berjalan; menyalakan emulator')
+            self.emulator.launch()
         deadline = time.monotonic() + RECOVER_ADB_SECONDS
-        while not self.device.connected():
+        while not (self.device.connected() and self.device.booted()):
             if time.monotonic() >= deadline:
                 raise DeviceError('ADB tidak kembali; pemulihan dihentikan')
             time.sleep(RECOVER_POLL_SECONDS if self.poll else 0)
@@ -1192,7 +1226,11 @@ class Bot:
         """until-full that reopens the game after a crash, closed app or ADB drop; other errors still stop."""
         integer(max_recoveries, 0, 1000, 'max_recoveries')
         recoveries = 0
-        if not self.device.game_in_front():
+        try:
+            ready = self.device.connected() and self.device.game_in_front()
+        except DeviceError:
+            ready = False
+        if not ready:
             self.recover()
         while True:
             try:
@@ -1273,7 +1311,8 @@ def main() -> int:
             executable(config.get('tesseract'), 'Tesseract')
         device = ADB(adb, config['serial'], config['resolution'], live=args.live,
                      touch=config.get('touch_device'))
-        runner = Bot(config, args.config.parent, device, live=args.live)
+        emulator = Emulator(executable(config['ldconsole'], 'ldconsole'), config.get('ld_index', 0))             if config.get('ldconsole') else None
+        runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator)
         if args.until_full and args.live:
             runner.run_until_full_resilient(args.searches, args.max_recoveries)
         else:

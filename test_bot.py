@@ -56,6 +56,9 @@ class Device:
     def capture(self):
         return self.frames[self.state].copy()
 
+    def booted(self):
+        return True
+
     def swipe(self, start, end):
         self.inputs.append(('swipe', tuple(start), tuple(end)))
 
@@ -950,6 +953,41 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.DeviceError):
             runner.run_until_full_resilient(0, max_recoveries=2)
         self.assertEqual(len(attempts), 3)
+
+    def test_recover_starts_stopped_emulator_then_game(self):
+        device = Device(self.frames)
+        device.up = False
+        device.front = False
+        device.launches = []
+        device.connected = lambda: device.up
+        device.booted = lambda: device.up
+        device.game_in_front = lambda: device.front
+        device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
+
+        class Emulator:
+            starts = 0
+            def running(self):
+                return device.up
+            def launch(self):
+                Emulator.starts += 1
+                device.up = True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=Emulator())
+        runner.run_until_full = lambda searches: 2
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=1), 2)
+        self.assertEqual(Emulator.starts, 1)
+        self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
+
+    def test_emulator_console_commands(self):
+        emulator = bot.Emulator('ldconsole.exe', 0)
+        with patch('bot.subprocess.run') as run:
+            run.return_value.stdout = 'running'
+            self.assertTrue(emulator.running())
+            self.assertEqual(run.call_args.args[0], ['ldconsole.exe', 'isrunning', '--index', '0'])
+            run.return_value.stdout = 'stop'
+            self.assertFalse(emulator.running())
+            emulator.launch()
+            self.assertEqual(run.call_args.args[0], ['ldconsole.exe', 'launch', '--index', '0'])
+            self.assertIs(run.call_args.kwargs.get('shell'), False)
 
     def test_adb_command_failure_is_device_error(self):
         device = bot.ADB('adb.exe', 'emulator-5554', [160, 90])

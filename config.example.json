@@ -2,7 +2,16 @@
   "adb": "C:\\LDPlayer\\LDPlayer14\\adb.exe",
   "serial": "",
   "tesseract": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
-  "resolution": [1280, 720],
-  "minimum": {"gold": 0, "elixir": 0, "dark": 0},
-  "screens": {}
+  "resolution": [
+    1280,
+    720
+  ],
+  "minimum": {
+    "gold": 0,
+    "elixir": 0,
+    "dark": 0
+  },
+  "screens": {},
+  "ldconsole": "C:\\LDPlayer\\LDPlayer14\\ldconsole.exe",
+  "ld_index": 0
 }
