@@ -1,0 +1,1175 @@
+{
+  "adb": "C:\\LDPlayer\\LDPlayer14\\adb.exe",
+  "serial": "emulator-5554",
+  "tesseract": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+  "resolution": [
+    1280,
+    720
+  ],
+  "minimum": {
+    "gold": 500000,
+    "elixir": 500000,
+    "dark": 0
+  },
+  "screens": {
+    "home": {
+      "anchors": [
+        {
+          "roi": [
+            578,
+            18,
+            46,
+            44
+          ],
+          "file": "calibration-legacy/home-8d5706e605ac4c0da3caaa0af8237eb9.png",
+          "margin": 24
+        },
+        {
+          "roi": [
+            1206,
+            500,
+            46,
+            44
+          ],
+          "file": "calibration-legacy/home-9907e134ba374f66b2e3dc2448bcd7f9.png",
+          "margin": 0
+        }
+      ],
+      "actions": {
+        "attack": [
+          78,
+          624
+        ]
+      },
+      "targets": {
+        "switch": {
+          "file": "calibration-legacy/home-boat-05a72ae9974a42059aa8483c901b1359.png",
+          "max_score": 0.12,
+          "pan": [
+            [
+              500,
+              450
+            ],
+            [
+              750,
+              200
+            ]
+          ],
+          "offset": [
+            -16,
+            40
+          ],
+          "scales": [
+            0.8,
+            0.9,
+            1.0,
+            1.1,
+            1.2,
+            1.3,
+            1.4
+          ],
+          "avoid": [
+            [
+              0,
+              0,
+              1280,
+              75
+            ],
+            [
+              1000,
+              0,
+              280,
+              270
+            ],
+            [
+              0,
+              75,
+              100,
+              500
+            ],
+            [
+              0,
+              560,
+              360,
+              160
+            ],
+            [
+              1180,
+              320,
+              100,
+              240
+            ],
+            [
+              1120,
+              560,
+              160,
+              160
+            ]
+          ],
+          "pan_attempts": 3
+        }
+      }
+    },
+    "home_menu": {
+      "anchors": [
+        {
+          "roi": [
+            95,
+            40,
+            155,
+            35
+          ],
+          "file": "calibration-legacy/home_menu-b04b6685200b47c685399c0b540fced7.png"
+        },
+        {
+          "roi": [
+            95,
+            445,
+            245,
+            32
+          ],
+          "file": "calibration-legacy/home_menu-6d501326ab2a426bb0b3df7c55d4e7e7.png"
+        }
+      ],
+      "actions": {
+        "find": [
+          218,
+          530
+        ]
+      }
+    },
+    "home_army": {
+      "anchors": [
+        {
+          "roi": [
+            190,
+            60,
+            135,
+            28
+          ],
+          "file": "calibration-legacy/home_army-c9eb87446efb4ac9a1007c48becdef93.png"
+        },
+        {
+          "roi": [
+            915,
+            60,
+            170,
+            28
+          ],
+          "file": "calibration-legacy/home_army-d5b5e761aa31441fbf41bda96951de02.png"
+        }
+      ],
+      "actions": {
+        "attack": [
+          1130,
+          641
+        ]
+      }
+    },
+    "home_scout": {
+      "anchors": [
+        {
+          "roi": [
+            32,
+            520,
+            122,
+            36
+          ],
+          "file": "calibration-legacy/home_scout-e9289ace0ede493db86ce6780f16ff06.png"
+        },
+        {
+          "roi": [
+            1128,
+            478,
+            128,
+            26
+          ],
+          "file": "calibration-legacy/home_scout-37a54428515c4598be7b1295dbee1411.png"
+        }
+      ],
+      "actions": {
+        "next": [
+          1165,
+          512
+        ]
+      },
+      "loot": {
+        "gold": [
+          66,
+          99,
+          135,
+          24
+        ],
+        "elixir": [
+          66,
+          136,
+          135,
+          24
+        ],
+        "dark": [
+          66,
+          175,
+          135,
+          24
+        ]
+      },
+      "deploy": [
+        125,
+        346
+      ],
+      "troops": [
+        {
+          "slot": [
+            130,
+            650
+          ],
+          "count": 1,
+          "hold": 6,
+          "until_empty": true
+        },
+        {
+          "slot": [
+            440,
+            650
+          ],
+          "count": 1
+        },
+        {
+          "slot": [
+            440,
+            650
+          ],
+          "count": 1,
+          "tap_only": true
+        },
+        {
+          "slot": [
+            742,
+            650
+          ],
+          "count": 5,
+          "points": [
+            [
+              230,
+              345
+            ],
+            [
+              320,
+              342
+            ],
+            [
+              410,
+              338
+            ],
+            [
+              500,
+              335
+            ],
+            [
+              580,
+              332
+            ]
+          ]
+        },
+        {
+          "slot": [
+            842,
+            650
+          ],
+          "count": 1,
+          "points": [
+            [
+              500,
+              335
+            ]
+          ]
+        },
+        {
+          "slot": [
+            950,
+            650
+          ],
+          "count": 1,
+          "points": [
+            [
+              580,
+              332
+            ]
+          ]
+        },
+        {
+          "slot": [
+            1050,
+            650
+          ],
+          "count": 1,
+          "points": [
+            [
+              640,
+              330
+            ]
+          ]
+        },
+        {
+          "slot": [
+            342,
+            650
+          ],
+          "count": 1
+        },
+        {
+          "slot": [
+            540,
+            650
+          ],
+          "count": 1
+        },
+        {
+          "slot": [
+            638,
+            650
+          ],
+          "count": 1
+        },
+        {
+          "slot": [
+            243,
+            650
+          ],
+          "count": 2
+        }
+      ]
+    },
+    "home_battle": {
+      "anchors": [
+        {
+          "roi": [
+            34,
+            138,
+            24,
+            26
+          ],
+          "file": "calibration-legacy/home_battle-6b3fcbfa861a4d28976729681bb0838c.png",
+          "margin": 6
+        },
+        {
+          "roi": [
+            1088,
+            505,
+            158,
+            14
+          ],
+          "file": "calibration-legacy/home_battle-48f219bbee7a4406a473634b20b4aabd.png",
+          "margin": 3
+        }
+      ],
+      "actions": {}
+    },
+    "home_result": {
+      "anchors": [
+        {
+          "roi": [
+            572,
+            600,
+            136,
+            32
+          ],
+          "file": "calibration-legacy/home_result-ba824c851dba4bf4916d337a3b435edb.png"
+        },
+        {
+          "roi": [
+            348,
+            205,
+            60,
+            40
+          ],
+          "file": "calibration-legacy/home_result-2a00bb8886b445e38365fd5da2b308ce.png"
+        }
+      ],
+      "actions": {
+        "return": [
+          640,
+          617
+        ]
+      }
+    },
+    "builder": {
+      "anchors": [
+        {
+          "roi": [
+            680,
+            20,
+            46,
+            42
+          ],
+          "file": "calibration-legacy/builder-c2a379c2a0de492cb19f87f0e47a652b.png",
+          "margin": 24
+        },
+        {
+          "roi": [
+            1206,
+            500,
+            46,
+            44
+          ],
+          "file": "calibration-legacy/builder-bdbb1f522c6b4b95b3224394a0c52308.png",
+          "margin": 0
+        }
+      ],
+      "actions": {
+        "attack": [
+          84,
+          640
+        ]
+      },
+      "targets": {
+        "switch": {
+          "file": "calibration-legacy/builder-boat-9d1a2aaa061a4c1985e316ed6e66dcf2.png",
+          "max_score": 0.1,
+          "pan": [
+            [
+              800,
+              300
+            ],
+            [
+              600,
+              450
+            ]
+          ],
+          "offset": [
+            0,
+            0
+          ],
+          "scales": [
+            0.8,
+            0.9,
+            1.0,
+            1.1,
+            1.2,
+            1.3,
+            1.4
+          ],
+          "avoid": [
+            [
+              0,
+              0,
+              1280,
+              75
+            ],
+            [
+              1000,
+              0,
+              280,
+              270
+            ],
+            [
+              0,
+              75,
+              100,
+              500
+            ],
+            [
+              0,
+              560,
+              360,
+              160
+            ],
+            [
+              1180,
+              320,
+              100,
+              240
+            ],
+            [
+              1120,
+              560,
+              160,
+              160
+            ]
+          ],
+          "pan_attempts": 3
+        },
+        "cart": {
+          "file": "calibration-legacy/builder-cart-9f3f874317214d978c0f2f24c20a55b8.png",
+          "max_score": 0.12,
+          "scales": [
+            0.8,
+            0.9,
+            1.0,
+            1.1,
+            1.2
+          ],
+          "avoid": [
+            [
+              0,
+              0,
+              1280,
+              75
+            ],
+            [
+              1000,
+              0,
+              280,
+              270
+            ],
+            [
+              0,
+              75,
+              100,
+              500
+            ],
+            [
+              0,
+              560,
+              360,
+              160
+            ],
+            [
+              1180,
+              320,
+              100,
+              240
+            ],
+            [
+              1120,
+              560,
+              160,
+              160
+            ]
+          ],
+          "pan": [
+            [
+              640,
+              300
+            ],
+            [
+              640,
+              450
+            ]
+          ],
+          "pan_attempts": 3,
+          "alt_files": [
+            {
+              "file": "calibration-legacy/builder-cart-full-73654d455f5c4be1bfc859ee5c2c6295.png",
+              "offset": [
+                0,
+                18
+              ]
+            },
+            {
+              "file": "calibration-legacy/builder-cart-fullbubble-8aad1e6536344a138faf54daca1ddce5.png",
+              "offset": [
+                0,
+                18
+              ]
+            }
+          ],
+          "search_first": true
+        }
+      }
+    },
+    "builder_menu": {
+      "anchors": [
+        {
+          "roi": [
+            500,
+            118,
+            312,
+            38
+          ],
+          "file": "calibration-legacy/builder_menu-2dfe62c4ad1d40e9bdb9712f8bc927be.png"
+        },
+        {
+          "roi": [
+            232,
+            220,
+            138,
+            26
+          ],
+          "file": "calibration-legacy/builder_menu-7a2258b2b0d0447f90b05e91acecc204.png"
+        }
+      ],
+      "actions": {
+        "find": [
+          950,
+          472
+        ]
+      }
+    },
+    "builder_scout": {
+      "anchors": [
+        {
+          "roi": [
+            185,
+            482,
+            188,
+            38
+          ],
+          "file": "calibration-legacy/builder_scout-002a96267b204d7092784f558cd685bb.png"
+        },
+        {
+          "roi": [
+            402,
+            482,
+            190,
+            38
+          ],
+          "file": "calibration-legacy/builder_scout-bdd5eca50f8f4370beddcb066e8ff1ba.png"
+        }
+      ],
+      "actions": {},
+      "deploy": [
+        150,
+        370
+      ],
+      "troops": [
+        {
+          "slot": [
+            130,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            150,
+            370
+          ]
+        },
+        {
+          "slot": [
+            243,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            330,
+            200
+          ]
+        },
+        {
+          "slot": [
+            344,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            850,
+            140
+          ]
+        },
+        {
+          "slot": [
+            445,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            1120,
+            370
+          ]
+        },
+        {
+          "slot": [
+            546,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            1000,
+            500
+          ]
+        },
+        {
+          "slot": [
+            647,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            240,
+            445
+          ]
+        },
+        {
+          "slot": [
+            748,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            220,
+            300
+          ]
+        }
+      ]
+    },
+    "builder_battle": {
+      "anchors": [
+        {
+          "roi": [
+            30,
+            488,
+            125,
+            26
+          ],
+          "file": "calibration-legacy/builder_battle-6a85ad64217d4ac581697c49367cc508.png"
+        },
+        {
+          "roi": [
+            1080,
+            503,
+            165,
+            20
+          ],
+          "file": "calibration-legacy/builder_battle-0e1c6c1e740c4d028d36e8a86a0ee813.png"
+        }
+      ],
+      "actions": {}
+    },
+    "builder_stage2": {
+      "anchors": [
+        {
+          "roi": [
+            30,
+            485,
+            125,
+            40
+          ],
+          "file": "calibration-legacy/builder_stage2-6654f209497f443685faf73ff0342cdf.png"
+        },
+        {
+          "roi": [
+            808,
+            592,
+            80,
+            24
+          ],
+          "file": "calibration-legacy/builder_stage2-ed163cffbf2d4b93989ed7cb197191ca.png",
+          "margin": 3
+        }
+      ],
+      "actions": {},
+      "deploy": [
+        230,
+        300
+      ],
+      "troops": [
+        {
+          "slot": [
+            130,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            230,
+            300
+          ]
+        },
+        {
+          "slot": [
+            243,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            400,
+            120
+          ]
+        },
+        {
+          "slot": [
+            344,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            900,
+            130
+          ]
+        },
+        {
+          "slot": [
+            445,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            1050,
+            330
+          ]
+        },
+        {
+          "slot": [
+            546,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            950,
+            500
+          ]
+        },
+        {
+          "slot": [
+            647,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            330,
+            440
+          ]
+        },
+        {
+          "slot": [
+            748,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            400,
+            120
+          ]
+        },
+        {
+          "slot": [
+            849,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            1050,
+            330
+          ]
+        },
+        {
+          "slot": [
+            950,
+            650
+          ],
+          "count": 1,
+          "deploy": [
+            330,
+            440
+          ]
+        }
+      ],
+      "overrides": [
+        "builder_battle2"
+      ]
+    },
+    "builder_battle2": {
+      "anchors": [
+        {
+          "roi": [
+            30,
+            485,
+            125,
+            40
+          ],
+          "file": "calibration-legacy/builder_battle2-4b1dd0ab8d9e4a6b90ed8ae1ab0960ea.png"
+        },
+        {
+          "roi": [
+            540,
+            20,
+            90,
+            11
+          ],
+          "file": "calibration-legacy/builder_battle2-ef024e562f1f4316869d262b9a1cfd8b.png",
+          "margin": 3
+        }
+      ],
+      "actions": {}
+    },
+    "builder_result": {
+      "anchors": [
+        {
+          "roi": [
+            580,
+            585,
+            120,
+            48
+          ],
+          "file": "calibration-legacy/builder_result-33acedda2f1d40ca9ca160b1ea0cfee4.png"
+        },
+        {
+          "roi": [
+            372,
+            387,
+            190,
+            18
+          ],
+          "file": "calibration-legacy/builder_result-9bcb809d676e47b8bf5da07008f3071e.png"
+        }
+      ],
+      "actions": {
+        "return": [
+          640,
+          607
+        ]
+      }
+    },
+    "star_bonus": {
+      "anchors": [
+        {
+          "roi": [
+            392,
+            62,
+            510,
+            38
+          ],
+          "file": "calibration-legacy/star_bonus-0a56eabea70f42bfbf4db757468f7b1c.png"
+        },
+        {
+          "roi": [
+            592,
+            596,
+            108,
+            34
+          ],
+          "file": "calibration-legacy/star_bonus-2502b8b537384382852ded40bc07d058.png"
+        }
+      ],
+      "actions": {
+        "ok": [
+          646,
+          612
+        ]
+      }
+    },
+    "builder_star_bonus": {
+      "anchors": [
+        {
+          "roi": [
+            478,
+            128,
+            330,
+            40
+          ],
+          "file": "calibration-legacy/builder_star_bonus-fa7522b5a89042b6b9d0c941e42c859b.png"
+        },
+        {
+          "roi": [
+            586,
+            542,
+            108,
+            34
+          ],
+          "file": "calibration-legacy/builder_star_bonus-8e8e1c20a42043bc9d9b351299b43b10.png"
+        }
+      ],
+      "actions": {
+        "ok": [
+          640,
+          559
+        ]
+      }
+    },
+    "builder_cart": {
+      "anchors": [
+        {
+          "roi": [
+            497,
+            58,
+            290,
+            34
+          ],
+          "file": "calibration-legacy/builder_cart-e27b725d104d4caca2b12bf613b7e737.png"
+        },
+        {
+          "roi": [
+            1050,
+            52,
+            44,
+            40
+          ],
+          "file": "calibration-legacy/builder_cart-ac7ae281167a4c749254b19cd6b40367.png"
+        }
+      ],
+      "actions": {
+        "claim": [
+          941,
+          606
+        ],
+        "close": [
+          1072,
+          71
+        ]
+      }
+    }
+  },
+  "digits": "calibration-legacy/digits",
+  "zoom_out": {
+    "device": "/dev/input/event4",
+    "pinches": 3,
+    "center": [
+      640,
+      360
+    ],
+    "gap": [
+      700,
+      150
+    ],
+    "selection": {
+      "file": "calibration-legacy/selected-info-0f2edaacf9d84544b28cb7b2615fec77.png",
+      "max_score": 0.08
+    }
+  },
+  "touch_device": "/dev/input/event4",
+  "storage": {
+    "home": {
+      "gold": {
+        "row": 53,
+        "left": 1014,
+        "right": 1198,
+        "hue": [
+          15,
+          35
+        ],
+        "min_saturation": 150
+      },
+      "elixir": {
+        "row": 120,
+        "left": 1014,
+        "right": 1198,
+        "hue": [
+          125,
+          165
+        ],
+        "min_saturation": 120
+      }
+    },
+    "builder": {
+      "gold": {
+        "row": 53,
+        "left": 1014,
+        "right": 1198,
+        "hue": [
+          15,
+          35
+        ],
+        "min_saturation": 150
+      },
+      "elixir": {
+        "row": 120,
+        "left": 1014,
+        "right": 1198,
+        "hue": [
+          125,
+          165
+        ],
+        "min_saturation": 120
+      }
+    }
+  },
+  "cart_bar": {
+    "row": 620,
+    "left": 515,
+    "right": 808,
+    "hue": [
+      125,
+      165
+    ],
+    "min_saturation": 100,
+    "from": "left"
+  },
+  "capacity": {
+    "home": {
+      "elixir": {
+        "bar": [
+          1020,
+          96,
+          190,
+          26
+        ],
+        "tap": [
+          1120,
+          108
+        ],
+        "max": [
+          1112,
+          151,
+          135,
+          24
+        ]
+      },
+      "gold": {
+        "bar": [
+          1020,
+          28,
+          190,
+          26
+        ],
+        "tap": [
+          1120,
+          40
+        ],
+        "max": [
+          1112,
+          82,
+          135,
+          24
+        ]
+      }
+    },
+    "builder": {
+      "elixir": {
+        "bar": [
+          1020,
+          96,
+          190,
+          26
+        ],
+        "tap": [
+          1120,
+          108
+        ],
+        "max": [
+          1130,
+          150,
+          118,
+          24
+        ]
+      },
+      "gold": {
+        "bar": [
+          1020,
+          28,
+          190,
+          26
+        ],
+        "tap": [
+          1120,
+          40
+        ],
+        "max": [
+          1130,
+          82,
+          118,
+          24
+        ]
+      }
+    }
+  },
+  "cart_text": [
+    514,
+    592,
+    220,
+    26
+  ],
+  "speed_button": {
+    "file": "calibration-legacy/speed-1x-f61cc27faff74ea8b4a84795e4c9b98e.png",
+    "max_score": 0.05,
+    "scales": [
+      0.95,
+      1.0,
+      1.05
+    ],
+    "region": [
+      1160,
+      330,
+      120,
+      160
+    ]
+  }
+}

@@ -1,7 +1,5 @@
 __pycache__/
 *.pyc
-config.json
-calibration/
 captures/
 .coverage
 .claude/
@@ -10,3 +8,6 @@ captures/
 .pi/
 *.png
 *.log
+!calibration/**/*.png
+!calibration-legacy/**/*.png
+!docs/*.png

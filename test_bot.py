@@ -1266,6 +1266,20 @@ class BotTests(unittest.TestCase):
         bot.Bot(self.zoom_config(), self.root, device, live=True, timeout=1, poll=0).zoom_out('home')
         self.assertEqual(sum(1 for i in device.inputs if i[0] == 'pinch'), 2)
 
+    def test_deploy_zooms_out_before_selecting_any_card(self):
+        config = self.zoom_config()
+        scout = {**config['screens']['home_scout'], 'troops': [{'slot': [20, 80], 'count': 1}]}
+        config = {**config, 'screens': {**config['screens'], 'home_scout': scout}}
+        device = Device(self.frames, 'home_scout')
+        device.tap = lambda point: device.inputs.append(tuple(point))
+        bot.Bot(config, self.root, device, live=True, timeout=0.02, poll=0).deploy('home_scout', {'home_scout'})
+        kinds = [i[0] if isinstance(i[0], str) else 'tap' for i in device.inputs]
+        self.assertEqual(kinds[:2], ['pinch', 'pinch'])
+        self.assertEqual(device.inputs[2], (20, 80))
+        dry = Device(self.frames, 'home_scout')
+        bot.Bot(config, self.root, dry, live=False, timeout=0.02, poll=0).deploy('home_scout', {'home_scout'})
+        self.assertEqual(dry.inputs, [])
+
     def test_zoom_out_never_pinches_during_battle(self):
         runner = bot.Bot(self.zoom_config(), self.root, Device(self.frames, 'builder_stage2'),
                          live=True, timeout=0.02, poll=0)

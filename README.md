@@ -1,124 +1,182 @@
-# CoC LDPlayer farming
+# CoC Auto — Clash of Clans farming bot for LDPlayer
 
-Bot farming Clash of Clans untuk LDPlayer (Python + ADB + OpenCV). Desa asal: filter minimum loot, pasukan ditahan sampai habis, Warden + ability, spell di jalur pasukan, hero, siege. Desa malam: deploy menyebar, dua stage, klaim Gerobak Eliksir. Mode `--until-full` menyerang sampai gudang kedua desa penuh.
+A local Python bot that farms **Clash of Clans** on an **LDPlayer** emulator through ADB and OpenCV.
+It attacks in both the **Home Village** and the **Builder Base**, filters opponents by loot,
+claims rewards, and keeps going until both villages' gold and elixir storages are full —
+reopening the emulator or the game by itself if anything closes or disconnects.
 
-**Bot melanggar aturan Supercell; akun dapat diblokir. Tidak ada anti-ban.** Tidak ada pembelian, gems, upgrade, login otomatis, modifikasi game atau bypass.
+![Demo: one Builder Base attack and one Home Village attack](docs/demo.gif)
 
-## Status
+▶️ [Full-quality demo video (MP4)](docs/demo.mp4)
 
-Diuji pada satu instance LDPlayer 1280×720 (bahasa Indonesia): kedua desa, pindah desa, popup bonus bintang, Gerobak Eliksir, dan baca kapasitas gudang. Belum terbukti: satu sesi `--until-full` utuh sampai berhenti sendiri. Koordinat dan template **tidak** disertakan (`config.json` dan `calibration/` diabaikan Git); setiap pengguna wajib kalibrasi sendiri. Update UI game, army berbeda, atau resolusi lain membatalkan kalibrasi.
+> [!WARNING]
+> Automating Clash of Clans violates Supercell's Terms of Service. **Your account can be banned.**
+> There is no anti-ban or detection evasion. Use it only on an account you are willing to lose.
+> The bot never buys anything, never spends gems, never upgrades, and never logs in for you.
 
-## Persiapan Windows
+---
 
-1. Python 3.10+; `python -m pip install -r requirements.txt`. OpenCV dengan GUI, bukan headless.
-2. Opsional: Tesseract hanya cadangan bila template angka (`digits`) belum dibuat. [Panduan instalasi](https://tesseract-ocr.github.io/tessdoc/Installation.html).
-3. Buka LDPlayer/CoC manual, aktifkan local ADB. Pertahankan resolusi, zoom, bahasa dan UI scale.
-4. Periksa serial perangkat di PowerShell:
+## Features
 
-```powershell
-& "C:\LDPlayer\LDPlayer14\adb.exe" devices
+| Area | What it does |
+| --- | --- |
+| **One command** | `python bot.py --until-full --live` starts LDPlayer if it is off, opens CoC, and farms. |
+| **Self-recovery** | Restarts a stopped LDPlayer (`ldconsole`), waits for ADB after a disconnect, and reopens CoC after a crash. |
+| **Home Village** | Searches opponents with a minimum gold / elixir / dark-elixir filter (unlimited searches by default). |
+| **Deploy plan** | Holds the main troop card until it is empty, drops the Grand Warden and fires its ability, throws spells along the troop path, then deploys the other heroes and the siege machine. |
+| **Builder Base** | Spreads troops around the base, handles stage 2, and claims the **Elixir Cart** before every attack. |
+| **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
+| **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Unknown screens stop the bot. |
+| **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
+| **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. |
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[ADB screenshot] --> B[Detector<br/>template anchors]
+    B -->|known screen| C[State machine]
+    B -->|unknown screen| S[Stop - no input]
+    C --> D[Digit templates<br/>loot / storage / cart]
+    C --> E[Raw touch events<br/>tap / hold / pinch]
+    C -->|crash or DC| R[Recovery<br/>ldconsole + am start]
+    R --> A
 ```
 
-Gunakan serial yang benar-benar muncul berstatus `device`; jangan menebak port/serial. Ganti path bila instalasi berbeda.
+- **Screens** are recognised by two small UI crops per screen (`anchors`), matched with OpenCV.
+  A screen can have alternative anchor sets (`alt_anchors`) when it has two layouts, such as the win and loss result screens.
+- **Numbers** (loot, storage bars, the "Maks" tooltip, the Elixir Cart) are read with per-digit templates built from real screenshots.
+  Several font variants per digit are supported.
+- **Input** is sent as raw multitouch events written to `/dev/input/eventN`, which makes holds and pinches possible.
 
-## Config
+## Requirements
 
-Ganti serial contoh dengan hasil `adb devices`; angka filter contoh, sesuaikan sendiri:
+- Windows with **LDPlayer** (tested on LDPlayer 14, Android 14, **1280×720**, Indonesian game language)
+- **Python 3.10+**
+- ADB from LDPlayer (`adb.exe`) with **local ADB debugging** enabled in LDPlayer settings
+- Optional: Tesseract OCR — only a fallback when digit templates are not configured
 
-```powershell
-python calibrate.py --init --serial emulator-5554 --gold 500000 --elixir 500000 --dark 3000
+## Installation
+
+```bash
+git clone https://github.com/peenjeee/coc-auto.git
+cd coc-auto
+python -m pip install -r requirements.txt
 ```
 
-`--init` menolak overwrite. Field: `adb`, `serial`, `tesseract`, `resolution`, `minimum`, `screens`. Resolusi awal 1280×720; ubah sebelum kalibrasi bila berbeda. Minimum `0` menonaktifkan resource tersebut; semua minimum aktif harus terpenuhi. Ubah `config.json` hanya saat bot berhenti. Config/executable harus terpercaya; inspeksi dahulu bila berasal dari unduhan.
+Enable ADB in LDPlayer (**Settings → Other settings → ADB debugging → Open local connection**) and check the device:
 
-## Kalibrasi
-
-Tampilkan layar terkait secara manual. Klik/drag pada **jendela screenshot**, bukan game. Kalibrasi hanya capture, tidak menekan tombol emulator.
-
-```powershell
-python calibrate.py --screen home
-python calibrate.py --screen home_menu
-python calibrate.py --screen home_army
-python calibrate.py --screen home_scout --counts 40 40
-python calibrate.py --screen home_battle
-python calibrate.py --screen home_result
-python calibrate.py --screen builder
-python calibrate.py --screen builder_menu
-python calibrate.py --screen builder_scout --counts 6
-python calibrate.py --screen builder_battle
-python calibrate.py --screen builder_stage2 --counts 2
-python calibrate.py --screen builder_result
+```bash
+C:\LDPlayer\LDPlayer14\adb.exe devices
 ```
 
-- `home`/`builder`: desa idle; pilih tombol `attack`, titik perahu `switch`.
-  Anchor boleh punya `margin` (piksel, maks 40) untuk UI yang bergeser sedikit, misalnya bar atas desa malam.
-- `zoom_out`: pinch dua jari di layar desa sebelum pindah desa/menyerang, supaya zoom battle (termasuk stage 2 desa malam) sama dengan kalibrasi. `selection` menghentikan bot jika bangunan tetap terpilih.
-- `touch_device` (mis. `/dev/input/event4`): tap deploy dikirim sebagai event sentuh langsung, satu panggilan shell per kartu.
-- Kartu pasukan: `until_empty` (tap per 4 sampai kartu abu-abu), `points` (titik bergiliran, mis. spell di jalur pasukan), `wait` (detik sebelum kartu, maks 20).
-- `capacity`: per desa, angka di bar emas/elixir dibandingkan dengan "Maks" dari tooltip (bar ditekan sekali untuk membuka, sekali lagi untuk menutup; dibaca sekali per sesi, elixir dulu baru emas). `storage` (warna bar) hanya cadangan. `python bot.py --until-full --live` mulai dari desa malam, menyerang desa yang belum penuh, pindah desa saat angka ≥ Maks, dan berhenti saat kedua desa penuh. Tidak ada batas jumlah serangan; hentikan dengan Ctrl+C. `--searches 0` (default) = cari lawan tanpa batas.
-- Popup bonus bintang (`star_bonus`, `builder_star_bonus`) ditutup otomatis lewat Oke; popup lain menghentikan bot.
-- Desa malam: sebelum menyerang, bot membuka Gerobak Eliksir (`targets.cart`, geser peta dulu), tekan Ambil, lalu tutup (`builder_cart`). Gerobak tidak terlihat = dilewati tanpa tap. Dengan `--until-full`, desa malam baru selesai jika gudang emas/elixir penuh dan teks gerobak `isi / maks` (`cart_text`) juga penuh.
-- `speed_button`: template tombol kecepatan battle "1x" + area pencarian. Tombol muncul saat sisa waktu < 1 menit dan toggle 1x <-> 4x; bot hanya menekan saat terlihat "1x", paling banyak sekali per fase battle.
-- Layar hadiah setelah battle (`reward_chest`: tap peti; `reward_card`: tekan Lanjutkan) dan popup `layout_blocked` ("Tata Letak Pertahanan Terhalang", tekan Serang) ditangani otomatis.
-- `capacity.<desa>.<resource>.label`: template label "Maks:" + area pencarian. Maks dibaca dari tooltip hanya saat label terlihat, sehingga angka bar lain di belakang tooltip tidak salah terbaca; kapasitas mengikuti level akun/upgrade gudang. `maximum` (opsional) memaksa nilai tetap tanpa membuka tooltip.
-- `--until-full` memulihkan sendiri: bila LDPlayer mati (perlu `ldconsole` + `ld_index` di config, dinyalakan via `ldconsole launch`), bila CoC belum terbuka, crash/tertutup, atau ADB putus, bot menunggu ADB, membuka CoC (`am start`), menunggu layar desa, lalu melanjutkan. Batas: `--max-recoveries` (default 20).
-- `alt_anchors`: set penanda alternatif untuk layar yang punya dua tampilan (mis. `home_result` menang "Klaim Hadiah" vs kalah "Ke Beranda").
-- `digits`: template angka loot (buat ulang dengan `python calibrate.py --learn-digits shot.png:EMAS:ELIXIR ...`).
-- `targets.switch`: posisi perahu ikut kamera, jadi bot mencari ikon (`{"file": "<ikon PNG>", "max_score": 0.12}`, opsional `pan`, `scales`, `avoid`) dan berhenti jika tidak ditemukan atau ambigu.
-- `hold` (detik): jari ditahan di titik deploy sampai kartu abu-abu. `tap_only`: tekan kartu saja, mis. ability hero.
-- `*_menu`: menu matchmaking, tombol `find`.
-- `*_scout`: lawan sebelum deploy. `home_scout`: tombol Next dan crop **angka saja** untuk tiap resource, tanpa ikon/label.
-- `*_battle`: sesudah deploy mulai. `builder_stage2`: tahap berikutnya siap deploy; pilih anchor yang tetap terlihat setelah deploy.
-- `*_result`: hasil dengan tombol `return`.
-- Dua anchor UI statis unik, tidak overlap; jangan timer, loot, animasi, jumlah pasukan, bangunan. Pilih bagian yang berubah ketika popup muncul. Dua anchor tidak menjamin setiap popup terdeteksi.
-- `--counts 40 40`: dua slot, masing-masing 40 tap deploy; bukan housing space. Urutan kartu, ability hero dan titik spell diatur lewat `troops` di `config.json`.
-- Satu titik deploy harus di luar garis merah. Legal pada satu lawan belum tentu legal untuk semua base. Jangan pilih shop/gems/UI lain.
-- Profil existing memerlukan `--replace`; config disimpan atomik, template memakai nama baru.
-- Bila loading menyebabkan stop, kalibrasi `--screen loading` dengan anchor loading unik. Layar asing tetap menghentikan bot.
-- Jika versi game tidak memiliki menu/tahap tersebut, alur perlu disesuaikan setelah screenshot diperiksa. Jangan memaksakan dua state dengan anchor identik.
+## Quick start
 
-Screenshot lokal opsional, capture menolak overwrite:
+The repository ships with the calibration that was used to build and test the bot (`config.json` + `calibration/`).
+If your setup matches (1280×720, Indonesian UI, a similar army), you can start right away:
 
-```powershell
-python calibrate.py --capture home.png
-python calibrate.py --screen home --image home.png
-```
-
-Tidak ada screenshot dikirim ke layanan OCR/AI. Simpan di `captures/` bila ingin diabaikan Git.
-
-## Dry-run
-
-```powershell
-python bot.py --mode home
-python bot.py --mode builder
-python bot.py --mode both
-```
-
-Tanpa `--live`, **tidak ada tap/swipe**. Memeriksa layar saat ini saja; pada `home_scout` membaca loot dan melaporkan filter. Tidak menavigasi atau mensimulasikan battle. Periksa tiap layar manual, OCR beberapa lawan dan popup.
-
-## Live opt-in
-
-Setelah kalibrasi/dry-run, mulai dari desa idle. Perintah ini benar-benar mengendalikan akun, dapat menghabiskan biaya pencarian/resource dan memengaruhi trophy. Jalankan hanya jika menerima risikonya:
-
-```powershell
-python bot.py --mode both --cycles 1 --live
+```bash
 python bot.py --until-full --live
 ```
 
-`both --cycles 1`: satu serangan tiap desa (cycles 1–100). `--searches 0` (default) mencari lawan tanpa batas; angka lain membatasi jumlah pencarian. Ctrl+C berhenti; input yang sudah dikirim tidak bisa dibatalkan. Battle dapat memerlukan penyelesaian manual.
+| Command | Purpose |
+| --- | --- |
+| `python bot.py` | Dry run: detect the current screen and, on a scout screen, read loot. No input. |
+| `python bot.py --mode builder --cycles 1 --live` | One Builder Base attack. |
+| `python bot.py --mode home --cycles 1 --live` | One Home Village attack. |
+| `python bot.py --mode both --cycles 3 --live` | Alternate villages, three rounds. |
+| `python bot.py --until-full --live` | Farm until both villages are full, with self-recovery. |
 
-OCR kosong/confidence rendah, layar asing/ambigu, disconnect, resolusi berubah, timeout menghentikan bot. Tidak ada recovery tap sembarang. Tunggu hasil, tidak surrender otomatis. Tidak menjamin kemenangan atau seluruh unit berhasil dideploy.
+### CLI options — `bot.py`
 
-## Tes
+| Option | Default | Description |
+| --- | --- | --- |
+| `--config PATH` | `config.json` | Calibration file to use. |
+| `--mode {home,builder,both}` | `both` | Villages used by `--cycles` runs. |
+| `--cycles N` | `1` | Rounds to attack (1–100). |
+| `--searches N` | `0` | Opponent searches per Home attack; `0` means unlimited. |
+| `--until-full` | off | Attack until gold and elixir are full in both villages. |
+| `--max-recoveries N` | `20` | How many times `--until-full` may restart LDPlayer / CoC. |
+| `--live` | off | Allow real taps. Without it the bot only observes. |
 
-```powershell
-python -m unittest discover -v
-python bot.py --help
-python calibrate.py --help
+Stop at any time with **Ctrl+C**.
+
+## Calibration
+
+| Files | UI version |
+| --- | --- |
+| `config.json` + `calibration/` | Current game UI (after the latest update). |
+| `config.legacy.json` + `calibration-legacy/` | Previous game UI, kept for reference. Run it with `python bot.py --config config.legacy.json`. |
+
+Calibration is specific to resolution, language, UI scale, and army composition.
+After a game update, or on a different setup, recalibrate the affected screens:
+
+```bash
+python calibrate.py --init --serial emulator-5554 --gold 500000 --elixir 500000
+python calibrate.py --capture shot.png                  # save a screenshot (no input)
+python calibrate.py --screen home --image shot.png      # pick anchors and tap points on a screenshot
+python calibrate.py --screen home_scout --counts 1 1    # deploy screens need slot counts
+python calibrate.py --learn-digits shot.png:GOLD:ELIXIR # build digit templates from labelled scouts
 ```
 
-Tes screenshot sintetis/perangkat palsu: parser OCR, filter, no-shell/serial, dry-run, template/popup, timeout, pergantian lawan, dua desa/tahap. Bukan bukti kompatibilitas game nyata. Coverage belum diukur; pytest/coverage/linter tidak dipasang otomatis.
+Calibration only works on screenshots and never taps the game. Existing profiles need `--replace`.
 
-## Referensi
+<details>
+<summary><b>Configuration reference</b></summary>
 
-[MyBot](https://github.com/MyBotRun/MyBot), [CoC_Bot](https://github.com/m24842/CoC_Bot), [CLI LDPlayer](https://www.ldplayer.net/blog/introduction-to-ldplayer-command-line-interface.html). Referensi pendekatan saja, kode tidak disalin. Status/lisensi/kompatibilitas repo belum diverifikasi ulang independen; tools ini bukan fork/instalasi bot tersebut.
+| Key | Meaning |
+| --- | --- |
+| `adb`, `serial`, `resolution` | ADB executable, device serial, and screen size. |
+| `ldconsole`, `ld_index` | LDPlayer console and instance index, used to start a stopped emulator. |
+| `touch_device` | Raw touch input device, e.g. `/dev/input/event4`. |
+| `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
+| `screens.<name>.anchors` | Two UI crops that identify a screen; optional `margin` for small UI shifts. |
+| `screens.<name>.alt_anchors` | Alternative anchor sets for screens with two layouts. |
+| `screens.<name>.overrides` | Screens this one wins over when both match (e.g. stage 2 over battle). |
+| `screens.<name>.actions` | Fixed tap points (attack, find, next, return, …). |
+| `screens.<name>.targets` | Tap points found by image search (boat, Elixir Cart) with `pan`, `scales`, `avoid`, `alt_files`. |
+| `screens.<deploy>.troops` | Ordered cards: `slot`, `count`, `hold`, `until_empty`, `points`, `tap_only`, `wait`. |
+| `capacity.<village>.<resource>` | Storage bar crop, tooltip tap point, `max` crop, and `label` ("Maks:") template. Optional `maximum` forces a fixed value. |
+| `cart_text` | Crop of the Elixir Cart "current / max" text. |
+| `digits` | Folder of digit templates (`0.png` … `9.png`, plus variants like `9-ui2.png`). |
+| `zoom_out` | Pinch settings used before switching villages or attacking. |
+| `speed_button` | Template of the battle "1x" button, tapped once to switch to 4x. |
+
+</details>
+
+## Recovery behaviour
+
+| Situation | What `--until-full` does |
+| --- | --- |
+| LDPlayer is not running | Starts it with `ldconsole launch`, waits for ADB and Android boot. |
+| CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. |
+| ADB disconnects | Waits up to 5 minutes for the device, then resumes. |
+| Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
+
+## Testing
+
+```bash
+python -m unittest -v test_bot
+```
+
+The suite (95 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
+
+## Project structure
+
+```text
+bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
+calibrate.py           calibration CLI (screenshots only, never taps)
+test_bot.py            offline unit tests
+config.json            calibration for the current game UI
+calibration/           anchor, target and digit templates for config.json
+config.legacy.json     calibration for the previous game UI
+calibration-legacy/    templates for config.legacy.json
+config.example.json    minimal config skeleton
+docs/                  demo GIF and video
+```
+
+## Disclaimer
+
+This project is for educational purposes. It is not affiliated with, endorsed by, or sponsored by Supercell.
+Clash of Clans is a trademark of Supercell Oy. You are responsible for how you use it.

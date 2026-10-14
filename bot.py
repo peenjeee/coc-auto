@@ -929,6 +929,10 @@ class Bot:
         state = self.checked_state(allowed, terminal)[0]
         if state in terminal:
             return state
+        if self.battle_zoom():
+            state = self.checked_state(allowed, terminal)[0]
+            if state in terminal:
+                return state
         for troop in screen['troops']:
             if troop.get('wait') and self.live:
                 time.sleep(troop['wait'])
@@ -968,6 +972,17 @@ class Bot:
         finally:
             if self.live:
                 self.device.touch_up()
+
+    def battle_zoom(self) -> bool:
+        """Zoom out on the battle map before any card is selected, so edge deploy points line up."""
+        zoom = self.config.get('zoom_out')
+        if not zoom or not self.live:
+            return False
+        for _ in range(zoom.get('battle_pinches', zoom['pinches'])):
+            start_gap, end_gap = zoom['gap']
+            self.device.pinch(zoom['device'], zoom['center'], start_gap, end_gap)
+        self.wait_still(ZOOM_SETTLE_SECONDS if self.poll else 0)
+        return True
 
     def checked_state(self, allowed: set, terminal: set) -> tuple[str, np.ndarray]:
         for attempt in range(UNKNOWN_RETRIES + 1):
