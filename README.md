@@ -30,6 +30,17 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
 | **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. |
 
+## Recommended armies
+
+The bundled deploy plans were tuned for these armies. Other compositions work too, but deploy points and card order may need recalibration.
+
+| Village | Troops | Spells | Notes |
+| --- | --- | --- | --- |
+| **Home Village** | Full **Dragons** | Full **Rage** or full **Freeze** | Heroes and a siege machine are optional; the sweep step deploys any card left in the bar. |
+| **Builder Base** | Full **Baby Dragons** + Battle Machine | — | Spread around the base in stage 1, remaining troops and reinforcements in stage 2. |
+
+Dragons are deployed by holding one edge point until the card is empty, and spells are thrown along the troops' path, so air armies give the most consistent results.
+
 ## How it works
 
 ```mermaid
