@@ -76,6 +76,7 @@ POPUP_CLEAR_ATTEMPTS = 3
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
+SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS, LAUNCH_WAIT_SECONDS = 4, 90
 OPTIONAL_SCREENS = ('builder_cart',)
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
@@ -246,7 +247,12 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
         if name in DEPLOY_SCREENS:
             point(screen.get('deploy'), resolution, 'deploy')
             troops = screen.get('troops', [])
-            if not troops or len(troops) > 20:
+            sweep = screen.get('sweep')
+            if sweep:
+                point(sweep.get('deploy'), resolution, 'sweep deploy')
+                for location in sweep.get('slots', []):
+                    point(location, resolution, 'sweep slot')
+            if (not troops and not sweep) or len(troops) > 20:
                 raise BotError(f'{name}: slot pasukan belum dikalibrasi')
             for troop in troops:
                 point(troop['slot'], resolution, 'troop slot')
@@ -930,6 +936,17 @@ class Bot:
                 if state in terminal:
                     return state
             state = self.deploy_card(screen, troop, allowed, terminal)
+            if state in terminal:
+                return state
+        sweep = screen.get('sweep')
+        for slot in (sweep or {}).get('slots', []):
+            state, image = self.checked_state(allowed, terminal)
+            if state in terminal:
+                return state
+            if card_empty(image, slot):
+                continue
+            card = {'slot': slot, 'count': SWEEP_TAPS, 'until_empty': True, 'deploy': sweep['deploy']}
+            state = self.deploy_card(screen, card, allowed, terminal)
             if state in terminal:
                 return state
         return None

@@ -1035,6 +1035,20 @@ class BotTests(unittest.TestCase):
             run.return_value.stdout = b'  mCurrentFocus=Window{1 u0 com.android.launcher3/x}'
             self.assertFalse(device.game_in_front())
 
+    def test_sweep_deploys_every_card_still_coloured(self):
+        frame = self.frames['home_scout'].copy()
+        frame[22:90, 10:90] = cv2.cvtColor(cv2.cvtColor(frame[22:90, 10:90], cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+        scout = {**self.config['screens']['home_scout'], 'troops': [],
+                 'sweep': {'slots': [[50, 60], [110, 60]], 'deploy': [40, 40]}}
+        config = {**self.config, 'screens': {**self.config['screens'], 'home_scout': scout}}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, 'home_scout': frame}, 'home_scout')
+        device.tap = lambda point: device.inputs.append(tuple(point))
+        bot.Bot(config, self.root, device, live=True, timeout=0.02, poll=0).deploy('home_scout', {'home_scout'})
+        self.assertNotIn((50, 60), device.inputs)
+        self.assertIn((110, 60), device.inputs)
+        self.assertIn((40, 40), device.inputs)
+
     def test_tap_only_card_presses_hero_ability(self):
         scout = {**self.config['screens']['home_scout'],
                  'troops': [{'slot': [20, 60], 'count': 1}, {'slot': [20, 60], 'count': 1, 'tap_only': True}]}
