@@ -732,6 +732,22 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.BotError):
             bot.validate_config(config, self.root, 'both')
 
+    def test_alternative_anchor_set_matches_other_layout(self):
+        loss = np.random.default_rng(41).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        alt = []
+        for number, roi in enumerate(([20, 30, 15, 12], [100, 60, 15, 12])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'loss-{number}.png'), loss[y:y+h, x:x+w])
+            alt.append({'roi': roi, 'file': f'loss-{number}.png'})
+        screens = {**self.config['screens'],
+                   'home_result': {**self.config['screens']['home_result'], 'alt_anchors': [alt]}}
+        config = {**self.config, 'screens': screens}
+        bot.validate_config(config, self.root, 'both')
+        detector = bot.Detector(config, self.root)
+        self.assertEqual(detector.detect(loss), 'home_result')
+        self.assertEqual(detector.detect(self.frames['home_result']), 'home_result')
+        self.assertEqual(detector.detect(self.frames['home']), 'home')
+
     def test_anchor_margin_tolerates_shifted_ui(self):
         shifted = self.frames['home'].copy()
         shifted[5:17, 2:17] = self.frames['home'][5:17, 5:20]

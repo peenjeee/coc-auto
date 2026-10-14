@@ -62,6 +62,7 @@ python calibrate.py --screen builder_result
 - Layar hadiah setelah battle (`reward_chest`: tap peti; `reward_card`: tekan Lanjutkan) dan popup `layout_blocked` ("Tata Letak Pertahanan Terhalang", tekan Serang) ditangani otomatis.
 - `capacity.<desa>.<resource>.label`: template label "Maks:" + area pencarian. Maks dibaca dari tooltip hanya saat label terlihat, sehingga angka bar lain di belakang tooltip tidak salah terbaca; kapasitas mengikuti level akun/upgrade gudang. `maximum` (opsional) memaksa nilai tetap tanpa membuka tooltip.
 - `--until-full` memulihkan sendiri: bila LDPlayer mati (perlu `ldconsole` + `ld_index` di config, dinyalakan via `ldconsole launch`), bila CoC belum terbuka, crash/tertutup, atau ADB putus, bot menunggu ADB, membuka CoC (`am start`), menunggu layar desa, lalu melanjutkan. Batas: `--max-recoveries` (default 20).
+- `alt_anchors`: set penanda alternatif untuk layar yang punya dua tampilan (mis. `home_result` menang "Klaim Hadiah" vs kalah "Ke Beranda").
 - `digits`: template angka loot (buat ulang dengan `python calibrate.py --learn-digits shot.png:EMAS:ELIXIR ...`).
 - `targets.switch`: posisi perahu ikut kamera, jadi bot mencari ikon (`{"file": "<ikon PNG>", "max_score": 0.12}`, opsional `pan`, `scales`, `avoid`) dan berhenti jika tidak ditemukan atau ambigu.
 - `hold` (detik): jari ditahan di titik deploy sampai kartu abu-abu. `tap_only`: tekan kartu saja, mis. ability hero.

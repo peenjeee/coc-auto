@@ -192,6 +192,14 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
             if float(template.std()) < 5:
                 raise BotError(f'{name}: anchor terlalu polos')
             integer(anchor.get('margin', 0), 0, ANCHOR_MAX_MARGIN, 'anchor margin')
+        for group in screen.get('alt_anchors', []):
+            if not isinstance(group, list) or len(group) < 2:
+                raise BotError(f'{name}: alt_anchors perlu minimal dua anchor')
+            for anchor in group:
+                roi = rectangle(anchor['roi'], resolution)
+                template = cv2.imread(str(asset_path(root, anchor['file'])))
+                if template is None or list(template.shape[:2]) != [roi[3], roi[2]] or float(template.std()) < 5:
+                    raise BotError(f'{name}: template alt_anchors hilang/ukuran salah')
         overrides = screen.get('overrides', [])
         if not isinstance(overrides, list) or set(overrides) - set(SCREEN_NAMES) or name in overrides:
             raise BotError(f'{name}: overrides tidak valid')
@@ -523,6 +531,15 @@ class Detector:
             for name, screen in config['screens'].items()
         }
         self.overrides = {name: set(screen.get('overrides', [])) for name, screen in config['screens'].items()}
+        self.alternatives = {
+            name: [[(a['roi'], cv2.imread(str(asset_path(root, a['file']))), a.get('margin', 0)) for a in group]
+                   for group in screen.get('alt_anchors', [])]
+            for name, screen in config['screens'].items()
+        }
+
+    def matches(self, image: np.ndarray, anchors: list) -> bool:
+        scores = [self.score(image, roi, template, margin) for roi, template, margin in anchors]
+        return all(math.isfinite(score) and score <= 0.02 for score in scores)
 
     def score(self, image: np.ndarray, roi: list, template: np.ndarray, margin: int) -> float:
         x, y, w, h = roi
@@ -536,8 +553,7 @@ class Detector:
             raise BotError('Resolusi layar berbeda dari kalibrasi')
         matches = []
         for name, anchors in self.templates.items():
-            scores = [self.score(image, roi, template, margin) for roi, template, margin in anchors]
-            if all(math.isfinite(score) and score <= 0.02 for score in scores):
+            if self.matches(image, anchors) or any(self.matches(image, group) for group in self.alternatives[name]):
                 matches.append(name)
         if not matches:
             raise UnknownScreen('Layar tidak dikenal; tidak ada input dikirim')
