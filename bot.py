@@ -269,6 +269,12 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
             point(spec.get('tap'), resolution, 'capacity tap')
             if 'maximum' in spec:
                 integer(spec['maximum'], 1, 999_999_999, 'capacity maximum')
+            label = spec.get('label')
+            if label:
+                rectangle(label.get('region'), resolution)
+                template = cv2.imread(str(asset_path(root, label.get('file'))))
+                if template is None or not isinstance(label.get('max_score'), float):
+                    raise BotError('capacity label tidak valid')
     if config.get('cart_text'):
         rectangle(config['cart_text'], resolution)
     button = config.get('speed_button')
@@ -1025,23 +1031,42 @@ class Bot:
             return cached
         if self.live:
             self.guarded_tap({village}, spec['tap'])
-        maximum = self.read_until(lambda image: read_number(crop(image, spec['max']), self.templates()),
-                                  TOOLTIP_SHOW_SECONDS)
+
+        def read_max(image: np.ndarray) -> int:
+            if not self.tooltip_open(image, spec):
+                raise BotError('Tooltip gudang belum terbuka')
+            return read_number(crop(image, spec['max']), self.templates(), FRACTION_MIN_SCORE)
+
+        maximum = self.read_until(read_max, TOOLTIP_SHOW_SECONDS)
         if maximum <= 0:
             raise BotError('Kapasitas gudang tidak terbaca')
         self.capacity[(village, key)] = maximum
-        if self.live:
-            self.guarded_tap({village}, spec['tap'])
+        if self.live and self.tooltip_open(self.device.capture(), spec):
+            self.device.tap_many([spec['tap']])
         deadline = time.monotonic() + (TOOLTIP_CLEAR_SECONDS if self.poll else 0)
         while time.monotonic() < deadline:
-            try:
-                read_number(crop(self.device.capture(), spec['max']), self.templates())
-            except BotError:
+            if not self.tooltip_open(self.device.capture(), spec):
                 break
         else:
             if self.poll:
                 raise BotError('Tooltip gudang tidak hilang; tidak ada input lanjutan')
         return maximum
+
+    def tooltip_open(self, image: np.ndarray, spec: dict) -> bool:
+        """With a 'Maks:' label template the tooltip is open only while the label is visible."""
+        label = spec.get('label')
+        if not label:
+            try:
+                read_number(crop(image, spec['max']), self.templates(), FRACTION_MIN_SCORE)
+                return True
+            except BotError:
+                return False
+        template = cv2.imread(str(asset_path(self.root, label['file'])))
+        try:
+            find_target(crop(image, label['region']), template, label['max_score'])
+            return True
+        except BotError:
+            return False
 
     def read_until(self, reader: Callable, limit: float):
         """Read from fresh screenshots until the value appears; no fixed wait."""

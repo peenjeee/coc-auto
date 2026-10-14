@@ -60,7 +60,7 @@ python calibrate.py --screen builder_result
 - Desa malam: sebelum menyerang, bot membuka Gerobak Eliksir (`targets.cart`, geser peta dulu), tekan Ambil, lalu tutup (`builder_cart`). Gerobak tidak terlihat = dilewati tanpa tap. Dengan `--until-full`, desa malam baru selesai jika gudang emas/elixir penuh dan teks gerobak `isi / maks` (`cart_text`) juga penuh.
 - `speed_button`: template tombol kecepatan battle "1x" + area pencarian. Tombol muncul saat sisa waktu < 1 menit dan toggle 1x <-> 4x; bot hanya menekan saat terlihat "1x", paling banyak sekali per fase battle.
 - Layar hadiah setelah battle (`reward_chest`: tap peti; `reward_card`: tekan Lanjutkan) dan popup `layout_blocked` ("Tata Letak Pertahanan Terhalang", tekan Serang) ditangani otomatis.
-- `capacity.<desa>.<resource>.maximum`: kapasitas gudang tetap; bila diisi, tooltip Maks tidak dibuka. Perbarui setelah upgrade gudang.
+- `capacity.<desa>.<resource>.label`: template label "Maks:" + area pencarian. Maks dibaca dari tooltip hanya saat label terlihat, sehingga angka bar lain di belakang tooltip tidak salah terbaca; kapasitas mengikuti level akun/upgrade gudang. `maximum` (opsional) memaksa nilai tetap tanpa membuka tooltip.
 - `digits`: template angka loot (buat ulang dengan `python calibrate.py --learn-digits shot.png:EMAS:ELIXIR ...`).
 - `targets.switch`: posisi perahu ikut kamera, jadi bot mencari ikon (`{"file": "<ikon PNG>", "max_score": 0.12}`, opsional `pan`, `scales`, `avoid`) dan berhenti jika tidak ditemukan atau ambigu.
 - `hold` (detik): jari ditahan di titik deploy sampai kartu abu-abu. `tap_only`: tekan kartu saja, mis. ability hero.

@@ -568,6 +568,46 @@ class BotTests(unittest.TestCase):
         self.assertFalse(runner.village_full('home', with_number(frame, '139', 22)))
         self.assertEqual(device.inputs, [(100, 10), (100, 10)])
 
+    def test_tooltip_label_gates_max_reading(self):
+        templates = self.digit_templates()
+        folder = self.root / 'digits'
+        folder.mkdir()
+        for digit, glyph in templates.items():
+            cv2.imwrite(str(folder / f'{digit}.png'), (glyph * 255).astype(np.uint8))
+
+        def with_number(base, text, top):
+            out = base.copy()
+            out[top:top + 30, 20:120] = 0
+            digits = self.rendered(text)
+            out[top:top + 30, 20:20 + digits.shape[1]] = digits
+            return out
+
+        frame = with_number(with_number(self.frames['home'], '140', 22), '999', 55)
+        label = np.random.default_rng(31).integers(0, 256, (10, 14, 3), dtype=np.uint8)
+        tip = with_number(frame, '140', 55)
+        tip[70:80, 130:144] = label
+        cv2.imwrite(str(self.root / 'maks.png'), label)
+        cap = {'bar': [20, 22, 100, 30], 'tap': [100, 10], 'max': [20, 55, 100, 30],
+               'label': {'file': 'maks.png', 'region': [120, 60, 40, 30], 'max_score': 0.05}}
+        config = {**self.config, 'digits': 'digits', 'capacity': {'home': {'gold': cap}}}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, 'home': frame})
+        def toggle(point):
+            device.inputs.append(tuple(point))
+            device.frames = {**device.frames, 'home': frame if device.frames['home'] is tip else tip}
+        device.tap = toggle
+        tip[5:17, 5:20] = 0
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        self.assertEqual(runner.storage_max('home', 'gold', cap), 140)
+        self.assertIs(device.frames['home'], frame)
+        self.assertEqual(device.inputs, [(100, 10), (100, 10)])
+        closed = {**self.frames, 'home': frame}
+        never = Device(closed)
+        never.tap = lambda point: never.inputs.append(tuple(point))
+        runner = bot.Bot(config, self.root, never, live=True, timeout=1, poll=0)
+        with self.assertRaises(bot.BotError):
+            runner.storage_max('home', 'gold', cap)
+
     def test_digit_reader_ignores_unaligned_background_blobs(self):
         image = self.rendered('504 548')
         image = np.pad(image, ((0, 0), (40, 0), (0, 0)))
