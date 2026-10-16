@@ -78,7 +78,7 @@ GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
 MEMORY_RETRY_SECONDS, BATTLE_END_SECONDS = 30, 240
-LOW_MEMORY_MB, EMULATOR_STOP_SECONDS = 1500, 60
+LOW_MEMORY_MB, EMULATOR_STOP_SECONDS, EMULATOR_REFRESH_SECONDS = 500, 60, 1800
 RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS, LAUNCH_WAIT_SECONDS = 4, 90
@@ -770,6 +770,7 @@ class Bot:
                  emulator: 'Emulator | None' = None) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.emulator = emulator
+        self.emulator_started: float | None = None
         self.detector = Detector(config, root)
         self.timeout, self.poll = timeout, poll
         self.reader = reader or self.read_loot
@@ -1293,6 +1294,7 @@ class Bot:
         if self.emulator and not self.device.connected() and not self.emulator.running():
             LOG.warning('LDPlayer belum berjalan; menyalakan emulator')
             self.emulator.launch()
+            self.emulator_started = time.monotonic()
         deadline = time.monotonic() + RECOVER_ADB_SECONDS
         while not (self.device.connected() and self.device.booted()):
             if time.monotonic() >= deadline:
@@ -1319,10 +1321,13 @@ class Bot:
             ready = self.device.connected() and self.device.game_in_front()
         except DeviceError:
             ready = False
-        if not ready:
-            self.recover()
+        # The recovery step runs inside the try, so a recovery that fails is retried like any other loss.
+        pending = None if ready else self.recover
         while True:
             try:
+                if pending:
+                    step, pending = pending, None
+                    step()
                 return self.run_until_full(searches)
             except (MemoryError, cv2.error) as exc:
                 if not out_of_memory(exc) or recoveries >= max_recoveries:
@@ -1332,8 +1337,7 @@ class Bot:
                 gc.collect()
                 time.sleep(MEMORY_RETRY_SECONDS if self.poll else 0)
                 self.release_touch()
-                self.settle()
-                self.refresh_if_low_memory()
+                pending = self.settle_after_memory
             except BotError as exc:
                 lost = isinstance(exc, DeviceError)
                 if not lost:
@@ -1346,7 +1350,11 @@ class Bot:
                 recoveries += 1
                 LOG.warning('Game tertutup/terputus (%s); pemulihan %s/%s', exc, recoveries, max_recoveries)
                 self.release_touch()
-                self.recover()
+                pending = self.recover
+
+    def settle_after_memory(self) -> None:
+        self.settle()
+        self.refresh_if_low_memory()
 
     def release_touch(self) -> None:
         touch_up = getattr(self.device, 'touch_up', None)
@@ -1359,6 +1367,8 @@ class Bot:
     def refresh_if_low_memory(self) -> bool:
         """LDPlayer grows its memory over hours; restart it between attacks before the PC runs out."""
         if not (self.live and self.emulator):
+            return False
+        if self.emulator_started is not None and time.monotonic() - self.emulator_started < EMULATOR_REFRESH_SECONDS:
             return False
         free = available_memory_mb()
         if free is None or free >= LOW_MEMORY_MB:

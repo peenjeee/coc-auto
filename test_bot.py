@@ -1037,6 +1037,30 @@ class BotTests(unittest.TestCase):
             self.assertTrue(runner.refresh_if_low_memory())
         self.assertEqual(emulator.events, ['quit', 'launch'])
         self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
+        with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB - 1):
+            self.assertFalse(runner.refresh_if_low_memory())
+        self.assertEqual(emulator.events, ['quit', 'launch'])
+
+    def test_failed_recovery_is_retried_instead_of_stopping(self):
+        device = Device(self.frames)
+        device.game_in_front = lambda: True
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runs, recoveries = [], []
+
+        def flaky_run(searches):
+            runs.append(1)
+            if len(runs) == 1:
+                raise bot.DeviceError('ADB gagal')
+            return 5
+
+        def flaky_recover():
+            recoveries.append(1)
+            if len(recoveries) == 1:
+                raise bot.DeviceError('ADB tidak kembali')
+        runner.run_until_full, runner.recover = flaky_run, flaky_recover
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=3), 5)
+        self.assertEqual((len(runs), len(recoveries)), (2, 2))
 
     def test_enough_memory_or_dry_run_never_restarts_emulator(self):
         device, emulator = self.restartable()
