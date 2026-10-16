@@ -864,6 +864,28 @@
           "file": "calibration/builder_battle-0e1c6c1e740c4d028d36e8a86a0ee813.png"
         }
       ],
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              30,
+              488,
+              125,
+              26
+            ],
+            "file": "calibration/builder_battle-6a85ad64217d4ac581697c49367cc508.png"
+          },
+          {
+            "roi": [
+              540,
+              20,
+              90,
+              11
+            ],
+            "file": "calibration/builder_battle2-ef024e562f1f4316869d262b9a1cfd8b.png"
+          }
+        ]
+      ],
       "actions": {}
     },
     "builder_stage2": {

@@ -1041,6 +1041,17 @@ class BotTests(unittest.TestCase):
             self.assertFalse(runner.refresh_if_low_memory())
         self.assertEqual(emulator.events, ['quit', 'launch'])
 
+    def test_resilient_run_started_on_a_result_screen_returns_to_the_village_first(self):
+        device = Device(self.frames, initial='builder_result')
+        device.game_in_front = lambda: True
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        seen = []
+        runner.run_until_full = lambda searches: seen.append(device.state) or 6
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=1), 6)
+        self.assertIn((80, 70), device.inputs)
+        self.assertEqual(seen, ['builder'])
+
     def test_failed_recovery_is_retried_instead_of_stopping(self):
         device = Device(self.frames)
         device.game_in_front = lambda: True

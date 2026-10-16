@@ -1322,7 +1322,8 @@ class Bot:
         except DeviceError:
             ready = False
         # The recovery step runs inside the try, so a recovery that fails is retried like any other loss.
-        pending = None if ready else self.recover
+        # Started mid-battle or on a result screen, first let the battle end and return to the village.
+        pending = self.settle if ready else self.recover
         while True:
             try:
                 if pending:
