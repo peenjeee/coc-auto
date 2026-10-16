@@ -78,6 +78,7 @@ GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
 MEMORY_RETRY_SECONDS, BATTLE_END_SECONDS = 30, 240
+LOW_MEMORY_MB, EMULATOR_STOP_SECONDS = 1500, 60
 RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS, LAUNCH_WAIT_SECONDS = 4, 90
@@ -532,6 +533,26 @@ class Emulator:
 
     def launch(self) -> None:
         self.run('launch')
+
+    def quit(self) -> None:
+        self.run('quit')
+
+
+def available_memory_mb() -> int | None:
+    """Free commit memory (RAM + page file) on Windows; None where it cannot be read."""
+    import ctypes
+    if not hasattr(ctypes, 'windll'):
+        return None
+
+    class MemoryStatus(ctypes.Structure):
+        _fields_ = [('length', ctypes.c_ulong), ('load', ctypes.c_ulong)] + [
+            (name, ctypes.c_ulonglong) for name in ('total_phys', 'avail_phys', 'total_commit', 'avail_commit',
+                                                    'total_virtual', 'avail_virtual', 'avail_extended')]
+    status = MemoryStatus()
+    status.length = ctypes.sizeof(MemoryStatus)
+    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+        return None
+    return status.avail_commit // (1024 * 1024)
 
 
 class Detector:
@@ -1246,6 +1267,7 @@ class Bot:
         self.wait(set(VILLAGES), set(), 30)
         village = 'builder'
         while True:
+            self.refresh_if_low_memory()
             self.navigate(village)
             if village == 'builder':
                 self.collect_cart()
@@ -1311,6 +1333,7 @@ class Bot:
                 time.sleep(MEMORY_RETRY_SECONDS if self.poll else 0)
                 self.release_touch()
                 self.settle()
+                self.refresh_if_low_memory()
             except BotError as exc:
                 lost = isinstance(exc, DeviceError)
                 if not lost:
@@ -1332,6 +1355,21 @@ class Bot:
                 touch_up()
             except BotError:
                 pass
+
+    def refresh_if_low_memory(self) -> bool:
+        """LDPlayer grows its memory over hours; restart it between attacks before the PC runs out."""
+        if not (self.live and self.emulator):
+            return False
+        free = available_memory_mb()
+        if free is None or free >= LOW_MEMORY_MB:
+            return False
+        LOG.warning('Memori PC tinggal %s MB; restart LDPlayer untuk membebaskan memori', free)
+        self.emulator.quit()
+        deadline = time.monotonic() + (EMULATOR_STOP_SECONDS if self.poll else 0)
+        while self.emulator.running() and time.monotonic() < deadline:
+            time.sleep(RECOVER_POLL_SECONDS)
+        self.recover()
+        return True
 
     def settle(self) -> None:
         """After an interrupted run, let a battle in progress end and leave its result screen."""

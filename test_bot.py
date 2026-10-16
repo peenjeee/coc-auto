@@ -1010,6 +1010,46 @@ class BotTests(unittest.TestCase):
             runner.run_until_full_resilient(0, max_recoveries=1)
         self.assertEqual(len(attempts), 2)
 
+    def restartable(self):
+        device = Device(self.frames)
+        device.up, device.front, device.launches = True, True, []
+        device.connected = lambda: device.up
+        device.booted = lambda: device.up
+        device.game_in_front = lambda: device.front
+        device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
+
+        class Emulator:
+            events = []
+            def running(self):
+                return device.up
+            def quit(self):
+                Emulator.events.append('quit')
+                device.up, device.front = False, False
+            def launch(self):
+                Emulator.events.append('launch')
+                device.up = True
+        return device, Emulator()
+
+    def test_low_pc_memory_restarts_emulator_between_attacks(self):
+        device, emulator = self.restartable()
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=emulator)
+        with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB - 1):
+            self.assertTrue(runner.refresh_if_low_memory())
+        self.assertEqual(emulator.events, ['quit', 'launch'])
+        self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
+
+    def test_enough_memory_or_dry_run_never_restarts_emulator(self):
+        device, emulator = self.restartable()
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=emulator)
+        with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB + 1):
+            self.assertFalse(runner.refresh_if_low_memory())
+        with patch('bot.available_memory_mb', return_value=None):
+            self.assertFalse(runner.refresh_if_low_memory())
+        dry = bot.Bot(self.config, self.root, device, live=False, timeout=1, poll=0, emulator=emulator)
+        with patch('bot.available_memory_mb', return_value=0):
+            self.assertFalse(dry.refresh_if_low_memory())
+        self.assertEqual(emulator.events, [])
+
     def test_recover_starts_stopped_emulator_then_game(self):
         device = Device(self.frames)
         device.up = False
