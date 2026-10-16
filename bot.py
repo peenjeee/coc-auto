@@ -3,6 +3,7 @@
 import argparse
 import base64
 import csv
+import gc
 import io
 import itertools
 import json
@@ -76,6 +77,8 @@ POPUP_CLEAR_ATTEMPTS = 3
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
+MEMORY_RETRY_SECONDS, BATTLE_END_SECONDS = 30, 240
+RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS, LAUNCH_WAIT_SECONDS = 4, 90
 OPTIONAL_SCREENS = ('builder_cart',)
@@ -568,6 +571,11 @@ class Detector:
         if len(matches) != 1:
             raise BotError('Layar ambigu; tidak ada input dikirim')
         return matches[0]
+
+
+def out_of_memory(exc: BaseException) -> bool:
+    """A full PC memory is transient; other OpenCV errors are real bugs."""
+    return isinstance(exc, MemoryError) or (isinstance(exc, cv2.error) and 'Insufficient memory' in str(exc))
 
 
 def find_target(image: np.ndarray, template: np.ndarray, max_score: float,
@@ -1291,6 +1299,15 @@ class Bot:
         while True:
             try:
                 return self.run_until_full(searches)
+            except (MemoryError, cv2.error) as exc:
+                if not out_of_memory(exc) or recoveries >= max_recoveries:
+                    raise
+                recoveries += 1
+                LOG.warning('Memori PC penuh (%s); jeda lalu lanjut, pemulihan %s/%s', exc, recoveries, max_recoveries)
+                gc.collect()
+                time.sleep(MEMORY_RETRY_SECONDS if self.poll else 0)
+                self.release_touch()
+                self.settle()
             except BotError as exc:
                 lost = isinstance(exc, DeviceError)
                 if not lost:
@@ -1302,13 +1319,24 @@ class Bot:
                     raise
                 recoveries += 1
                 LOG.warning('Game tertutup/terputus (%s); pemulihan %s/%s', exc, recoveries, max_recoveries)
-                touch_up = getattr(self.device, 'touch_up', None)
-                if callable(touch_up) and getattr(self.device, 'touch', True):
-                    try:
-                        touch_up()
-                    except BotError:
-                        pass
+                self.release_touch()
                 self.recover()
+
+    def release_touch(self) -> None:
+        touch_up = getattr(self.device, 'touch_up', None)
+        if callable(touch_up) and getattr(self.device, 'touch', True):
+            try:
+                touch_up()
+            except BotError:
+                pass
+
+    def settle(self) -> None:
+        """After an interrupted run, let a battle in progress end and leave its result screen."""
+        busy = set(BATTLE_STATES) | {'home_scout', 'builder_scout', 'builder_stage2', *RESULT_SCREENS}
+        state = self.wait(set(VILLAGES) | set(RESULT_SCREENS), busy, BATTLE_END_SECONDS if self.poll else self.timeout)
+        if state in RESULT_SCREENS:
+            self.action(state, 'return')
+            self.wait(set(VILLAGES), {state}, 30)
 
     def run(self, mode: str, cycles: int, searches: int) -> int:
         integer(cycles, 1, 100, 'cycles')

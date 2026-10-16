@@ -970,6 +970,39 @@ class BotTests(unittest.TestCase):
             runner.run_until_full_resilient(0, max_recoveries=2)
         self.assertEqual(len(attempts), 3)
 
+    def test_resilient_run_retries_after_out_of_memory_and_leaves_result_screen(self):
+        device = Device(self.frames, initial='home_result')
+        device.game_in_front = lambda: True
+        device.launch = lambda activity: None
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        calls = []
+
+        def flaky(searches):
+            calls.append(searches)
+            if len(calls) == 1:
+                raise cv2.error('OpenCV: (-4:Insufficient memory) Failed to allocate 22166424 bytes')
+            return 4
+        runner.run_until_full = flaky
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2), 4)
+        self.assertEqual(len(calls), 2)
+        self.assertIn((80, 70), device.inputs)
+        self.assertEqual(device.state, 'home')
+
+    def test_resilient_run_reraises_other_opencv_errors_and_memory_after_limit(self):
+        device = Device(self.frames)
+        device.game_in_front = lambda: True
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.run_until_full = lambda searches: (_ for _ in ()).throw(cv2.error('bad template size'))
+        with self.assertRaises(cv2.error):
+            runner.run_until_full_resilient(0, max_recoveries=3)
+        attempts = []
+        runner.run_until_full = lambda searches: (attempts.append(1), (_ for _ in ()).throw(MemoryError()))[1]
+        with self.assertRaises(MemoryError):
+            runner.run_until_full_resilient(0, max_recoveries=1)
+        self.assertEqual(len(attempts), 2)
+
     def test_recover_starts_stopped_emulator_then_game(self):
         device = Device(self.frames)
         device.up = False
