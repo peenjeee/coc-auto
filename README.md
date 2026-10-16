@@ -169,6 +169,7 @@ Calibration only works on screenshots and never taps the game. Existing profiles
 | LDPlayer is not running | Starts it with `ldconsole launch`, waits for ADB and Android boot. |
 | CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. |
 | ADB disconnects | Waits up to 5 minutes for the device, then resumes. |
+| PC runs out of memory | Pauses, lets a running battle end, leaves the result screen, then resumes. |
 | Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
 
 ## Testing
