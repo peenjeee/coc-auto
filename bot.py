@@ -395,6 +395,9 @@ class ADB:
             return result.stdout
         except (OSError, subprocess.SubprocessError) as exc:
             raise DeviceError('ADB gagal/disconnect; periksa instance dan serial') from exc
+        except (MemoryError, IndexError) as exc:
+            # A pipe reader thread that runs out of memory leaves subprocess with no output to return.
+            raise MemoryError('Output ADB hilang; memori PC penuh') from exc
 
     def connected(self) -> bool:
         try:

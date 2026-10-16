@@ -258,6 +258,13 @@ class BotTests(unittest.TestCase):
         with patch('bot.subprocess.run', side_effect=[short, ok]):
             self.assertEqual(device.capture().shape, (90, 160, 3))
 
+    def test_adb_output_lost_to_full_memory_is_reported_as_memory_error(self):
+        device = bot.ADB('adb.exe', 'emulator-5554', [160, 90])
+        for lost in (MemoryError(), IndexError('list index out of range')):
+            with self.subTest(lost=type(lost).__name__), patch('bot.subprocess.run', side_effect=lost):
+                with self.assertRaises(MemoryError):
+                    device.capture()
+
     def test_star_bonus_popup_is_dismissed_while_waiting(self):
         popup = np.random.default_rng(3).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
