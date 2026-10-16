@@ -1298,6 +1298,10 @@ class Bot:
         deadline = time.monotonic() + RECOVER_ADB_SECONDS
         while not (self.device.connected() and self.device.booted()):
             if time.monotonic() >= deadline:
+                if self.emulator:
+                    # LDPlayer can keep its window while the VM never boots; quit so the next try starts fresh.
+                    LOG.warning('ADB tidak kembali; mematikan LDPlayer agar dinyalakan ulang')
+                    self.emulator.quit()
                 raise DeviceError('ADB tidak kembali; pemulihan dihentikan')
             time.sleep(RECOVER_POLL_SECONDS if self.poll else 0)
         for attempt in range(LAUNCH_ATTEMPTS):

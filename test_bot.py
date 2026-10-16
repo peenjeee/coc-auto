@@ -1052,6 +1052,15 @@ class BotTests(unittest.TestCase):
         self.assertIn((80, 70), device.inputs)
         self.assertEqual(seen, ['builder'])
 
+    def test_recover_quits_an_emulator_whose_adb_never_comes_back(self):
+        device, emulator = self.restartable()
+        device.up = False
+        emulator.running = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=emulator)
+        with patch('bot.RECOVER_ADB_SECONDS', 0), self.assertRaises(bot.DeviceError):
+            runner.recover()
+        self.assertEqual(emulator.events, ['quit'])
+
     def test_failed_recovery_is_retried_instead_of_stopping(self):
         device = Device(self.frames)
         device.game_in_front = lambda: True
