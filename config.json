@@ -16,12 +16,12 @@
       "anchors": [
         {
           "roi": [
-            42,
-            60,
-            56,
-            48
+            30,
+            676,
+            118,
+            20
           ],
-          "file": "calibration/home-0ce3f99d90464a7f82a627cc344a4f46.png"
+          "file": "calibration/home-attack-label.png"
         },
         {
           "roi": [
@@ -504,21 +504,21 @@
       "anchors": [
         {
           "roi": [
-            42,
-            60,
-            56,
-            48
+            30,
+            676,
+            118,
+            20
           ],
-          "file": "calibration/builder-9ed79920f5574170b5c09fae6e67de17.png"
+          "file": "calibration/builder-attack-label.png"
         },
         {
           "roi": [
-            30,
-            166,
-            58,
-            30
+            1236,
+            126,
+            20,
+            22
           ],
-          "file": "calibration/builder-badge-top.png"
+          "file": "calibration/builder-gem-icon.png"
         }
       ],
       "actions": {
