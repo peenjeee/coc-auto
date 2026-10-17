@@ -422,6 +422,28 @@
           "margin": 4
         }
       ],
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              30,
+              522,
+              125,
+              28
+            ],
+            "file": "calibration/home_battle-surrender.png"
+          },
+          {
+            "roi": [
+              540,
+              20,
+              90,
+              11
+            ],
+            "file": "calibration/builder_battle2-ef024e562f1f4316869d262b9a1cfd8b.png"
+          }
+        ]
+      ],
       "actions": {}
     },
     "home_result": {
