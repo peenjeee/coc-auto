@@ -32,7 +32,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 
 ## Recommended armies
 
-The bundled deploy plans were tuned for these armies. Other compositions work too, but deploy points and card order may need recalibration.
+The bundled deploy plans were tuned for these armies. Other compositions work too, but deploy points and card order may need recalibration (see [Changing the army and deploy plan](#changing-the-army-and-deploy-plan)).
 
 | Village | Troops | Spells | Notes |
 | --- | --- | --- | --- |
@@ -138,6 +138,49 @@ python calibrate.py --learn-digits shot.png:GOLD:ELIXIR # build digit templates 
 ```
 
 Calibration only works on screenshots and never taps the game. Existing profiles need `--replace`.
+
+### Changing the army and deploy plan
+
+The army and how it is deployed live in `config.json`; no code changes are needed.
+
+| Village | Key |
+| --- | --- |
+| Home Village | `screens.home_scout.troops` (plus `screens.home_scout.sweep`) |
+| Builder Base, stage 1 | `screens.builder_scout.troops` |
+| Builder Base, stage 2 | `screens.builder_stage2.troops` |
+
+`troops` is an ordered list. Each item is one card in the troop bar, used in list order:
+
+| Field | Meaning |
+| --- | --- |
+| `slot` | `[x, y]` of the card in the troop bar. Required. |
+| `count` | How many taps to drop from this card. Required. |
+| `deploy` | One drop point `[x, y]` for this card. Defaults to the screen's own `deploy` point. |
+| `points` | Several drop points; taps cycle through them (e.g. spells along the troop path). Overrides `deploy`. |
+| `hold` | Seconds to keep a finger down on the first drop point instead of tapping (fast for dragons). |
+| `until_empty` | Stop this card as soon as it is greyed out (empty). |
+| `tap_only` | Only tap the card itself, e.g. a second tap on a hero to fire its ability. |
+| `wait` | Seconds to wait before this card. |
+
+Example from the bundled Home Village plan:
+
+```json
+{"slot": [130, 650], "count": 1, "hold": 6, "until_empty": true},
+{"slot": [545, 650], "count": 1},
+{"slot": [545, 650], "count": 1, "tap_only": true},
+{"slot": [845, 650], "count": 4, "until_empty": true, "points": [[230, 345], [320, 342], [410, 338], [500, 335]]}
+```
+
+This holds the first card until it is empty, drops the hero in slot 545, taps it again for its ability, then throws four spells along a line.
+
+After the list, the Home Village `sweep` taps every card in `sweep.slots` that still has troops left at `sweep.deploy`, so nothing is wasted when the army differs from the plan.
+
+How to change it:
+
+1. Card positions depend on army order, so re-check every `slot` after changing the army.
+2. The bot zooms out (`zoom_out`) before deploying, so drop points must be read from a **zoomed-out** battle screen, not a normal scout screenshot. Start an attack, zoom out like the bot does, then save a screenshot with `python calibrate.py --capture shot.png` and read pixel positions in any image viewer.
+3. Edit `config.json`, then check it without input: `python bot.py`.
+4. Test one attack: `python bot.py --mode home --cycles 1 --live` (or `--mode builder`).
 
 <details>
 <summary><b>Configuration reference</b></summary>
