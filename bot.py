@@ -79,6 +79,7 @@ RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
 MEMORY_RETRY_SECONDS, BATTLE_END_SECONDS = 30, 240
 LOW_MEMORY_MB, EMULATOR_STOP_SECONDS, EMULATOR_REFRESH_SECONDS = 1000, 60, 1800
+TAP_RETRIES, TAP_RETRY_SECONDS = 3, 10
 RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS, LAUNCH_WAIT_SECONDS = 4, 90
@@ -99,6 +100,10 @@ class DeviceError(BotError):
 
 class UnknownScreen(BotError):
     """Frame matches no calibrated screen, e.g. a camera transition."""
+
+
+class WaitTimeout(BotError):
+    """The expected screen did not appear in time."""
 
 
 class TargetMissing(BotError):
@@ -816,7 +821,30 @@ class Bot:
             if state not in allowed | {'loading'}:
                 raise BotError(f'Layar tidak diharapkan saat menunggu: {state}')
             time.sleep(self.poll)
-        raise BotError('Timeout; tidak mencoba input pemulihan')
+        raise WaitTimeout('Timeout; tidak mencoba input pemulihan')
+
+    def tap_until(self, state: str, name: str, targets: set, timeout: float) -> str:
+        """Tap a menu button and wait; repeat the tap while the same menu is still shown (a lost tap)."""
+        deadline = time.monotonic() + timeout
+        taps = 0
+        while True:
+            if taps == 0 or (taps < TAP_RETRIES and self.current_screen() == state):
+                if taps:
+                    LOG.warning('Tap %s di %s tidak berpengaruh; ulangi', name, state)
+                self.action(state, name)
+                taps += 1
+            left = deadline - time.monotonic()
+            try:
+                return self.wait(targets, {state}, min(TAP_RETRY_SECONDS, max(left, 0)))
+            except WaitTimeout:
+                if time.monotonic() >= deadline:
+                    raise
+
+    def current_screen(self) -> str | None:
+        try:
+            return self.observe()[0]
+        except BotError:
+            return None
 
     def try_speed_up(self, image: np.ndarray, state: str) -> bool:
         """Tap the battle speed button while it shows 1x (it toggles 1x <-> 4x); at most once per wait."""
@@ -1083,12 +1111,9 @@ class Bot:
         raise BotError('Lawan belum berubah/stabil; hentikan pencarian')
 
     def home_attack(self, searches: int) -> None:
-        self.action('home', 'attack')
-        self.wait({'home_menu'}, {'home'}, 30)
-        self.action('home_menu', 'find')
-        self.wait({'home_army'}, {'home_menu'}, 30)
-        self.action('home_army', 'attack')
-        self.wait({'home_scout'}, {'home_army'}, 60)
+        self.tap_until('home', 'attack', {'home_menu'}, 30)
+        self.tap_until('home_menu', 'find', {'home_army'}, 30)
+        self.tap_until('home_army', 'attack', {'home_scout'}, 60)
         attempts = itertools.count() if searches == 0 else range(searches)
         for attempt in attempts:
             state, image = self.observe()
@@ -1147,10 +1172,8 @@ class Bot:
     def builder_attack(self, collect: bool = True) -> None:
         if collect:
             self.collect_cart()
-        self.action('builder', 'attack')
-        self.wait({'builder_menu'}, {'builder'}, 30)
-        self.action('builder_menu', 'find')
-        self.wait({'builder_scout'}, {'builder_menu'}, 60)
+        self.tap_until('builder', 'attack', {'builder_menu'}, 30)
+        self.tap_until('builder_menu', 'find', {'builder_scout'}, 60)
         self.deploy('builder_scout', {'builder_scout', 'builder_battle'})
         stage2 = {'builder_stage2', 'builder_battle2'}
         state = self.wait({'builder_stage2', 'builder_result', 'builder'},

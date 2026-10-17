@@ -1061,6 +1061,30 @@ class BotTests(unittest.TestCase):
             runner.recover()
         self.assertEqual(emulator.events, ['quit'])
 
+    def test_lost_tap_on_a_menu_is_repeated_until_the_screen_changes(self):
+        device = Device(self.frames, initial='builder_menu')
+        runner = self.make_bot(device, True)
+        real_tap, lost = device.tap, []
+
+        def flaky_tap(point):
+            if device.state == 'builder_menu' and not lost:
+                lost.append(point)
+                return
+            real_tap(point)
+        device.tap = flaky_tap
+        with patch('bot.TAP_RETRY_SECONDS', 0.05):
+            self.assertEqual(runner.tap_until('builder_menu', 'find', {'builder_scout'}, 1), 'builder_scout')
+        self.assertEqual(len(lost), 1)
+
+    def test_tap_until_gives_up_after_the_retry_limit(self):
+        device = Device(self.frames, initial='builder_menu')
+        runner = self.make_bot(device, True)
+        taps = []
+        device.tap = lambda point: taps.append(point)
+        with patch('bot.TAP_RETRY_SECONDS', 0.02), self.assertRaises(bot.BotError):
+            runner.tap_until('builder_menu', 'find', {'builder_scout'}, 0.2)
+        self.assertEqual(len(taps), bot.TAP_RETRIES)
+
     def test_failed_recovery_is_retried_instead_of_stopping(self):
         device = Device(self.frames)
         device.game_in_front = lambda: True
