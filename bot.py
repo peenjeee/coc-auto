@@ -80,6 +80,7 @@ MAX_RECOVERIES = 20
 MEMORY_RETRY_SECONDS, BATTLE_END_SECONDS = 30, 240
 LOW_MEMORY_MB, EMULATOR_STOP_SECONDS, EMULATOR_REFRESH_SECONDS = 1000, 60, 1800
 TAP_RETRIES, TAP_RETRY_SECONDS = 3, 10
+EMULATOR_SETTLE_SECONDS = 20
 RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS, LAUNCH_WAIT_SECONDS = 4, 90
@@ -1408,6 +1409,8 @@ class Bot:
         deadline = time.monotonic() + (EMULATOR_STOP_SECONDS if self.poll else 0)
         while self.emulator.running() and time.monotonic() < deadline:
             time.sleep(RECOVER_POLL_SECONDS)
+        # The VM keeps shutting down after ldconsole reports it stopped; launching at once leaves it unbooted.
+        time.sleep(EMULATOR_SETTLE_SECONDS if self.poll else 0)
         self.recover()
         return True
 
