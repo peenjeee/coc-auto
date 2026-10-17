@@ -170,7 +170,7 @@ Calibration only works on screenshots and never taps the game. Existing profiles
 | CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. |
 | ADB disconnects | Waits up to 5 minutes for the device, then resumes. |
 | PC runs out of memory | Pauses, lets a running battle end, leaves the result screen, then resumes. |
-| PC memory runs low (LDPlayer grows over hours) | Between attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 500 MB, then reopens CoC. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back. |
+| PC memory runs low (LDPlayer grows over hours) | Between attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back. |
 | Started mid-battle or on a result screen | Waits for the battle to end, taps return, then starts farming. |
 | Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
 
