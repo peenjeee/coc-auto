@@ -172,7 +172,7 @@ Calibration only works on screenshots and never taps the game. Existing profiles
 | PC runs out of memory | Pauses, lets a running battle end, leaves the result screen, then resumes. |
 | PC memory runs low (LDPlayer grows over hours) | Between attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back. |
 | Started mid-battle, on a result screen, or on an attack menu | Waits for the battle to end and taps return, or closes the menu (when it has a `close` point), then starts farming. |
-| A menu tap is lost (e.g. right after LDPlayer boots) | Taps the same button again, up to 3 times, while that menu is still shown. |
+| A menu tap is lost (e.g. right after LDPlayer boots) | Taps the same button again, up to 3 times, while that menu is still shown. The search button is retried for up to 3 minutes to wait out the attack cooldown after a game restart. |
 | Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
 
 ## Testing
@@ -181,7 +181,7 @@ Calibration only works on screenshots and never taps the game. Existing profiles
 python -m unittest -v test_bot
 ```
 
-The suite (108 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (109 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

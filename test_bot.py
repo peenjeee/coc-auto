@@ -1090,6 +1090,21 @@ class BotTests(unittest.TestCase):
             self.assertEqual(runner.tap_until('builder_menu', 'find', {'builder_scout'}, 1), 'builder_scout')
         self.assertEqual(len(lost), 1)
 
+    def test_tap_until_keeps_tapping_through_an_attack_cooldown(self):
+        device = Device(self.frames, initial='home_menu')
+        runner = self.make_bot(device, True)
+        real_tap, ignored = device.tap, []
+
+        def cooldown_tap(point):
+            if device.state == 'home_menu' and len(ignored) < 5:
+                ignored.append(point)
+                return
+            real_tap(point)
+        device.tap = cooldown_tap
+        with patch('bot.TAP_RETRY_SECONDS', 0.02):
+            self.assertEqual(runner.tap_until('home_menu', 'find', {'home_army'}, 2, retries=10), 'home_army')
+        self.assertEqual(len(ignored), 5)
+
     def test_tap_until_gives_up_after_the_retry_limit(self):
         device = Device(self.frames, initial='builder_menu')
         runner = self.make_bot(device, True)

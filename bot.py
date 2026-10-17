@@ -80,6 +80,7 @@ MAX_RECOVERIES = 20
 MEMORY_RETRY_SECONDS, BATTLE_END_SECONDS = 30, 240
 LOW_MEMORY_MB, EMULATOR_STOP_SECONDS, EMULATOR_REFRESH_SECONDS = 1000, 60, 1800
 TAP_RETRIES, TAP_RETRY_SECONDS = 3, 10
+FIND_COOLDOWN_SECONDS, FIND_RETRIES = 180, 18
 EMULATOR_SETTLE_SECONDS = 20
 RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
@@ -826,12 +827,12 @@ class Bot:
             time.sleep(self.poll)
         raise WaitTimeout('Timeout; tidak mencoba input pemulihan')
 
-    def tap_until(self, state: str, name: str, targets: set, timeout: float) -> str:
+    def tap_until(self, state: str, name: str, targets: set, timeout: float, retries: int = TAP_RETRIES) -> str:
         """Tap a menu button and wait; repeat the tap while the same menu is still shown (a lost tap)."""
         deadline = time.monotonic() + timeout
         taps = 0
         while True:
-            if taps == 0 or (taps < TAP_RETRIES and self.current_screen() == state):
+            if taps == 0 or (taps < retries and self.current_screen() == state):
                 if taps:
                     LOG.warning('Tap %s di %s tidak berpengaruh; ulangi', name, state)
                 self.action(state, name)
@@ -1115,7 +1116,8 @@ class Bot:
 
     def home_attack(self, searches: int) -> None:
         self.tap_until('home', 'attack', {'home_menu'}, 30)
-        self.tap_until('home_menu', 'find', {'home_army'}, 30)
+        # After the game restarts the search button shows a short cooldown; keep tapping until it is available.
+        self.tap_until('home_menu', 'find', {'home_army'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
         self.tap_until('home_army', 'attack', {'home_scout'}, 60)
         attempts = itertools.count() if searches == 0 else range(searches)
         for attempt in attempts:
@@ -1176,7 +1178,7 @@ class Bot:
         if collect:
             self.collect_cart()
         self.tap_until('builder', 'attack', {'builder_menu'}, 30)
-        self.tap_until('builder_menu', 'find', {'builder_scout'}, 60)
+        self.tap_until('builder_menu', 'find', {'builder_scout'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
         self.deploy('builder_scout', {'builder_scout', 'builder_battle'})
         stage2 = {'builder_stage2', 'builder_battle2'}
         state = self.wait({'builder_stage2', 'builder_result', 'builder'},
