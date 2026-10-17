@@ -28,7 +28,7 @@ SCREEN_NAMES = (
 )
 ACTIONS = {
     'home': ('attack', 'switch'), 'builder': ('attack', 'switch', 'cart'),
-    'home_menu': ('find',), 'builder_menu': ('find',), 'home_army': ('attack',),
+    'home_menu': ('find', 'close'), 'builder_menu': ('find', 'close'), 'home_army': ('attack', 'close'),
     'home_scout': ('next',), 'home_result': ('return',),
     'builder_result': ('return',), 'star_bonus': ('ok',), 'builder_star_bonus': ('ok',),
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
@@ -250,8 +250,10 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
                 raise BotError(f'{name}: scales target tidak valid')
             for area in target.get('avoid', []):
                 rectangle(area, resolution)
-        required = [a for a in allowed if (a != 'switch' or mode == 'both') and a != 'cart' and a not in targets]
-        for action in required:
+        optional = ('cart', 'close')
+        required = [a for a in allowed if (a != 'switch' or mode == 'both') and a not in optional and a not in targets]
+        present = [a for a in optional if a in screen.get('actions', {})]
+        for action in required + present:
             point(screen.get('actions', {}).get(action), resolution, action)
         if name in DEPLOY_SCREENS:
             point(screen.get('deploy'), resolution, 'deploy')
@@ -1410,8 +1412,13 @@ class Bot:
         return True
 
     def settle(self) -> None:
-        """After an interrupted run, let a battle in progress end and leave its result screen."""
-        busy = set(BATTLE_STATES) | {'home_scout', 'builder_scout', 'builder_stage2', *RESULT_SCREENS}
+        """After an interrupted run, close an open attack menu or let a battle end and leave its result screen."""
+        state = self.current_screen()
+        if state and 'close' in self.config['screens'][state].get('actions', {}):
+            self.action(state, 'close')
+            self.wait(set(VILLAGES), {state}, 30)
+            return
+        busy =set(BATTLE_STATES) | {'home_scout', 'builder_scout', 'builder_stage2', *RESULT_SCREENS}
         state = self.wait(set(VILLAGES) | set(RESULT_SCREENS), busy, BATTLE_END_SECONDS if self.poll else self.timeout)
         if state in RESULT_SCREENS:
             self.action(state, 'return')

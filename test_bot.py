@@ -1061,6 +1061,20 @@ class BotTests(unittest.TestCase):
             runner.recover()
         self.assertEqual(emulator.events, ['quit'])
 
+    def test_resilient_run_started_on_an_attack_menu_closes_it_first(self):
+        self.config['screens']['builder_menu']['actions']['close'] = [150, 20]
+        device = Device(self.frames, initial='builder_menu')
+        device.game_in_front = lambda: True
+        device.connected = lambda: True
+        real_tap = device.tap
+        device.tap = lambda point: (setattr(device, 'state', 'builder') if point == [150, 20] and
+                                    device.state == 'builder_menu' else real_tap(point))
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        seen = []
+        runner.run_until_full = lambda searches: seen.append(device.state) or 7
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=1), 7)
+        self.assertEqual(seen, ['builder'])
+
     def test_lost_tap_on_a_menu_is_repeated_until_the_screen_changes(self):
         device = Device(self.frames, initial='builder_menu')
         runner = self.make_bot(device, True)

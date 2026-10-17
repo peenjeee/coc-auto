@@ -151,7 +151,7 @@ Calibration only works on screenshots and never taps the game. Existing profiles
 | `screens.<name>.anchors` | Two UI crops that identify a screen; optional `margin` for small UI shifts. |
 | `screens.<name>.alt_anchors` | Alternative anchor sets for screens with two layouts. |
 | `screens.<name>.overrides` | Screens this one wins over when both match (e.g. stage 2 over battle). |
-| `screens.<name>.actions` | Fixed tap points (attack, find, next, return, …). |
+| `screens.<name>.actions` | Fixed tap points (attack, find, next, return, …). Menus may add an optional `close`. |
 | `screens.<name>.targets` | Tap points found by image search (boat, Elixir Cart) with `pan`, `scales`, `avoid`, `alt_files`. |
 | `screens.<deploy>.troops` | Ordered cards: `slot`, `count`, `hold`, `until_empty`, `points`, `tap_only`, `wait`. |
 | `capacity.<village>.<resource>` | Storage bar crop, tooltip tap point, `max` crop, and `label` ("Maks:") template. Optional `maximum` forces a fixed value. |
@@ -171,7 +171,7 @@ Calibration only works on screenshots and never taps the game. Existing profiles
 | ADB disconnects | Waits up to 5 minutes for the device, then resumes. |
 | PC runs out of memory | Pauses, lets a running battle end, leaves the result screen, then resumes. |
 | PC memory runs low (LDPlayer grows over hours) | Between attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back. |
-| Started mid-battle or on a result screen | Waits for the battle to end, taps return, then starts farming. |
+| Started mid-battle, on a result screen, or on an attack menu | Waits for the battle to end and taps return, or closes the menu (when it has a `close` point), then starts farming. |
 | A menu tap is lost (e.g. right after LDPlayer boots) | Taps the same button again, up to 3 times, while that menu is still shown. |
 | Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
 
@@ -181,7 +181,7 @@ Calibration only works on screenshots and never taps the game. Existing profiles
 python -m unittest -v test_bot
 ```
 
-The suite (107 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (108 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure
