@@ -212,7 +212,7 @@ How to change it:
 | LDPlayer is not running | Starts it with `ldconsole launch`, waits for ADB and Android boot. |
 | CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. |
 | ADB disconnects | Waits up to 5 minutes for the device, then resumes. |
-| PC runs out of memory | Pauses, lets a running battle end, leaves the result screen, then resumes. |
+| PC runs out of memory | Pauses, lets a running battle end, leaves the result screen, then resumes. Any other error while free memory is below 1 GB is handled the same way. |
 | PC memory runs low (LDPlayer grows over hours) | Between attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back. |
 | Started mid-battle, on a result screen, or on an attack menu | Waits for the battle to end and taps return, or closes the menu (when it has a `close` point), then starts farming. |
 | A menu tap is lost (e.g. right after LDPlayer boots) | Taps the same button again, up to 3 times, while that menu is still shown. The search button is retried for up to 3 minutes to wait out the attack cooldown after a game restart. |
@@ -224,7 +224,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (109 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (110 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

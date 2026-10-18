@@ -996,6 +996,27 @@ class BotTests(unittest.TestCase):
         self.assertIn((80, 70), device.inputs)
         self.assertEqual(device.state, 'home')
 
+    def test_error_while_pc_memory_is_critical_is_recovered_like_out_of_memory(self):
+        device = Device(self.frames)
+        device.game_in_front = lambda: True
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        calls = []
+
+        def flaky(searches):
+            calls.append(searches)
+            if len(calls) == 1:
+                raise bot.WaitTimeout('Timeout; tidak mencoba input pemulihan')
+            return 8
+        runner.run_until_full = flaky
+        with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB - 1):
+            self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2), 8)
+        self.assertEqual(len(calls), 2)
+        runner.run_until_full = lambda searches: (_ for _ in ()).throw(bot.WaitTimeout('Timeout'))
+        with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB + 1), \
+                self.assertRaises(bot.WaitTimeout):
+            runner.run_until_full_resilient(0, max_recoveries=2)
+
     def test_resilient_run_reraises_other_opencv_errors_and_memory_after_limit(self):
         device = Device(self.frames)
         device.game_in_front = lambda: True

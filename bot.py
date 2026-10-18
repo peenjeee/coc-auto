@@ -606,6 +606,11 @@ class Detector:
         return matches[0]
 
 
+def memory_critical() -> bool:
+    free = available_memory_mb()
+    return free is not None and free < LOW_MEMORY_MB
+
+
 def out_of_memory(exc: BaseException) -> bool:
     """A full PC memory is transient; other OpenCV errors are real bugs."""
     return isinstance(exc, MemoryError) or (isinstance(exc, cv2.error) and 'Insufficient memory' in str(exc))
@@ -1378,11 +1383,20 @@ class Bot:
                         lost = not self.device.game_in_front()
                     except DeviceError:
                         lost = True
-                if not lost or recoveries >= max_recoveries:
+                # With PC memory nearly exhausted, screenshots fail and any wait can time out.
+                starved = not lost and memory_critical()
+                if not (lost or starved) or recoveries >= max_recoveries:
                     raise
                 recoveries += 1
-                LOG.warning('Game tertutup/terputus (%s); pemulihan %s/%s', exc, recoveries, max_recoveries)
                 self.release_touch()
+                if starved:
+                    LOG.warning('Memori PC hampir habis (%s); jeda lalu lanjut, pemulihan %s/%s',
+                                exc, recoveries, max_recoveries)
+                    gc.collect()
+                    time.sleep(MEMORY_RETRY_SECONDS if self.poll else 0)
+                    pending = self.settle_after_memory
+                    continue
+                LOG.warning('Game tertutup/terputus (%s); pemulihan %s/%s', exc, recoveries, max_recoveries)
                 pending = self.recover
 
     def settle_after_memory(self) -> None:
