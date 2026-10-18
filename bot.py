@@ -1326,6 +1326,8 @@ class Bot:
         """Wait for ADB, start the game if it is not in front, and wait for a village screen."""
         if self.emulator and not self.device.connected() and not self.emulator.running():
             LOG.warning('LDPlayer belum berjalan; menyalakan emulator')
+            # A VM that was just quit is still shutting down; launching at once leaves it unbooted.
+            time.sleep(EMULATOR_SETTLE_SECONDS if self.poll else 0)
             self.emulator.launch()
             self.emulator_started = time.monotonic()
         deadline = time.monotonic() + RECOVER_ADB_SECONDS
@@ -1431,8 +1433,6 @@ class Bot:
         deadline = time.monotonic() + (EMULATOR_STOP_SECONDS if self.poll else 0)
         while self.emulator.running() and time.monotonic() < deadline:
             time.sleep(RECOVER_POLL_SECONDS)
-        # The VM keeps shutting down after ldconsole reports it stopped; launching at once leaves it unbooted.
-        time.sleep(EMULATOR_SETTLE_SECONDS if self.poll else 0)
         self.recover()
         return True
 
