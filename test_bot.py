@@ -1143,6 +1143,15 @@ class BotTests(unittest.TestCase):
             runner.recover()
         self.assertEqual(emulator.events, ['quit'])
 
+    def test_recover_finishes_a_battle_that_was_running_when_adb_dropped(self):
+        device = Device(self.frames, initial='builder_result')
+        device.connected = lambda: True
+        device.game_in_front = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.recover()
+        self.assertIn((80, 70), device.inputs)
+        self.assertEqual(device.state, 'builder')
+
     def test_failed_recovery_is_retried_instead_of_stopping(self):
         device = Device(self.frames)
         device.game_in_front = lambda: True

@@ -84,7 +84,7 @@ FIND_COOLDOWN_SECONDS, FIND_RETRIES = 180, 18
 EMULATOR_SETTLE_SECONDS = 20
 RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
-LAUNCH_ATTEMPTS, LAUNCH_WAIT_SECONDS = 4, 90
+LAUNCH_ATTEMPTS = 4
 OPTIONAL_SCREENS = ('builder_cart',)
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
@@ -1344,7 +1344,8 @@ class Bot:
                 LOG.warning('CoC tidak terbuka; membuka game (percobaan %s)', attempt + 1)
                 self.device.launch(GAME_ACTIVITY)
             try:
-                self.wait(set(VILLAGES), set(), LAUNCH_WAIT_SECONDS if self.poll else self.timeout)
+                # The game may come back mid-battle, on a result screen or in a menu; settle handles all of them.
+                self.settle()
                 LOG.info('Game siap kembali di layar desa')
                 return
             except DeviceError:
