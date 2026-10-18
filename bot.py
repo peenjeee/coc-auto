@@ -1345,6 +1345,12 @@ class Bot:
                 self.wait(set(VILLAGES), set(), LAUNCH_WAIT_SECONDS if self.poll else self.timeout)
                 LOG.info('Game siap kembali di layar desa')
                 return
+            except DeviceError:
+                if self.emulator:
+                    # ADB shell answers but screencap hangs: the emulator display is stuck; restart it.
+                    LOG.warning('Layar emulator tidak bisa diambil; mematikan LDPlayer agar dinyalakan ulang')
+                    self.emulator.quit()
+                raise
             except BotError:
                 if self.device.game_in_front() and attempt + 1 == LAUNCH_ATTEMPTS:
                     raise

@@ -1135,6 +1135,14 @@ class BotTests(unittest.TestCase):
             runner.tap_until('builder_menu', 'find', {'builder_scout'}, 0.2)
         self.assertEqual(len(taps), bot.TAP_RETRIES)
 
+    def test_recover_quits_an_emulator_whose_screen_cannot_be_captured(self):
+        device, emulator = self.restartable()
+        device.capture = lambda: (_ for _ in ()).throw(bot.DeviceError('screencap timeout'))
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=emulator)
+        with self.assertRaises(bot.DeviceError):
+            runner.recover()
+        self.assertEqual(emulator.events, ['quit'])
+
     def test_failed_recovery_is_retried_instead_of_stopping(self):
         device = Device(self.frames)
         device.game_in_front = lambda: True
