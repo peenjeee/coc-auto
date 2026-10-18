@@ -1152,6 +1152,24 @@ class BotTests(unittest.TestCase):
         self.assertIn((80, 70), device.inputs)
         self.assertEqual(device.state, 'builder')
 
+    def test_unknown_screen_while_the_game_is_closing_is_recovered(self):
+        device = Device(self.frames)
+        device.connected = lambda: True
+        checks = iter([True, False])
+        device.game_in_front = lambda: next(checks, True)
+        device.launch = lambda activity: None
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        calls = []
+
+        def flaky(searches):
+            calls.append(searches)
+            if len(calls) == 1:
+                raise bot.UnknownScreen('Layar tidak dikenal; tidak ada input dikirim')
+            return 9
+        runner.run_until_full = flaky
+        with patch('bot.available_memory_mb', return_value=None):
+            self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2), 9)
+
     def test_failed_recovery_is_retried_instead_of_stopping(self):
         device = Device(self.frames)
         device.game_in_front = lambda: True
