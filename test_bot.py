@@ -1052,6 +1052,23 @@ class BotTests(unittest.TestCase):
             runner.run_until_full_resilient(0, max_recoveries=2)
         self.assertEqual(len(attempts), 3)
 
+    def test_unknown_screen_with_the_game_open_is_settled_and_retried(self):
+        device = Device(self.frames)
+        device.game_in_front = lambda: True
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        calls = []
+
+        def flashed_once(searches):
+            calls.append(searches)
+            if len(calls) == 1:
+                raise bot.UnknownScreen('Layar tidak dikenal; tidak ada input dikirim')
+            return 6
+        runner.run_until_full = flashed_once
+        with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB + 1):
+            self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2), 6)
+        self.assertEqual(len(calls), 2)
+
     def test_other_errors_with_the_game_open_still_stop(self):
         device = Device(self.frames)
         device.game_in_front = lambda: True

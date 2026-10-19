@@ -1394,8 +1394,8 @@ class Bot:
                         lost = True
                 # With PC memory nearly exhausted, screenshots fail and any wait can time out.
                 starved = not lost and memory_critical()
-                # A slow matchmaking search or a lagging screen times out with the game still open.
-                stalled = not (lost or starved) and isinstance(exc, WaitTimeout)
+                # Slow matchmaking, a lagging screen or a passing animation, with the game still open.
+                stalled = not (lost or starved) and isinstance(exc, (WaitTimeout, UnknownScreen))
                 if not (lost or starved or stalled) or recoveries >= max_recoveries:
                     raise
                 recoveries += 1

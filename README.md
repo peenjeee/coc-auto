@@ -216,7 +216,7 @@ How to change it:
 | PC memory runs low (LDPlayer grows over hours) | Between attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back or its screen cannot be captured. |
 | Started mid-battle, on a result screen, or on an attack menu | Waits for the battle to end and taps return, or closes the menu (when it has a `close` point), then starts farming. |
 | A menu tap is lost (e.g. right after LDPlayer boots) | Taps the same button again, up to 3 times, while that menu is still shown. The search button is retried for up to 3 minutes to wait out the attack cooldown after a game restart. |
-| A wait times out with the game still open (slow matchmaking, lag) | Lets a running battle end or closes the menu, then resumes. Counts as one recovery. |
+| A wait times out, or an unrecognised screen passes, with the game still open (slow matchmaking, lag, an animation) | Lets a running battle end or closes the menu, then resumes. Counts as one recovery. |
 | Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
 
 ## Testing
@@ -225,7 +225,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (115 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (118 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure
