@@ -1287,6 +1287,34 @@
           "file": "calibration/layout_blocked-4617e86350a242839c27e1342bad80ba.png"
         }
       ]
+    },
+    "league": {
+      "anchors": [
+        {
+          "roi": [
+            150,
+            60,
+            190,
+            28
+          ],
+          "file": "calibration/league-301160298ecc4be7b6cae4dd1a361970.png"
+        },
+        {
+          "roi": [
+            1212,
+            50,
+            50,
+            46
+          ],
+          "file": "calibration/league-dfad0514db5d4488a4d4358cf8add2a0.png"
+        }
+      ],
+      "actions": {
+        "close": [
+          1236,
+          72
+        ]
+      }
     }
   },
   "digits": "calibration/digits",

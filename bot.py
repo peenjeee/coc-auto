@@ -32,7 +32,7 @@ ACTIONS = {
     'home_scout': ('next',), 'home_result': ('return',),
     'builder_result': ('return',), 'star_bonus': ('ok',), 'builder_star_bonus': ('ok',),
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
-    'layout_blocked': ('ok',),
+    'layout_blocked': ('ok',), 'league': ('close',),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -71,7 +71,7 @@ UNKNOWN_RETRIES = 3
 FULL_RATIO, STORAGE_RUN_RATIO, STORAGE_MIN_VALUE = 0.95, 0.8, 150
 RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
 POPUP_ACTIONS = {'star_bonus': 'ok', 'builder_star_bonus': 'ok', 'reward_chest': 'open', 'reward_card': 'continue',
-                 'layout_blocked': 'ok'}
+                 'layout_blocked': 'ok', 'league': 'close'}
 POPUPS = tuple(POPUP_ACTIONS)
 POPUP_CLEAR_ATTEMPTS = 3
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'

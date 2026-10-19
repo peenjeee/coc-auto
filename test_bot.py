@@ -303,6 +303,22 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.wait({'home'}, {'home_result'}, 1), 'home')
         self.assertEqual(device.inputs, [(70, 40), (70, 80)])
 
+    def test_league_window_is_closed_while_waiting_for_the_village(self):
+        league = np.random.default_rng(17).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        anchors = []
+        for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'league-{number}.png'), league[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'league-{number}.png'})
+        config = {**self.config, 'screens': {**self.config['screens'],
+                                             'league': {'anchors': anchors, 'actions': {'close': [150, 8]}}}}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, 'league': league}, 'league')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'home'))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
+        self.assertEqual(device.inputs, [(150, 8)])
+
     def test_guarded_tap_dismisses_popup_then_taps(self):
         popup = np.random.default_rng(21).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
