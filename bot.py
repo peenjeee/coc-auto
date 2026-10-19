@@ -1394,7 +1394,9 @@ class Bot:
                         lost = True
                 # With PC memory nearly exhausted, screenshots fail and any wait can time out.
                 starved = not lost and memory_critical()
-                if not (lost or starved) or recoveries >= max_recoveries:
+                # A slow matchmaking search or a lagging screen times out with the game still open.
+                stalled = not (lost or starved) and isinstance(exc, WaitTimeout)
+                if not (lost or starved or stalled) or recoveries >= max_recoveries:
                     raise
                 recoveries += 1
                 self.release_touch()
@@ -1404,6 +1406,11 @@ class Bot:
                     gc.collect()
                     time.sleep(MEMORY_RETRY_SECONDS if self.poll else 0)
                     pending = self.settle_after_memory
+                    continue
+                if stalled:
+                    LOG.warning('Layar macet (%s); rapikan layar lalu lanjut, pemulihan %s/%s',
+                                exc, recoveries, max_recoveries)
+                    pending = self.settle
                     continue
                 LOG.warning('Game tertutup/terputus (%s); pemulihan %s/%s', exc, recoveries, max_recoveries)
                 pending = self.recover
