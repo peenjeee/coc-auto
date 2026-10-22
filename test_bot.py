@@ -985,20 +985,28 @@ class BotTests(unittest.TestCase):
             icons[name] = icon
         row = rng.integers(0, 256, (6, 20, 3), dtype=np.uint8)
         cv2.imwrite(str(self.root / 'wall-row.png'), row)
+        for name in ('gold', 'elixir'):
+            cv2.imwrite(str(self.root / f'button-{name}.png'), rng.integers(0, 256, (8, 12, 3), dtype=np.uint8))
         spec = {'build': [150, 80], 'row': {'file': 'wall-row.png', 'region': [100, 0, 60, 90],
                                            'max_score': 0.05, 'tap_x': 130},
                 'scroll': [[130, 70], [130, 20]], 'gems': [0, 0, 30, 10], 'min_white': 20,
-                'buttons': {'gold': {'tap': [20, 80], 'price': [10, 60, 20, 6]},
-                            'elixir': {'tap': [60, 80], 'price': [50, 60, 20, 6]}},
-                'confirm': {'price': [10, 30, 30, 8], 'icon': [45, 25, 20, 20], 'min_white': 40,
-                            'max_score': 0.05, 'icons': {'gold': 'wall-gold.png', 'elixir': 'wall-elixir.png'}}}
+                'buttons': {'gold': {'tap': [20, 80], 'price': [10, 60, 20, 6],
+                                     'anchor': {'file': 'button-gold.png', 'roi': [10, 70, 12, 8]}},
+                            'elixir': {'tap': [60, 80], 'price': [50, 60, 20, 6],
+                                       'anchor': {'file': 'button-elixir.png', 'roi': [50, 70, 12, 8]}}},
+                'confirm': {'screen': 'wall_confirm', 'price': [10, 30, 30, 8], 'icon': [45, 25, 20, 20],
+                            'min_white': 40, 'max_score': 0.05,
+                            'icons': {'gold': 'wall-gold.png', 'elixir': 'wall-elixir.png'}}}
         return spec, icons, row
 
-    def priced(self, spec, white):
+    def priced(self, spec, white, shown=('gold', 'elixir')):
         image = np.zeros((90, 160, 3), dtype=np.uint8)
         for name, button in spec['buttons'].items():
             x, y, w, h = button['price']
             image[y:y + h, x:x + w] = (255, 255, 255) if name in white else (40, 40, 230)
+            if name in shown:
+                x, y, w, h = button['anchor']['roi']
+                image[y:y + h, x:x + w] = cv2.imread(str(self.root / button['anchor']['file']))
         return image
 
     def confirm_frame(self, spec, icon, white=True):
@@ -1038,6 +1046,13 @@ class BotTests(unittest.TestCase):
     def test_wall_is_not_touched_when_no_price_is_affordable(self):
         spec, _, _ = self.wall_spec()
         runner, taps = self.wall_runner([('wall_selected', self.priced(spec, set()))], [100])
+        self.assertFalse(runner.upgrade_wall(spec, 100))
+        self.assertEqual(taps, [])
+
+    def test_a_button_missing_from_the_layout_is_never_tapped(self):
+        spec, _, _ = self.wall_spec()
+        frame = self.priced(spec, {'gold', 'elixir'}, shown=())
+        runner, taps = self.wall_runner([('wall_selected', frame)], [100])
         self.assertFalse(runner.upgrade_wall(spec, 100))
         self.assertEqual(taps, [])
 
@@ -1104,13 +1119,21 @@ class BotTests(unittest.TestCase):
         runner = self.make_bot(Device(self.frames), True)
         runner.wall_order = ('home', 'builder')
         calls = []
-        rounds = {'home': iter([False, True]), 'builder': iter([True])}
+        rounds = {'home': iter([3, None]), 'builder': iter([None])}
         runner.run_until_full = lambda searches: calls.append(('farm', dict(runner.goals)))
         runner.upgrade_walls = lambda village: calls.append(('walls', village)) or next(rounds[village])
         runner.run_walls(0)
         self.assertEqual(calls, [('farm', {'home': {'gold', 'elixir'}}), ('walls', 'home'),
                                  ('farm', {'home': {'gold', 'elixir'}}), ('walls', 'home'),
                                  ('farm', {'builder': {'gold', 'elixir'}}), ('walls', 'builder')])
+
+    def test_walls_stop_when_full_storage_upgrades_nothing(self):
+        runner = self.make_bot(Device(self.frames), True)
+        runner.wall_order = ('builder',)
+        runner.run_until_full = lambda searches: None
+        runner.upgrade_walls = lambda village: 0
+        with self.assertRaises(bot.BotError):
+            runner.run_walls(0)
 
     def test_wall_order_and_calibration_are_checked(self):
         self.assertEqual(bot.wall_order('both', 'home'), ('home', 'builder'))

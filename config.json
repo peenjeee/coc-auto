@@ -1373,7 +1373,29 @@
           1258,
           22
         ]
-      }
+      },
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              341,
+              515,
+              112,
+              108
+            ],
+            "file": "calibration/wall_selected-builder-row-c1cb83fdf6f4409ab18209a265b35d39.png"
+          },
+          {
+            "roi": [
+              480,
+              515,
+              112,
+              108
+            ],
+            "file": "calibration/wall_selected-builder-more-c0d60f3dd7cb46f1bd7d03c2395f67b7.png"
+          }
+        ]
+      ]
     },
     "wall_confirm": {
       "anchors": [
@@ -1436,6 +1458,42 @@
         "ok": [
           654,
           598
+        ]
+      }
+    },
+    "builder_wall_confirm": {
+      "anchors": [
+        {
+          "roi": [
+            306,
+            104,
+            128,
+            34
+          ],
+          "file": "calibration/builder_wall_confirm-label-449b0efd4d9f4f18a9afbd0f31baadc7.png"
+        },
+        {
+          "roi": [
+            198,
+            276,
+            184,
+            78
+          ],
+          "file": "calibration/builder_wall_confirm-time-a08d9ca150144116987466668ea0b679.png"
+        }
+      ],
+      "overrides": [
+        "build_list",
+        "wall_selected"
+      ],
+      "actions": {
+        "confirm": [
+          643,
+          630
+        ],
+        "close": [
+          1071,
+          46
         ]
       }
     }
@@ -1572,6 +1630,34 @@
           ],
           "max_score": 0.05
         }
+      },
+      "dark": {
+        "bar": [
+          1040,
+          122,
+          178,
+          26
+        ],
+        "tap": [
+          1120,
+          134
+        ],
+        "max": [
+          1146,
+          174,
+          106,
+          28
+        ],
+        "label": {
+          "file": "calibration/tooltip-maks-6bd3d99a78874bb8a28c17db728e4fd3.png",
+          "region": [
+            1030,
+            170,
+            130,
+            34
+          ],
+          "max_score": 0.05
+        }
       }
     },
     "builder": {
@@ -1701,7 +1787,16 @@
             518,
             108,
             20
-          ]
+          ],
+          "anchor": {
+            "roi": [
+              570,
+              544,
+              70,
+              42
+            ],
+            "file": "calibration/wall-button-home-gold-ca8276749f204528bf2d6420f92ff844.png"
+          }
         },
         "elixir": {
           "tap": [
@@ -1713,10 +1808,20 @@
             518,
             108,
             20
-          ]
+          ],
+          "anchor": {
+            "roi": [
+              710,
+              544,
+              70,
+              42
+            ],
+            "file": "calibration/wall-button-home-elixir-ad00b759d1c74376bb74a10ec3038b06.png"
+          }
         }
       },
       "confirm": {
+        "screen": "wall_confirm",
         "price": [
           806,
           624,
@@ -1734,6 +1839,83 @@
         "icons": {
           "gold": "calibration/wall-icon-gold-239c7df7d5f54b5d8e5afdbd3a0caf01.png",
           "elixir": "calibration/wall-icon-elixir-d81a618d1ebb49f095bdb41dd5459204.png"
+        }
+      }
+    },
+    "builder": {
+      "build": [
+        1196,
+        640
+      ],
+      "row": {
+        "file": "calibration/wall-row-0ebe283d13c24291b8a2891002a29e59.png",
+        "region": [
+          940,
+          56,
+          340,
+          584
+        ],
+        "max_score": 0.05,
+        "tap_x": 1100
+      },
+      "scroll": [
+        [
+          1110,
+          560
+        ],
+        [
+          1110,
+          300
+        ]
+      ],
+      "gems": [
+        766,
+        124,
+        114,
+        26
+      ],
+      "min_white": 150,
+      "buttons": {
+        "gold": {
+          "tap": [
+            675,
+            570
+          ],
+          "price": [
+            622,
+            518,
+            108,
+            20
+          ],
+          "anchor": {
+            "roi": [
+              640,
+              544,
+              70,
+              42
+            ],
+            "file": "calibration/wall-button-builder-gold-640edf6e19e94e5c8945457e5818f9bd.png"
+          }
+        }
+      },
+      "confirm": {
+        "screen": "builder_wall_confirm",
+        "price": [
+          536,
+          608,
+          158,
+          44
+        ],
+        "icon": [
+          696,
+          596,
+          68,
+          68
+        ],
+        "min_white": 300,
+        "max_score": 0.05,
+        "icons": {
+          "gold": "calibration/wall-icon-builder-gold-aa1d2c3cfa14435e863de2fd1e1536e6.png"
         }
       }
     }

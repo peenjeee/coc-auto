@@ -147,7 +147,7 @@ python bot.py --walls both --first home --live
 full, then opens the builder list, finds a "Tembok" row, and upgrades one wall at a time with whichever of gold or
 elixir is still affordable. When neither is, it farms again. It stops once no "Tembok" row is left, which means
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
-Elixir Cart first. `--first` picks the village to finish first when `both` is chosen.
+Elixir Cart first; its walls cost gold only until they reach higher levels, and only the upgrade buttons a wall actually shows are used. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
 
 The bot never spends gems. It taps an upgrade only when its price is shown in white, and taps Konfirmasi only when
 the dialog is a wall upgrade, its price is white, and its icon is the chosen gold or elixir. It reads the gem count
@@ -278,7 +278,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (131 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (133 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

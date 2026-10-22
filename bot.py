@@ -36,6 +36,7 @@ ACTIONS = {
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',),
     'build_list': ('close',), 'wall_selected': ('close',), 'wall_confirm': ('confirm', 'close'),
+    'builder_wall_confirm': ('confirm', 'close'),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -88,7 +89,7 @@ EMULATOR_SETTLE_SECONDS = 20
 RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS = 4
-MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm')
+MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
 OPTIONAL_SCREENS = ('builder_cart', *MENU_SCREENS)
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT = 15, 2, 15
@@ -688,15 +689,20 @@ def validate_walls(config: dict, root: Path, villages: tuple) -> None:
         rectangle(spec.get('gems'), resolution)
         integer(spec.get('min_white'), 1, 100_000, 'walls min_white')
         confirm = spec.get('confirm', {})
+        if confirm.get('screen') not in MENU_SCREENS:
+            raise BotError('walls confirm screen tidak valid')
         rectangle(confirm.get('price'), resolution)
         rectangle(confirm.get('icon'), resolution)
         integer(confirm.get('min_white'), 1, 100_000, 'walls confirm min_white')
+        buttons = spec.get('buttons')
+        if not isinstance(buttons, dict) or not buttons or set(buttons) - set(WALL_RESOURCES):
+            raise BotError('walls buttons hanya gold/elixir')
         files = [row.get('file')]
-        for resource in WALL_RESOURCES:
-            button = spec.get('buttons', {}).get(resource, {})
+        for resource, button in buttons.items():
             point(button.get('tap'), resolution, f'walls {resource}')
             rectangle(button.get('price'), resolution)
-            files.append(confirm.get('icons', {}).get(resource))
+            rectangle(button.get('anchor', {}).get('roi'), resolution)
+            files += [button['anchor'].get('file'), confirm.get('icons', {}).get(resource)]
         for file in files:
             if cv2.imread(str(asset_path(root, file))) is None:
                 raise BotError(f'Template tembok hilang: {file}')
@@ -1454,6 +1460,13 @@ class Bot:
                     self.device.swipe(*swipe)
         return None
 
+    def button_shown(self, image: np.ndarray, button: dict) -> bool:
+        """The upgrade button for a resource exists in this wall's layout (Builder Base walls may be gold-only)."""
+        anchor = button['anchor']
+        template = cv2.imread(str(asset_path(self.root, anchor['file'])))
+        score = self.detector.score(image, anchor['roi'], template, 0)
+        return math.isfinite(score) and score <= 0.02
+
     def confirm_safe(self, image: np.ndarray, spec: dict, resource: str) -> bool:
         """Konfirmasi is tapped only for a white price next to the chosen resource's icon, never a gem one."""
         confirm = spec['confirm']
@@ -1472,21 +1485,22 @@ class Bot:
         if state != 'wall_selected':
             raise BotError(f'Tembok tidak terpilih: layar {state}')
         self.check_gems(image, spec, gems)
-        choices = [resource for resource in WALL_RESOURCES
-                   if white_pixels(image, spec['buttons'][resource]['price']) >= spec['min_white']]
+        choices = [resource for resource, button in spec['buttons'].items()
+                   if self.button_shown(image, button) and white_pixels(image, button['price']) >= spec['min_white']]
         if not choices:
             return False
         resource = choices[0]
+        dialog = spec['confirm']['screen']
         self.guarded_tap({'wall_selected'}, spec['buttons'][resource]['tap'])
-        self.wait({'wall_confirm'}, {'wall_selected', 'build_list'}, WALL_TAP_SECONDS)
+        self.wait({dialog}, {'wall_selected', 'build_list'}, WALL_TAP_SECONDS)
         _, image = self.observe()
         if not self.confirm_safe(image, spec, resource):
             LOG.warning('Dialog upgrade tembok (%s) tidak sesuai; ditutup tanpa konfirmasi', resource)
-            self.action('wall_confirm', 'close')
-            self.wait({'wall_selected', 'build_list'}, {'wall_confirm'}, WALL_TAP_SECONDS)
+            self.action(dialog, 'close')
+            self.wait({'wall_selected', 'build_list'}, {dialog}, WALL_TAP_SECONDS)
             return False
-        self.action('wall_confirm', 'confirm')
-        self.wait({'wall_selected', 'build_list'}, {'wall_confirm'}, WALL_TAP_SECONDS)
+        self.action(dialog, 'confirm')
+        self.wait({'wall_selected', 'build_list'}, {dialog}, WALL_TAP_SECONDS)
         _, image = self.observe()
         self.check_gems(image, spec, gems)
         LOG.info('Tembok di-upgrade dengan %s', resource)
@@ -1501,8 +1515,8 @@ class Bot:
             self.action(state, 'close')
             self.wait(set(VILLAGES) | set(MENU_SCREENS) - {state}, {state}, WALL_TAP_SECONDS)
 
-    def upgrade_walls(self, village: str) -> bool:
-        """Spend gold and elixir on walls one at a time; True once no wall is left to upgrade."""
+    def upgrade_walls(self, village: str) -> int | None:
+        """Spend gold and elixir on walls one at a time; the number upgraded, or None once no wall is left."""
         spec = self.config['walls'][village]
         self.navigate(village)
         if village == 'builder':
@@ -1518,14 +1532,14 @@ class Bot:
             if y is None:
                 LOG.info('Semua tembok %s sudah level maksimal (%s upgrade sesi ini)', village, upgraded)
                 self.close_menus()
-                return True
+                return None
             self.guarded_tap({'build_list', 'wall_selected'}, [spec['row']['tap_x'], y])
             self.wait({'wall_selected'}, {'build_list'}, WALL_TAP_SECONDS)
             self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
             if not self.upgrade_wall(spec, gems):
                 LOG.info('Gold dan elixir %s tidak cukup lagi setelah %s upgrade tembok', village, upgraded)
                 self.close_menus()
-                return False
+                return upgraded
             upgraded += 1
 
     def run_walls(self, searches: int) -> int:
@@ -1534,8 +1548,11 @@ class Bot:
             while village not in self.walls_done:
                 self.goals = {village: {'gold', 'elixir'}}
                 self.run_until_full(searches)
-                if self.upgrade_walls(village):
+                upgraded = self.upgrade_walls(village)
+                if upgraded is None:
                     self.walls_done.add(village)
+                elif upgraded == 0:
+                    raise BotError(f'Tembok {village} tidak bisa di-upgrade walau gudang penuh; periksa kalibrasi')
         LOG.info('Semua tembok sudah maksimal: %s', ', '.join(self.wall_order))
         return len(self.walls_done)
 
