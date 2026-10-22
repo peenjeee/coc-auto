@@ -35,7 +35,7 @@ ACTIONS = {
     'builder_result': ('return',), 'star_bonus': ('ok',), 'builder_star_bonus': ('ok',),
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',),
-    'build_list': ('close',), 'wall_selected': ('close',), 'wall_confirm': ('confirm', 'close'),
+    'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
     'builder_wall_confirm': ('confirm', 'close'),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
@@ -686,7 +686,11 @@ def validate_walls(config: dict, root: Path, villages: tuple) -> None:
             raise BotError('walls scroll perlu titik awal dan akhir')
         for location in scroll:
             point(location, resolution, 'walls scroll')
-        rectangle(spec.get('gems'), resolution)
+        gems = spec.get('gems')
+        if not isinstance(gems, dict) or set(gems) != {'list', 'village'}:
+            raise BotError('walls gems perlu area list dan village')
+        for region in gems.values():
+            rectangle(region, resolution)
         integer(spec.get('min_white'), 1, 100_000, 'walls min_white')
         confirm = spec.get('confirm', {})
         if confirm.get('screen') not in MENU_SCREENS:
@@ -698,11 +702,15 @@ def validate_walls(config: dict, root: Path, villages: tuple) -> None:
         if not isinstance(buttons, dict) or not buttons or set(buttons) - set(WALL_RESOURCES):
             raise BotError('walls buttons hanya gold/elixir')
         files = [row.get('file')]
-        for resource, button in buttons.items():
-            point(button.get('tap'), resolution, f'walls {resource}')
-            rectangle(button.get('price'), resolution)
-            rectangle(button.get('anchor', {}).get('roi'), resolution)
-            files += [button['anchor'].get('file'), confirm.get('icons', {}).get(resource)]
+        for resource, layouts in buttons.items():
+            if not isinstance(layouts, list) or not layouts:
+                raise BotError(f'walls buttons {resource} perlu daftar tata letak')
+            files.append(confirm.get('icons', {}).get(resource))
+            for button in layouts:
+                point(button.get('tap'), resolution, f'walls {resource}')
+                rectangle(button.get('price'), resolution)
+                rectangle(button.get('anchor', {}).get('roi'), resolution)
+                files.append(button['anchor'].get('file'))
         for file in files:
             if cv2.imread(str(asset_path(root, file))) is None:
                 raise BotError(f'Template tembok hilang: {file}')
@@ -1432,8 +1440,15 @@ class Bot:
             attacks += 1
             LOG.info('Serangan selesai: %s (%s)', village, attacks)
 
+    def list_open(self, image: np.ndarray) -> bool:
+        return self.detector.matches(image, self.detector.templates['build_list'])
+
+    def gem_region(self, image: np.ndarray, spec: dict) -> list:
+        """The open builder list pushes the resource bars left, so the gem count moves with it."""
+        return spec['gems']['list' if self.list_open(image) else 'village']
+
     def read_gems(self, image: np.ndarray, spec: dict) -> int:
-        return read_number(crop(image, spec['gems']), self.templates(), FRACTION_MIN_SCORE)
+        return read_number(crop(image, self.gem_region(image, spec)), self.templates(), FRACTION_MIN_SCORE)
 
     def check_gems(self, image: np.ndarray, spec: dict, gems: int) -> None:
         now = self.read_gems(image, spec)
@@ -1485,13 +1500,16 @@ class Bot:
         if state != 'wall_selected':
             raise BotError(f'Tembok tidak terpilih: layar {state}')
         self.check_gems(image, spec, gems)
-        choices = [resource for resource, button in spec['buttons'].items()
-                   if self.button_shown(image, button) and white_pixels(image, button['price']) >= spec['min_white']]
+        choices = []
+        for resource, layouts in spec['buttons'].items():
+            button = next((button for button in layouts if self.button_shown(image, button)), None)
+            if button and white_pixels(image, button['price']) >= spec['min_white']:
+                choices.append((resource, button))
         if not choices:
             return False
-        resource = choices[0]
+        resource, button = choices[0]
         dialog = spec['confirm']['screen']
-        self.guarded_tap({'wall_selected'}, spec['buttons'][resource]['tap'])
+        self.guarded_tap({'wall_selected'}, button['tap'])
         self.wait({dialog}, {'wall_selected', 'build_list'}, WALL_TAP_SECONDS)
         _, image = self.observe()
         if not self.confirm_safe(image, spec, resource):
@@ -1506,12 +1524,33 @@ class Bot:
         LOG.info('Tembok di-upgrade dengan %s', resource)
         return True
 
+    def listed(self, image: np.ndarray) -> np.ndarray:
+        if not self.list_open(image):
+            raise BotError('Daftar Bangun belum terbuka')
+        return image
+
+    def open_build_list(self, village: str, spec: dict) -> np.ndarray:
+        """A frame with the builder list open; picking a wall row sometimes closes the list."""
+        image = self.device.capture()
+        if self.list_open(image):
+            return image
+        self.guarded_tap({village, 'wall_selected'}, spec['build'])
+        return self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
+
     def close_menus(self) -> None:
-        """Close the wall dialog and the builder list, top layer first."""
-        for _ in MENU_SCREENS:
-            state = self.current_screen()
+        """Close the wall dialog and the builder list, top layer first; a wall selected without the list is
+        dropped by opening the list and closing it."""
+        for _ in range(len(MENU_SCREENS) + 1):
+            try:
+                state, image = self.observe()
+            except BotError:
+                return
             if state not in MENU_SCREENS:
                 return
+            if state == 'wall_selected' and not self.list_open(image):
+                self.action(state, 'build')
+                self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
+                continue
             self.action(state, 'close')
             self.wait(set(VILLAGES) | set(MENU_SCREENS) - {state}, {state}, WALL_TAP_SECONDS)
 
@@ -1522,14 +1561,13 @@ class Bot:
         if village == 'builder':
             self.collect_cart()
         self.wait({village}, set(), 30)
-        self.guarded_tap({village}, spec['build'])
-        self.wait({'build_list'}, {village}, WALL_TAP_SECONDS)
-        _, image = self.observe()
-        gems = self.read_gems(image, spec)
+        gems = self.read_gems(self.open_build_list(village, spec), spec)
         upgraded = 0
         while True:
+            self.open_build_list(village, spec)
             y = self.wall_row(spec)
             if y is None:
+                self.listed(self.device.capture())
                 LOG.info('Semua tembok %s sudah level maksimal (%s upgrade sesi ini)', village, upgraded)
                 self.close_menus()
                 return None

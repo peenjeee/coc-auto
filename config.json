@@ -1366,12 +1366,18 @@
         }
       ],
       "overrides": [
-        "build_list"
+        "build_list",
+        "home",
+        "builder"
       ],
       "actions": {
         "close": [
           1258,
           22
+        ],
+        "build": [
+          1196,
+          640
         ]
       },
       "alt_anchors": [
@@ -1393,6 +1399,26 @@
               108
             ],
             "file": "calibration/wall_selected-builder-more-c0d60f3dd7cb46f1bd7d03c2395f67b7.png"
+          }
+        ],
+        [
+          {
+            "roi": [
+              450,
+              520,
+              100,
+              90
+            ],
+            "file": "calibration/wall_selected-open-row-d0f9c26adbe0487a8dafbf6a253edb76.png"
+          },
+          {
+            "roi": [
+              600,
+              515,
+              90,
+              55
+            ],
+            "file": "calibration/wall_selected-open-more-fdca3b74cc054e1485e063d5d51cf786.png"
           }
         ]
       ]
@@ -1769,56 +1795,110 @@
           300
         ]
       ],
-      "gems": [
-        766,
-        174,
-        114,
-        26
-      ],
+      "gems": {
+        "list": [
+          766,
+          174,
+          114,
+          26
+        ],
+        "village": [
+          1100,
+          174,
+          118,
+          26
+        ]
+      },
       "min_white": 150,
       "buttons": {
-        "gold": {
-          "tap": [
-            605,
-            570
-          ],
-          "price": [
-            552,
-            518,
-            108,
-            20
-          ],
-          "anchor": {
-            "roi": [
-              570,
-              544,
-              70,
-              42
+        "gold": [
+          {
+            "tap": [
+              605,
+              570
             ],
-            "file": "calibration/wall-button-home-gold-ca8276749f204528bf2d6420f92ff844.png"
-          }
-        },
-        "elixir": {
-          "tap": [
-            744,
-            570
-          ],
-          "price": [
-            692,
-            518,
-            108,
-            20
-          ],
-          "anchor": {
-            "roi": [
-              710,
-              544,
-              70,
-              42
+            "price": [
+              552,
+              518,
+              108,
+              20
             ],
-            "file": "calibration/wall-button-home-elixir-ad00b759d1c74376bb74a10ec3038b06.png"
+            "anchor": {
+              "roi": [
+                570,
+                544,
+                70,
+                42
+              ],
+              "file": "calibration/wall-button-home-gold-ca8276749f204528bf2d6420f92ff844.png"
+            }
+          },
+          {
+            "tap": [
+              778,
+              565
+            ],
+            "price": [
+              722,
+              508,
+              108,
+              20
+            ],
+            "anchor": {
+              "roi": [
+                745,
+                535,
+                70,
+                42
+              ],
+              "file": "calibration/wall-button-open-gold-8d4ca67e37ba4276ae26c16b5366dd15.png"
+            }
           }
-        }
+        ],
+        "elixir": [
+          {
+            "tap": [
+              744,
+              570
+            ],
+            "price": [
+              692,
+              518,
+              108,
+              20
+            ],
+            "anchor": {
+              "roi": [
+                710,
+                544,
+                70,
+                42
+              ],
+              "file": "calibration/wall-button-home-elixir-ad00b759d1c74376bb74a10ec3038b06.png"
+            }
+          },
+          {
+            "tap": [
+              918,
+              565
+            ],
+            "price": [
+              862,
+              508,
+              108,
+              20
+            ],
+            "anchor": {
+              "roi": [
+                885,
+                535,
+                70,
+                42
+              ],
+              "file": "calibration/wall-button-open-elixir-9e357428df49440b923fa16f65e07ac8.png"
+            }
+          }
+        ]
       },
       "confirm": {
         "screen": "wall_confirm",
@@ -1868,35 +1948,45 @@
           300
         ]
       ],
-      "gems": [
-        766,
-        124,
-        114,
-        26
-      ],
+      "gems": {
+        "list": [
+          766,
+          124,
+          114,
+          26
+        ],
+        "village": [
+          1100,
+          124,
+          118,
+          26
+        ]
+      },
       "min_white": 150,
       "buttons": {
-        "gold": {
-          "tap": [
-            675,
-            570
-          ],
-          "price": [
-            622,
-            518,
-            108,
-            20
-          ],
-          "anchor": {
-            "roi": [
-              640,
-              544,
-              70,
-              42
+        "gold": [
+          {
+            "tap": [
+              675,
+              570
             ],
-            "file": "calibration/wall-button-builder-gold-640edf6e19e94e5c8945457e5818f9bd.png"
+            "price": [
+              622,
+              518,
+              108,
+              20
+            ],
+            "anchor": {
+              "roi": [
+                640,
+                544,
+                70,
+                42
+              ],
+              "file": "calibration/wall-button-builder-gold-640edf6e19e94e5c8945457e5818f9bd.png"
+            }
           }
-        }
+        ]
       },
       "confirm": {
         "screen": "builder_wall_confirm",

@@ -989,11 +989,12 @@ class BotTests(unittest.TestCase):
             cv2.imwrite(str(self.root / f'button-{name}.png'), rng.integers(0, 256, (8, 12, 3), dtype=np.uint8))
         spec = {'build': [150, 80], 'row': {'file': 'wall-row.png', 'region': [100, 0, 60, 90],
                                            'max_score': 0.05, 'tap_x': 130},
-                'scroll': [[130, 70], [130, 20]], 'gems': [0, 0, 30, 10], 'min_white': 20,
-                'buttons': {'gold': {'tap': [20, 80], 'price': [10, 60, 20, 6],
-                                     'anchor': {'file': 'button-gold.png', 'roi': [10, 70, 12, 8]}},
-                            'elixir': {'tap': [60, 80], 'price': [50, 60, 20, 6],
-                                       'anchor': {'file': 'button-elixir.png', 'roi': [50, 70, 12, 8]}}},
+                'scroll': [[130, 70], [130, 20]], 'min_white': 20,
+                'gems': {'list': [0, 0, 30, 10], 'village': [0, 12, 30, 10]},
+                'buttons': {'gold': [{'tap': [20, 80], 'price': [10, 60, 20, 6],
+                                      'anchor': {'file': 'button-gold.png', 'roi': [10, 70, 12, 8]}}],
+                            'elixir': [{'tap': [60, 80], 'price': [50, 60, 20, 6],
+                                        'anchor': {'file': 'button-elixir.png', 'roi': [50, 70, 12, 8]}}]},
                 'confirm': {'screen': 'wall_confirm', 'price': [10, 30, 30, 8], 'icon': [45, 25, 20, 20],
                             'min_white': 40, 'max_score': 0.05,
                             'icons': {'gold': 'wall-gold.png', 'elixir': 'wall-elixir.png'}}}
@@ -1001,7 +1002,8 @@ class BotTests(unittest.TestCase):
 
     def priced(self, spec, white, shown=('gold', 'elixir')):
         image = np.zeros((90, 160, 3), dtype=np.uint8)
-        for name, button in spec['buttons'].items():
+        for name, layouts in spec['buttons'].items():
+            button = layouts[0]
             x, y, w, h = button['price']
             image[y:y + h, x:x + w] = (255, 255, 255) if name in white else (40, 40, 230)
             if name in shown:
@@ -1032,8 +1034,30 @@ class BotTests(unittest.TestCase):
     def test_white_price_is_affordable_and_red_is_not(self):
         spec, _, _ = self.wall_spec()
         image = self.priced(spec, {'elixir'})
-        self.assertLess(bot.white_pixels(image, spec['buttons']['gold']['price']), spec['min_white'])
-        self.assertGreaterEqual(bot.white_pixels(image, spec['buttons']['elixir']['price']), spec['min_white'])
+        self.assertLess(bot.white_pixels(image, spec['buttons']['gold'][0]['price']), spec['min_white'])
+        self.assertGreaterEqual(bot.white_pixels(image, spec['buttons']['elixir'][0]['price']), spec['min_white'])
+
+    def test_the_shown_button_layout_is_used_when_the_list_closes(self):
+        spec, icons, _ = self.wall_spec()
+        moved = {'tap': [100, 80], 'price': [90, 60, 20, 6],
+                 'anchor': {'file': 'button-gold.png', 'roi': [90, 70, 12, 8]}}
+        spec['buttons'] = {'gold': [spec['buttons']['gold'][0], moved]}
+        frame = np.zeros((90, 160, 3), dtype=np.uint8)
+        frame[60:66, 90:110] = 255
+        frame[70:78, 90:102] = cv2.imread(str(self.root / 'button-gold.png'))
+        frames = [('wall_selected', frame), ('wall_confirm', self.confirm_frame(spec, icons['gold'])),
+                  ('wall_selected', frame)]
+        runner, taps = self.wall_runner(frames, [100, 100])
+        self.assertTrue(runner.upgrade_wall(spec, 100))
+        self.assertEqual(taps, [(100, 80), ('wall_confirm', 'confirm')])
+
+    def test_gems_are_read_where_the_hud_sits(self):
+        spec, _, _ = self.wall_spec()
+        runner = self.make_bot(Device(self.frames), True)
+        runner.list_open = lambda image: True
+        self.assertEqual(runner.gem_region(None, spec), spec['gems']['list'])
+        runner.list_open = lambda image: False
+        self.assertEqual(runner.gem_region(None, spec), spec['gems']['village'])
 
     def test_wall_rows_are_found_top_first(self):
         spec, _, row = self.wall_spec()
