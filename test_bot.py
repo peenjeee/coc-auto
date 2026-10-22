@@ -1018,14 +1018,22 @@ class BotTests(unittest.TestCase):
         image[30:40, 50:60] = icon
         return image
 
-    def wall_runner(self, frames, gems):
+    def wall_runner(self, frames, gems, tap_frames=None):
         runner = self.make_bot(Device(self.frames), True)
         taps = []
         shots = iter(frames)
         counts = iter(gems)
-        runner.observe = lambda: next(shots)
+        seen = []
+        runner.observe = lambda: seen.append(next(shots)) or seen[-1]
         runner.read_gems = lambda image, spec: next(counts)
-        runner.guarded_tap = lambda states, location, terminal=None: taps.append(tuple(location)) or 'ok'
+        later = iter(tap_frames or [])
+
+        def tap(states, location, terminal=None):
+            if callable(location):
+                location = location(next(later, seen[-1][1]))
+            taps.append(tuple(location))
+            return 'ok'
+        runner.guarded_tap = tap
         runner.action = lambda state, name: taps.append((state, name))
         runner.wait = lambda targets, allowed, timeout=None: sorted(targets)[0]
         runner.wait_still = lambda limit: None
@@ -1050,6 +1058,24 @@ class BotTests(unittest.TestCase):
         runner, taps = self.wall_runner(frames, [100, 100])
         self.assertTrue(runner.upgrade_wall(spec, 100))
         self.assertEqual(taps, [(100, 80), ('wall_confirm', 'confirm')])
+
+    def test_the_upgrade_button_is_found_again_in_the_frame_it_is_tapped_on(self):
+        spec, icons, _ = self.wall_spec()
+        moved = {'tap': [100, 80], 'price': [90, 60, 20, 6],
+                 'anchor': {'file': 'button-gold.png', 'roi': [90, 70, 12, 8]}}
+        spec['buttons'] = {'gold': [spec['buttons']['gold'][0], moved]}
+        closed = np.zeros((90, 160, 3), dtype=np.uint8)
+        closed[60:66, 90:110] = 255
+        closed[70:78, 90:102] = cv2.imread(str(self.root / 'button-gold.png'))
+        frames = [('wall_selected', self.priced(spec, {'gold'})),
+                  ('wall_confirm', self.confirm_frame(spec, icons['gold'])), ('wall_selected', closed)]
+        runner, taps = self.wall_runner(frames, [100, 100], tap_frames=[closed])
+        self.assertTrue(runner.upgrade_wall(spec, 100))
+        self.assertEqual(taps, [(100, 80), ('wall_confirm', 'confirm')])
+        frames = [('wall_selected', self.priced(spec, {'gold'}))]
+        runner, taps = self.wall_runner(frames, [100], tap_frames=[self.priced(spec, set())])
+        self.assertFalse(runner.upgrade_wall(spec, 100))
+        self.assertEqual(taps, [])
 
     def test_gems_are_read_where_the_hud_sits(self):
         spec, _, _ = self.wall_spec()

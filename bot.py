@@ -1475,6 +1475,14 @@ class Bot:
                     self.device.swipe(*swipe)
         return None
 
+    def affordable_button(self, image: np.ndarray, spec: dict) -> tuple | None:
+        """(resource, button) of the first upgrade button shown in this layout with a white price."""
+        for resource, layouts in spec['buttons'].items():
+            button = next((button for button in layouts if self.button_shown(image, button)), None)
+            if button and white_pixels(image, button['price']) >= spec['min_white']:
+                return resource, button
+        return None
+
     def button_shown(self, image: np.ndarray, button: dict) -> bool:
         """The upgrade button for a resource exists in this wall's layout (Builder Base walls may be gold-only)."""
         anchor = button['anchor']
@@ -1500,25 +1508,32 @@ class Bot:
         if state != 'wall_selected':
             raise BotError(f'Tembok tidak terpilih: layar {state}')
         self.check_gems(image, spec, gems)
-        choices = []
-        for resource, layouts in spec['buttons'].items():
-            button = next((button for button in layouts if self.button_shown(image, button)), None)
-            if button and white_pixels(image, button['price']) >= spec['min_white']:
-                choices.append((resource, button))
-        if not choices:
+        if self.affordable_button(image, spec) is None:
             return False
-        resource, button = choices[0]
-        dialog = spec['confirm']['screen']
-        self.guarded_tap({'wall_selected'}, button['tap'])
+        picked = []
+
+        def locate(frame: np.ndarray) -> list:
+            # The list can slide shut after a pick and move the buttons, so look again in the tapped frame.
+            choice = self.affordable_button(frame, spec)
+            if choice is None:
+                raise TargetMissing('Tombol upgrade tembok tidak terjangkau lagi; tidak ada input dikirim')
+            picked.append(choice[0])
+            return choice[1]['tap']
+        try:
+            self.guarded_tap({'wall_selected'}, locate)
+        except TargetMissing:
+            return False
+        resource, dialog = picked[0], spec['confirm']['screen']
+        after = {'wall_selected', 'build_list', *VILLAGES}
         self.wait({dialog}, {'wall_selected', 'build_list'}, WALL_TAP_SECONDS)
         _, image = self.observe()
         if not self.confirm_safe(image, spec, resource):
             LOG.warning('Dialog upgrade tembok (%s) tidak sesuai; ditutup tanpa konfirmasi', resource)
             self.action(dialog, 'close')
-            self.wait({'wall_selected', 'build_list'}, {dialog}, WALL_TAP_SECONDS)
+            self.wait(after, {dialog}, WALL_TAP_SECONDS)
             return False
         self.action(dialog, 'confirm')
-        self.wait({'wall_selected', 'build_list'}, {dialog}, WALL_TAP_SECONDS)
+        self.wait(after, {dialog}, WALL_TAP_SECONDS)
         _, image = self.observe()
         self.check_gems(image, spec, gems)
         LOG.info('Tembok di-upgrade dengan %s', resource)
@@ -1572,7 +1587,9 @@ class Bot:
                 self.close_menus()
                 return None
             self.guarded_tap({'build_list', 'wall_selected'}, [spec['row']['tap_x'], y])
-            self.wait({'wall_selected'}, {'build_list'}, WALL_TAP_SECONDS)
+            self.wait({'wall_selected'}, {'build_list', village}, WALL_TAP_SECONDS)
+            # After a pick the list may slide shut; let that finish before reading the buttons.
+            time.sleep(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
             self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
             if not self.upgrade_wall(spec, gems):
                 LOG.info('Gold dan elixir %s tidak cukup lagi setelah %s upgrade tembok', village, upgraded)

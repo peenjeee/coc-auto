@@ -1357,12 +1357,12 @@
         },
         {
           "roi": [
-            410,
-            515,
-            112,
-            108
+            140,
+            520,
+            95,
+            90
           ],
-          "file": "calibration/wall_selected-more-0105acb1abeb4b8c9dfffbc7e811fb38.png"
+          "file": "calibration/wall_selected-info-7e5b25befe114966aebb31f17503aaa6.png"
         }
       ],
       "overrides": [
@@ -1393,12 +1393,12 @@
           },
           {
             "roi": [
-              480,
-              515,
-              112,
-              108
+              212,
+              520,
+              95,
+              90
             ],
-            "file": "calibration/wall_selected-builder-more-c0d60f3dd7cb46f1bd7d03c2395f67b7.png"
+            "file": "calibration/wall_selected-builder-info-3963e28cbbb8460e9a52ec7336d42b83.png"
           }
         ],
         [
@@ -1413,12 +1413,12 @@
           },
           {
             "roi": [
-              600,
+              310,
               515,
-              90,
-              55
+              100,
+              95
             ],
-            "file": "calibration/wall_selected-open-more-fdca3b74cc054e1485e063d5d51cf786.png"
+            "file": "calibration/wall_selected-open-info-03a06dc117414b20be8bdf6f75bc4889.png"
           }
         ]
       ]
@@ -1432,7 +1432,8 @@
             384,
             38
           ],
-          "file": "calibration/wall_confirm-title-b20e94a565334d03be35cc39156d94c9.png"
+          "file": "calibration/wall_confirm-title-b20e94a565334d03be35cc39156d94c9.png",
+          "margin": 12
         },
         {
           "roi": [
@@ -1496,7 +1497,8 @@
             128,
             34
           ],
-          "file": "calibration/builder_wall_confirm-label-449b0efd4d9f4f18a9afbd0f31baadc7.png"
+          "file": "calibration/builder_wall_confirm-label-449b0efd4d9f4f18a9afbd0f31baadc7.png",
+          "margin": 12
         },
         {
           "roi": [
