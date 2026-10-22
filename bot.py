@@ -34,7 +34,8 @@ ACTIONS = {
     'home_scout': ('next',), 'home_result': ('return',),
     'builder_result': ('return',), 'star_bonus': ('ok',), 'builder_star_bonus': ('ok',),
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
-    'layout_blocked': ('ok',), 'league': ('close',),
+    'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',),
+    'build_list': ('close',), 'wall_selected': ('close',), 'wall_confirm': ('confirm', 'close'),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -73,7 +74,7 @@ UNKNOWN_RETRIES = 3
 FULL_RATIO, STORAGE_RUN_RATIO, STORAGE_MIN_VALUE = 0.95, 0.8, 150
 RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
 POPUP_ACTIONS = {'star_bonus': 'ok', 'builder_star_bonus': 'ok', 'reward_chest': 'open', 'reward_card': 'continue',
-                 'layout_blocked': 'ok', 'league': 'close'}
+                 'layout_blocked': 'ok', 'league': 'close', 'welcome': 'ok'}
 POPUPS = tuple(POPUP_ACTIONS)
 POPUP_CLEAR_ATTEMPTS = 3
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
@@ -87,7 +88,11 @@ EMULATOR_SETTLE_SECONDS = 20
 RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS = 4
-OPTIONAL_SCREENS = ('builder_cart',)
+MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm')
+OPTIONAL_SCREENS = ('builder_cart', *MENU_SCREENS)
+WALL_RESOURCES = ('gold', 'elixir')
+WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT = 15, 2, 15
+WHITE_LEVEL = 200
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
 STAGE_SETTLE_SECONDS = 4
@@ -112,6 +117,10 @@ class WaitTimeout(BotError):
 
 class TargetMissing(BotError):
     """Target icon not visible or unsafe to tap; the camera may need another pan."""
+
+
+class GemSpent(Exception):
+    """The gem count dropped during wall upgrades; never recovered, the run stops at once."""
 
 
 def integer(value: object, low: int, high: int, label: str) -> int:
@@ -215,7 +224,8 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
                 if template is None or list(template.shape[:2]) != [roi[3], roi[2]] or float(template.std()) < 5:
                     raise BotError(f'{name}: template alt_anchors hilang/ukuran salah')
         overrides = screen.get('overrides', [])
-        if not isinstance(overrides, list) or set(overrides) - set(SCREEN_NAMES) or name in overrides:
+        if not isinstance(overrides, list) or set(overrides) - set(SCREEN_NAMES + OPTIONAL_SCREENS) \
+                or name in overrides:
             raise BotError(f'{name}: overrides tidak valid')
         allowed = ACTIONS.get(name, ())
         targets = screen.get('targets', {})
@@ -636,6 +646,65 @@ def parse_goals(config: dict, builder: str | None, home: str | None, first: str)
     return {village: goals[village] for village in sorted(goals, key=lambda village: village != first)}
 
 
+def white_pixels(image: np.ndarray, region: list) -> int:
+    """Prices are white when affordable and red when short, so white text means the resource is there."""
+    return int(np.all(crop(image, region) > WHITE_LEVEL, axis=2).sum())
+
+
+def find_rows(image: np.ndarray, template: np.ndarray, region: list, max_score: float) -> list:
+    """Centre y of every row in the region that shows the template text, top row first."""
+    x, y, w, h = region
+    scores = cv2.matchTemplate(image[y:y + h, x:x + w], template, cv2.TM_SQDIFF_NORMED)
+    tops = []
+    for top in sorted({int(row) for row in np.where(scores <= max_score)[0]}):
+        if not tops or top - tops[-1] > template.shape[0]:
+            tops.append(top)
+    return [y + top + template.shape[0] // 2 for top in tops]
+
+
+def wall_order(choice: str, first: str) -> tuple:
+    villages = VILLAGES if choice == 'both' else (choice,)
+    return tuple(sorted(villages, key=lambda village: village != first))
+
+
+def validate_walls(config: dict, root: Path, villages: tuple) -> None:
+    resolution = config['resolution']
+    for name in MENU_SCREENS:
+        if name not in config.get('screens', {}):
+            raise BotError(f'Kalibrasi layar belum tersedia: {name}')
+    for village in villages:
+        spec = config.get('walls', {}).get(village)
+        if not isinstance(spec, dict):
+            raise BotError(f'Upgrade tembok belum dikalibrasi di {village}')
+        point(spec.get('build'), resolution, 'walls build')
+        row = spec.get('row', {})
+        rectangle(row.get('region'), resolution)
+        integer(row.get('tap_x'), 0, resolution[0] - 1, 'walls row tap_x')
+        scroll = spec.get('scroll')
+        if not isinstance(scroll, list) or len(scroll) != 2:
+            raise BotError('walls scroll perlu titik awal dan akhir')
+        for location in scroll:
+            point(location, resolution, 'walls scroll')
+        rectangle(spec.get('gems'), resolution)
+        integer(spec.get('min_white'), 1, 100_000, 'walls min_white')
+        confirm = spec.get('confirm', {})
+        rectangle(confirm.get('price'), resolution)
+        rectangle(confirm.get('icon'), resolution)
+        integer(confirm.get('min_white'), 1, 100_000, 'walls confirm min_white')
+        files = [row.get('file')]
+        for resource in WALL_RESOURCES:
+            button = spec.get('buttons', {}).get(resource, {})
+            point(button.get('tap'), resolution, f'walls {resource}')
+            rectangle(button.get('price'), resolution)
+            files.append(confirm.get('icons', {}).get(resource))
+        for file in files:
+            if cv2.imread(str(asset_path(root, file))) is None:
+                raise BotError(f'Template tembok hilang: {file}')
+        for score in (row.get('max_score'), confirm.get('max_score')):
+            if not isinstance(score, float) or not 0 < score <= TARGET_MAX_SCORE:
+                raise BotError('max_score tembok tidak valid')
+
+
 def memory_critical() -> bool:
     free = available_memory_mb()
     return free is not None and free < LOW_MEMORY_MB
@@ -811,9 +880,10 @@ def ocr_resource(image: np.ndarray, program: str) -> int:
 class Bot:
     def __init__(self, config: dict, root: Path, device: ADB, live: bool = False,
                  reader: Callable | None = None, timeout: float = 240, poll: float = 0.05,
-                 emulator: 'Emulator | None' = None, goals: dict | None = None) -> None:
+                 emulator: 'Emulator | None' = None, goals: dict | None = None, walls: tuple = ()) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.goals = goals if goals is not None else parse_goals(config, None, None, 'builder')
+        self.wall_order, self.walls_done = walls, set()
         self.emulator = emulator
         self.emulator_started: float | None = None
         self.detector = Detector(config, root)
@@ -1356,6 +1426,119 @@ class Bot:
             attacks += 1
             LOG.info('Serangan selesai: %s (%s)', village, attacks)
 
+    def read_gems(self, image: np.ndarray, spec: dict) -> int:
+        return read_number(crop(image, spec['gems']), self.templates(), FRACTION_MIN_SCORE)
+
+    def check_gems(self, image: np.ndarray, spec: dict, gems: int) -> None:
+        now = self.read_gems(image, spec)
+        if now < gems:
+            raise GemSpent(f'Gem turun {gems:,} -> {now:,}; upgrade tembok dihentikan')
+
+    def wall_row(self, spec: dict) -> int | None:
+        """y of the first visible 'Tembok' row; scroll the list to its top, then down to its end."""
+        row = spec['row']
+        template = cv2.imread(str(asset_path(self.root, row['file'])))
+        down = spec['scroll']
+        for swipe in (down[::-1], down):
+            previous = None
+            for _ in range(WALL_SCROLL_LIMIT):
+                image = self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
+                rows = find_rows(image, template, row['region'], row['max_score'])
+                if rows:
+                    return rows[0]
+                listed = crop(image, row['region'])
+                if previous is not None and float(cv2.absdiff(previous, listed).mean()) < STILL_DIFF:
+                    break
+                previous = listed
+                if self.live:
+                    self.device.swipe(*swipe)
+        return None
+
+    def confirm_safe(self, image: np.ndarray, spec: dict, resource: str) -> bool:
+        """Konfirmasi is tapped only for a white price next to the chosen resource's icon, never a gem one."""
+        confirm = spec['confirm']
+        if white_pixels(image, confirm['price']) < confirm['min_white']:
+            return False
+        icon = cv2.imread(str(asset_path(self.root, confirm['icons'][resource])))
+        try:
+            find_target(crop(image, confirm['icon']), icon, confirm['max_score'])
+        except BotError:
+            return False
+        return True
+
+    def upgrade_wall(self, spec: dict, gems: int) -> bool:
+        """Upgrade the selected wall once with gold or elixir; False when neither price is affordable."""
+        state, image = self.observe()
+        if state != 'wall_selected':
+            raise BotError(f'Tembok tidak terpilih: layar {state}')
+        self.check_gems(image, spec, gems)
+        choices = [resource for resource in WALL_RESOURCES
+                   if white_pixels(image, spec['buttons'][resource]['price']) >= spec['min_white']]
+        if not choices:
+            return False
+        resource = choices[0]
+        self.guarded_tap({'wall_selected'}, spec['buttons'][resource]['tap'])
+        self.wait({'wall_confirm'}, {'wall_selected', 'build_list'}, WALL_TAP_SECONDS)
+        _, image = self.observe()
+        if not self.confirm_safe(image, spec, resource):
+            LOG.warning('Dialog upgrade tembok (%s) tidak sesuai; ditutup tanpa konfirmasi', resource)
+            self.action('wall_confirm', 'close')
+            self.wait({'wall_selected', 'build_list'}, {'wall_confirm'}, WALL_TAP_SECONDS)
+            return False
+        self.action('wall_confirm', 'confirm')
+        self.wait({'wall_selected', 'build_list'}, {'wall_confirm'}, WALL_TAP_SECONDS)
+        _, image = self.observe()
+        self.check_gems(image, spec, gems)
+        LOG.info('Tembok di-upgrade dengan %s', resource)
+        return True
+
+    def close_menus(self) -> None:
+        """Close the wall dialog and the builder list, top layer first."""
+        for _ in MENU_SCREENS:
+            state = self.current_screen()
+            if state not in MENU_SCREENS:
+                return
+            self.action(state, 'close')
+            self.wait(set(VILLAGES) | set(MENU_SCREENS) - {state}, {state}, WALL_TAP_SECONDS)
+
+    def upgrade_walls(self, village: str) -> bool:
+        """Spend gold and elixir on walls one at a time; True once no wall is left to upgrade."""
+        spec = self.config['walls'][village]
+        self.navigate(village)
+        if village == 'builder':
+            self.collect_cart()
+        self.wait({village}, set(), 30)
+        self.guarded_tap({village}, spec['build'])
+        self.wait({'build_list'}, {village}, WALL_TAP_SECONDS)
+        _, image = self.observe()
+        gems = self.read_gems(image, spec)
+        upgraded = 0
+        while True:
+            y = self.wall_row(spec)
+            if y is None:
+                LOG.info('Semua tembok %s sudah level maksimal (%s upgrade sesi ini)', village, upgraded)
+                self.close_menus()
+                return True
+            self.guarded_tap({'build_list', 'wall_selected'}, [spec['row']['tap_x'], y])
+            self.wait({'wall_selected'}, {'build_list'}, WALL_TAP_SECONDS)
+            self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
+            if not self.upgrade_wall(spec, gems):
+                LOG.info('Gold dan elixir %s tidak cukup lagi setelah %s upgrade tembok', village, upgraded)
+                self.close_menus()
+                return False
+            upgraded += 1
+
+    def run_walls(self, searches: int) -> int:
+        """Per village in order: farm gold and elixir full, spend them on walls, repeat until every wall is maxed."""
+        for village in self.wall_order:
+            while village not in self.walls_done:
+                self.goals = {village: {'gold', 'elixir'}}
+                self.run_until_full(searches)
+                if self.upgrade_walls(village):
+                    self.walls_done.add(village)
+        LOG.info('Semua tembok sudah maksimal: %s', ', '.join(self.wall_order))
+        return len(self.walls_done)
+
     def recover(self) -> None:
         """Wait for ADB, start the game if it is not in front, and wait for a village screen."""
         if self.emulator and not self.device.connected() and not self.emulator.running():
@@ -1393,8 +1576,9 @@ class Bot:
                     raise
         raise DeviceError('CoC tidak bisa dibuka; pemulihan dihentikan')
 
-    def run_until_full_resilient(self, searches: int, max_recoveries: int = MAX_RECOVERIES) -> int:
-        """until-full that reopens the game after a crash, closed app or ADB drop; other errors still stop."""
+    def run_until_full_resilient(self, searches: int, max_recoveries: int = MAX_RECOVERIES,
+                                 job: Callable | None = None) -> int:
+        """Run job (until-full by default), reopening the game after a crash, closed app or ADB drop."""
         integer(max_recoveries, 0, 1000, 'max_recoveries')
         recoveries = 0
         try:
@@ -1409,7 +1593,7 @@ class Bot:
                 if pending:
                     step, pending = pending, None
                     step()
-                return self.run_until_full(searches)
+                return (job or self.run_until_full)(searches)
             except (MemoryError, cv2.error) as exc:
                 if not out_of_memory(exc) or recoveries >= max_recoveries:
                     raise
@@ -1481,6 +1665,9 @@ class Bot:
     def settle(self) -> None:
         """After an interrupted run, close an open attack menu or let a battle end and leave its result screen."""
         state = self.current_screen()
+        if state in MENU_SCREENS:
+            self.close_menus()
+            return
         if state and 'close' in self.config['screens'][state].get('actions', {}):
             self.action(state, 'close')
             self.wait(set(VILLAGES), {state}, 30)
@@ -1540,7 +1727,10 @@ def main() -> int:
     parser.add_argument('--home', metavar='RESOURCES',
                         help='--until-full desa asal saja sampai penuh: gold,elixir,dark (pilih sebagian) atau all')
     parser.add_argument('--first', choices=('builder', 'home'), default='builder',
-                        help='Desa yang dikerjakan dulu bila --builder dan --home sama-sama dipilih')
+                        help='Desa yang dikerjakan dulu bila dua desa dipilih')
+    parser.add_argument('--walls', choices=('home', 'builder', 'both'),
+                        help='Farming sampai gold+elixir penuh, habiskan untuk upgrade tembok, ulangi sampai '
+                             'semua tembok maksimal; tidak pernah memakai gem')
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
                         help='--until-full: berapa kali boleh membuka ulang CoC setelah crash/DC')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
@@ -1549,17 +1739,27 @@ def main() -> int:
     try:
         config = load_config(args.config)
         until_full = args.until_full or args.builder is not None or args.home is not None
+        if args.walls and until_full:
+            raise BotError('--walls tidak bisa digabung dengan --until-full/--builder/--home')
+        walls = wall_order(args.walls, args.first) if args.walls else ()
         goals = parse_goals(config, args.builder, args.home, args.first) if until_full else None
-        mode = (next(iter(goals)) if len(goals) == 1 else 'both') if goals else args.mode
+        villages = walls or tuple(goals or ())
+        mode = (villages[0] if len(villages) == 1 else 'both') if villages else args.mode
         validate_config(config, args.config.parent, mode)
+        if walls:
+            if not args.live:
+                raise BotError('--walls butuh --live')
+            validate_walls(config, args.config.parent, walls)
         adb = executable(config.get('adb'), 'ADB')
         if mode != 'builder' and any(config.get('minimum', {}).values()):
             executable(config.get('tesseract'), 'Tesseract')
         device = ADB(adb, config['serial'], config['resolution'], live=args.live,
                      touch=config.get('touch_device'))
         emulator = Emulator(executable(config['ldconsole'], 'ldconsole'), config.get('ld_index', 0))             if config.get('ldconsole') else None
-        runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals)
-        if until_full and args.live:
+        runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals, walls=walls)
+        if walls:
+            runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
+        elif until_full and args.live:
             runner.run_until_full_resilient(args.searches, args.max_recoveries)
         else:
             runner.run(args.mode, args.cycles, args.searches)
@@ -1567,6 +1767,9 @@ def main() -> int:
     except KeyboardInterrupt:
         LOG.warning('Dihentikan; tidak ada input lanjutan')
         return 130
+    except GemSpent as exc:
+        LOG.error('BERHENTI DARURAT: %s', exc)
+        return 3
     except (BotError, KeyError, TypeError, cv2.error) as exc:
         LOG.error('Berhenti: %s', exc)
         return 1

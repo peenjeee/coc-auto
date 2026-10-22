@@ -134,6 +134,26 @@ Home Village gold and dark elixir. The last fills everything in both villages, H
 `--home gold,elixir` instead of `--home all` to leave dark elixir out. A resource must be calibrated before it can
 be chosen (dark elixir needs a `capacity.home.dark` entry); the bot refuses to start otherwise.
 
+### Upgrading walls
+
+```bash
+python bot.py --walls home --live
+```
+```bash
+python bot.py --walls both --first home --live
+```
+
+`--walls` takes `home`, `builder` or `both`. For each village in turn it farms until gold and elixir are both
+full, then opens the builder list, finds a "Tembok" row, and upgrades one wall at a time with whichever of gold or
+elixir is still affordable. When neither is, it farms again. It stops once no "Tembok" row is left, which means
+every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
+Elixir Cart first. `--first` picks the village to finish first when `both` is chosen.
+
+The bot never spends gems. It taps an upgrade only when its price is shown in white, and taps Konfirmasi only when
+the dialog is a wall upgrade, its price is white, and its icon is the chosen gold or elixir. It reads the gem count
+before and after every upgrade and stops for good, without any recovery, if the count drops. A village needs a
+`walls.<village>` calibration before `--walls` accepts it.
+
 ### CLI options — `bot.py`
 
 | Option | Default | Description |
@@ -145,7 +165,8 @@ be chosen (dark elixir needs a `capacity.home.dark` entry); the bot refuses to s
 | `--until-full` | off | Attack until gold and elixir are full in both villages. |
 | `--builder RESOURCES` | – | Fill these Builder Base resources (`gold`, `elixir`, `cart`, or `all`). Implies `--until-full`. |
 | `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
-| `--first {builder,home}` | `builder` | Which village to fill first when both are chosen. |
+| `--first {builder,home}` | `builder` | Which village to work on first when both are chosen. |
+| `--walls {home,builder,both}` | – | Farm, then spend gold and elixir on walls until every wall is maxed. Never uses gems. |
 | `--max-recoveries N` | `20` | How many times `--until-full` may restart LDPlayer / CoC. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 
@@ -257,7 +278,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (122 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (131 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

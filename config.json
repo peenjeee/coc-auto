@@ -1315,6 +1315,129 @@
           72
         ]
       }
+    },
+    "build_list": {
+      "anchors": [
+        {
+          "roi": [
+            1044,
+            6,
+            134,
+            34
+          ],
+          "file": "calibration/build_list-header-15b16a04c1b844c6bd5b8557e9922900.png"
+        },
+        {
+          "roi": [
+            1240,
+            6,
+            38,
+            34
+          ],
+          "file": "calibration/build_list-close-9230279687b64ac497e8223c7152d496.png"
+        }
+      ],
+      "actions": {
+        "close": [
+          1258,
+          22
+        ]
+      }
+    },
+    "wall_selected": {
+      "anchors": [
+        {
+          "roi": [
+            272,
+            515,
+            112,
+            108
+          ],
+          "file": "calibration/wall_selected-row-47b722ab78034b17a3b8a2f878802d46.png"
+        },
+        {
+          "roi": [
+            410,
+            515,
+            112,
+            108
+          ],
+          "file": "calibration/wall_selected-more-0105acb1abeb4b8c9dfffbc7e811fb38.png"
+        }
+      ],
+      "overrides": [
+        "build_list"
+      ],
+      "actions": {
+        "close": [
+          1258,
+          22
+        ]
+      }
+    },
+    "wall_confirm": {
+      "anchors": [
+        {
+          "roi": [
+            368,
+            30,
+            384,
+            38
+          ],
+          "file": "calibration/wall_confirm-title-b20e94a565334d03be35cc39156d94c9.png"
+        },
+        {
+          "roi": [
+            1008,
+            588,
+            148,
+            88
+          ],
+          "file": "calibration/wall_confirm-time-4d3009d5d10743f68fbf875a65536313.png"
+        }
+      ],
+      "overrides": [
+        "build_list",
+        "wall_selected"
+      ],
+      "actions": {
+        "confirm": [
+          896,
+          628
+        ],
+        "close": [
+          1131,
+          56
+        ]
+      }
+    },
+    "welcome": {
+      "anchors": [
+        {
+          "roi": [
+            330,
+            62,
+            620,
+            44
+          ],
+          "file": "calibration/welcome-title-5a03be9cfb684af8919a18faed0e1f40.png"
+        },
+        {
+          "roi": [
+            520,
+            140,
+            240,
+            28
+          ],
+          "file": "calibration/welcome-away-08f06c77c9b84a73bc3345e91b1f8250.png"
+        }
+      ],
+      "actions": {
+        "ok": [
+          654,
+          598
+        ]
+      }
     }
   },
   "digits": "calibration/digits",
@@ -1532,5 +1655,87 @@
     ]
   },
   "ldconsole": "C:\\LDPlayer\\LDPlayer14\\ldconsole.exe",
-  "ld_index": 0
+  "ld_index": 0,
+  "walls": {
+    "home": {
+      "build": [
+        1196,
+        640
+      ],
+      "row": {
+        "file": "calibration/wall-row-0ebe283d13c24291b8a2891002a29e59.png",
+        "region": [
+          940,
+          56,
+          340,
+          584
+        ],
+        "max_score": 0.05,
+        "tap_x": 1100
+      },
+      "scroll": [
+        [
+          1110,
+          560
+        ],
+        [
+          1110,
+          300
+        ]
+      ],
+      "gems": [
+        748,
+        174,
+        132,
+        26
+      ],
+      "min_white": 150,
+      "buttons": {
+        "gold": {
+          "tap": [
+            605,
+            570
+          ],
+          "price": [
+            552,
+            518,
+            108,
+            20
+          ]
+        },
+        "elixir": {
+          "tap": [
+            744,
+            570
+          ],
+          "price": [
+            692,
+            518,
+            108,
+            20
+          ]
+        }
+      },
+      "confirm": {
+        "price": [
+          806,
+          624,
+          146,
+          32
+        ],
+        "icon": [
+          940,
+          604,
+          68,
+          72
+        ],
+        "min_white": 300,
+        "max_score": 0.05,
+        "icons": {
+          "gold": "calibration/wall-icon-gold-239c7df7d5f54b5d8e5afdbd3a0caf01.png",
+          "elixir": "calibration/wall-icon-elixir-d81a618d1ebb49f095bdb41dd5459204.png"
+        }
+      }
+    }
+  }
 }

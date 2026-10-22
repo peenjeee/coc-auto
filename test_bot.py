@@ -976,6 +976,157 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.run_until_full(0), 1)
         self.assertEqual([c[1] for c in calls if c[0] == 'go'], ['home', 'home', 'builder'])
 
+    def wall_spec(self):
+        rng = np.random.default_rng(31)
+        icons = {}
+        for name in ('gold', 'elixir'):
+            icon = rng.integers(0, 256, (10, 10, 3), dtype=np.uint8)
+            cv2.imwrite(str(self.root / f'wall-{name}.png'), icon)
+            icons[name] = icon
+        row = rng.integers(0, 256, (6, 20, 3), dtype=np.uint8)
+        cv2.imwrite(str(self.root / 'wall-row.png'), row)
+        spec = {'build': [150, 80], 'row': {'file': 'wall-row.png', 'region': [100, 0, 60, 90],
+                                           'max_score': 0.05, 'tap_x': 130},
+                'scroll': [[130, 70], [130, 20]], 'gems': [0, 0, 30, 10], 'min_white': 20,
+                'buttons': {'gold': {'tap': [20, 80], 'price': [10, 60, 20, 6]},
+                            'elixir': {'tap': [60, 80], 'price': [50, 60, 20, 6]}},
+                'confirm': {'price': [10, 30, 30, 8], 'icon': [45, 25, 20, 20], 'min_white': 40,
+                            'max_score': 0.05, 'icons': {'gold': 'wall-gold.png', 'elixir': 'wall-elixir.png'}}}
+        return spec, icons, row
+
+    def priced(self, spec, white):
+        image = np.zeros((90, 160, 3), dtype=np.uint8)
+        for name, button in spec['buttons'].items():
+            x, y, w, h = button['price']
+            image[y:y + h, x:x + w] = (255, 255, 255) if name in white else (40, 40, 230)
+        return image
+
+    def confirm_frame(self, spec, icon, white=True):
+        image = np.zeros((90, 160, 3), dtype=np.uint8)
+        x, y, w, h = spec['confirm']['price']
+        image[y:y + h, x:x + w] = (255, 255, 255) if white else (40, 40, 230)
+        image[30:40, 50:60] = icon
+        return image
+
+    def wall_runner(self, frames, gems):
+        runner = self.make_bot(Device(self.frames), True)
+        taps = []
+        shots = iter(frames)
+        counts = iter(gems)
+        runner.observe = lambda: next(shots)
+        runner.read_gems = lambda image, spec: next(counts)
+        runner.guarded_tap = lambda states, location, terminal=None: taps.append(tuple(location)) or 'ok'
+        runner.action = lambda state, name: taps.append((state, name))
+        runner.wait = lambda targets, allowed, timeout=None: sorted(targets)[0]
+        runner.wait_still = lambda limit: None
+        return runner, taps
+
+    def test_white_price_is_affordable_and_red_is_not(self):
+        spec, _, _ = self.wall_spec()
+        image = self.priced(spec, {'elixir'})
+        self.assertLess(bot.white_pixels(image, spec['buttons']['gold']['price']), spec['min_white'])
+        self.assertGreaterEqual(bot.white_pixels(image, spec['buttons']['elixir']['price']), spec['min_white'])
+
+    def test_wall_rows_are_found_top_first(self):
+        spec, _, row = self.wall_spec()
+        image = np.zeros((90, 160, 3), dtype=np.uint8)
+        image[50:56, 110:130] = row
+        image[12:18, 110:130] = row
+        self.assertEqual(bot.find_rows(image, row, spec['row']['region'], 0.05), [15, 53])
+        self.assertEqual(bot.find_rows(np.zeros_like(image), row, spec['row']['region'], 0.05), [])
+
+    def test_wall_is_not_touched_when_no_price_is_affordable(self):
+        spec, _, _ = self.wall_spec()
+        runner, taps = self.wall_runner([('wall_selected', self.priced(spec, set()))], [100])
+        self.assertFalse(runner.upgrade_wall(spec, 100))
+        self.assertEqual(taps, [])
+
+    def test_wall_is_upgraded_with_an_affordable_resource_after_a_safe_confirm(self):
+        spec, icons, _ = self.wall_spec()
+        frames = [('wall_selected', self.priced(spec, {'elixir'})),
+                  ('wall_confirm', self.confirm_frame(spec, icons['elixir'])),
+                  ('wall_selected', self.priced(spec, {'elixir'}))]
+        runner, taps = self.wall_runner(frames, [100, 100])
+        self.assertTrue(runner.upgrade_wall(spec, 100))
+        self.assertEqual(taps, [(60, 80), ('wall_confirm', 'confirm')])
+
+    def test_confirm_with_red_price_or_wrong_icon_is_closed_not_confirmed(self):
+        spec, icons, _ = self.wall_spec()
+        for confirm in (self.confirm_frame(spec, icons['elixir'], white=False),
+                        self.confirm_frame(spec, icons['gold'])):
+            frames = [('wall_selected', self.priced(spec, {'elixir'})), ('wall_confirm', confirm)]
+            runner, taps = self.wall_runner(frames, [100])
+            self.assertFalse(runner.upgrade_wall(spec, 100))
+            self.assertEqual(taps, [(60, 80), ('wall_confirm', 'close')])
+
+    def test_gem_drop_stops_wall_upgrades_for_good(self):
+        spec, icons, _ = self.wall_spec()
+        runner, taps = self.wall_runner([('wall_selected', self.priced(spec, {'gold'}))], [99])
+        with self.assertRaises(bot.GemSpent):
+            runner.upgrade_wall(spec, 100)
+        self.assertEqual(taps, [])
+        frames = [('wall_selected', self.priced(spec, {'gold'})),
+                  ('wall_confirm', self.confirm_frame(spec, icons['gold'])),
+                  ('wall_selected', self.priced(spec, {'gold'}))]
+        runner, taps = self.wall_runner(frames, [100, 98])
+        with self.assertRaises(bot.GemSpent):
+            runner.upgrade_wall(spec, 100)
+        device = Device(self.frames)
+        device.connected = device.game_in_front = lambda: True
+        runner = self.make_bot(device, True)
+        runner.settle = runner.recover = lambda: None
+        attempts = []
+        runner.run_walls = lambda searches: (attempts.append(1), (_ for _ in ()).throw(bot.GemSpent('gem')))[1]
+        with self.assertRaises(bot.GemSpent):
+            runner.run_until_full_resilient(0, max_recoveries=3, job=runner.run_walls)
+        self.assertEqual(len(attempts), 1)
+
+    def test_wall_row_scrolls_to_the_top_then_down_until_a_row_shows(self):
+        spec, _, row = self.wall_spec()
+        blank = np.zeros((90, 160, 3), dtype=np.uint8)
+        other = blank.copy()
+        other[40:60, 100:160] = 90
+        found = blank.copy()
+        found[30:36, 110:130] = row
+        device = Device(self.frames)
+        swipes = []
+        device.swipe = lambda start, end: swipes.append((tuple(start), tuple(end)))
+        runner = self.make_bot(device, True)
+        shots = iter([blank, blank, other, found])
+        runner.wait_still = lambda limit: next(shots)
+        self.assertEqual(runner.wall_row(spec), 33)
+        self.assertEqual(swipes, [((130, 20), (130, 70)), ((130, 70), (130, 20))])
+        shots = iter([blank] * 4)
+        runner.wait_still = lambda limit: next(shots)
+        self.assertIsNone(runner.wall_row(spec))
+
+    def test_walls_farm_then_upgrade_until_maxed_in_the_chosen_order(self):
+        runner = self.make_bot(Device(self.frames), True)
+        runner.wall_order = ('home', 'builder')
+        calls = []
+        rounds = {'home': iter([False, True]), 'builder': iter([True])}
+        runner.run_until_full = lambda searches: calls.append(('farm', dict(runner.goals)))
+        runner.upgrade_walls = lambda village: calls.append(('walls', village)) or next(rounds[village])
+        runner.run_walls(0)
+        self.assertEqual(calls, [('farm', {'home': {'gold', 'elixir'}}), ('walls', 'home'),
+                                 ('farm', {'home': {'gold', 'elixir'}}), ('walls', 'home'),
+                                 ('farm', {'builder': {'gold', 'elixir'}}), ('walls', 'builder')])
+
+    def test_wall_order_and_calibration_are_checked(self):
+        self.assertEqual(bot.wall_order('both', 'home'), ('home', 'builder'))
+        self.assertEqual(bot.wall_order('builder', 'home'), ('builder',))
+        spec, _, _ = self.wall_spec()
+        config = {**self.config, 'walls': {'home': spec}}
+        with self.assertRaises(bot.BotError):
+            bot.validate_walls(config, self.root, ('home',))
+        anchors = self.config['screens']['home']['anchors']
+        screens = {name: {'anchors': anchors, 'actions': {'close': [10, 10], 'confirm': [20, 20]}}
+                   for name in bot.MENU_SCREENS}
+        config = {**config, 'screens': {**self.config['screens'], **screens}}
+        bot.validate_walls(config, self.root, ('home',))
+        with self.assertRaises(bot.BotError):
+            bot.validate_walls(config, self.root, ('builder',))
+
     def test_unlimited_searches_keep_skipping_until_loot_passes(self):
         lows = [{'gold': 1, 'elixir': 1}] * 25
         device = Device(self.frames, loot=lows + [{'gold': 100, 'elixir': 200}])
