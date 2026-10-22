@@ -21,6 +21,8 @@ import cv2
 import numpy as np
 
 RESOURCES = ('gold', 'elixir', 'dark')
+VILLAGE_GOALS = {'builder': ('gold', 'elixir', 'cart'), 'home': ('gold', 'elixir', 'dark')}
+DEFAULT_GOALS = {'builder': ('gold', 'elixir', 'cart'), 'home': ('gold', 'elixir')}
 SCREEN_NAMES = (
     'home', 'home_menu', 'home_army', 'home_scout', 'home_battle', 'home_result',
     'builder', 'builder_menu', 'builder_scout', 'builder_battle',
@@ -606,6 +608,34 @@ class Detector:
         return matches[0]
 
 
+def calibrated(config: dict, village: str) -> set:
+    """Resources whose fill level the config can read in that village."""
+    found = set(config.get('capacity', {}).get(village, {})) | set(config.get('storage', {}).get(village, {}))
+    if village == 'builder' and (config.get('cart_text') or config.get('cart_bar')):
+        found.add('cart')
+    return found
+
+
+def parse_goals(config: dict, builder: str | None, home: str | None, first: str) -> dict:
+    """Village -> resources to fill, in visiting order; no choice means both villages without dark elixir."""
+    if builder is None and home is None:
+        goals = {village: set(DEFAULT_GOALS[village]) & calibrated(config, village) for village in VILLAGES}
+    else:
+        goals = {}
+        for village, text in (('builder', builder), ('home', home)):
+            if text is None:
+                continue
+            names = VILLAGE_GOALS[village] if text == 'all' else text.split(',')
+            if not all(names) or set(names) - set(VILLAGE_GOALS[village]):
+                raise BotError(f'Target {village} tidak valid: {text!r}; pilih dari '
+                               f'{",".join(VILLAGE_GOALS[village])} atau all')
+            missing = set(names) - calibrated(config, village)
+            if missing:
+                raise BotError(f'Belum dikalibrasi di {village}: {", ".join(sorted(missing))}')
+            goals[village] = set(names)
+    return {village: goals[village] for village in sorted(goals, key=lambda village: village != first)}
+
+
 def memory_critical() -> bool:
     free = available_memory_mb()
     return free is not None and free < LOW_MEMORY_MB
@@ -781,8 +811,9 @@ def ocr_resource(image: np.ndarray, program: str) -> int:
 class Bot:
     def __init__(self, config: dict, root: Path, device: ADB, live: bool = False,
                  reader: Callable | None = None, timeout: float = 240, poll: float = 0.05,
-                 emulator: 'Emulator | None' = None) -> None:
+                 emulator: 'Emulator | None' = None, goals: dict | None = None) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
+        self.goals = goals if goals is not None else parse_goals(config, None, None, 'builder')
         self.emulator = emulator
         self.emulator_started: float | None = None
         self.detector = Detector(config, root)
@@ -1274,32 +1305,35 @@ class Bot:
     def templates(self) -> dict:
         return load_digit_templates(self.root, self.config['digits'])
 
-    def village_full(self, village: str, image: np.ndarray) -> bool:
+    def village_full(self, village: str, image: np.ndarray, keys: set | None = None) -> bool:
         capacity = self.config.get('capacity', {}).get(village)
         if capacity:
+            capacity = {key: spec for key, spec in capacity.items() if keys is None or key in keys}
             amounts = {key: read_number(crop(image, spec['bar']), self.templates(), FRACTION_MIN_SCORE)
                        for key, spec in capacity.items()}
             maxima = {key: self.storage_max(village, key, spec) for key, spec in capacity.items()}
             LOG.info('Gudang %s: %s', village, {key: f'{amounts[key]:,}/{maxima[key]:,}' for key in capacity})
             return all(amounts[key] >= maxima[key] for key in capacity)
-        bars = self.config.get('storage', {}).get(village, {})
+        bars = {key: bar for key, bar in self.config.get('storage', {}).get(village, {}).items()
+                if keys is None or key in keys}
         fills = {key: storage_fill(image, bar) for key, bar in bars.items()}
         LOG.info('Isi gudang %s: %s', village, {key: f'{value:.0%}' for key, value in fills.items()})
         return bool(fills) and all(value >= FULL_RATIO for value in fills.values())
 
-    def builder_done(self, image: np.ndarray) -> bool:
-        """Builder base is done only when gold, elixir and the Elixir Cart are all full."""
-        storage_full = self.village_full('builder', image)
-        if not (self.config.get('cart_text') or self.config.get('cart_bar')):
-            return storage_full
-        return storage_full and self.cart_full
+    def village_done(self, village: str, image: np.ndarray) -> bool:
+        """Done when every chosen storage and, if chosen, the Elixir Cart is full."""
+        wanted = self.goals[village]
+        storage = wanted - {'cart'}
+        if storage and not self.village_full(village, image, storage):
+            return False
+        return 'cart' not in wanted or self.cart_full
 
     def run_until_full(self, searches: int) -> int:
-        """Builder base first: attack until gold and elixir are full, then home; stop when both are."""
+        """Farm the chosen villages in order until each one's chosen resources are full."""
         integer(searches, 0, 1_000_000, 'searches')
-        full, attacks = {}, 0
+        full, attacks = set(), 0
         self.wait(set(VILLAGES), set(), 30)
-        village = 'builder'
+        village = next(iter(self.goals))
         while True:
             self.refresh_if_low_memory()
             self.navigate(village)
@@ -1307,13 +1341,13 @@ class Bot:
                 self.collect_cart()
             self.wait({village}, set(), 30)
             _, image = self.observe()
-            full[village] = self.builder_done(image) if village == 'builder' else self.village_full(village, image)
-            if full[village]:
-                other = 'builder' if village == 'home' else 'home'
-                if full.get(other):
-                    LOG.info('Gudang kedua desa penuh; selesai setelah %s serangan', attacks)
+            if self.village_done(village, image):
+                full.add(village)
+                pending = [name for name in self.goals if name not in full]
+                if not pending:
+                    LOG.info('Semua target penuh; selesai setelah %s serangan', attacks)
                     return attacks
-                village = other
+                village = pending[0]
                 continue
             if village == 'home':
                 self.home_attack(searches)
@@ -1501,6 +1535,12 @@ def main() -> int:
     parser.add_argument('--searches', type=int, default=0, help='Batas pencarian lawan desa asal; 0 = tanpa batas')
     parser.add_argument('--until-full', action='store_true',
                         help='Serang desa yang emas/elixirnya belum penuh; berhenti saat kedua desa penuh')
+    parser.add_argument('--builder', metavar='RESOURCES',
+                        help='--until-full desa malam saja sampai penuh: gold,elixir,cart (pilih sebagian) atau all')
+    parser.add_argument('--home', metavar='RESOURCES',
+                        help='--until-full desa asal saja sampai penuh: gold,elixir,dark (pilih sebagian) atau all')
+    parser.add_argument('--first', choices=('builder', 'home'), default='builder',
+                        help='Desa yang dikerjakan dulu bila --builder dan --home sama-sama dipilih')
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
                         help='--until-full: berapa kali boleh membuka ulang CoC setelah crash/DC')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
@@ -1508,15 +1548,18 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     try:
         config = load_config(args.config)
-        validate_config(config, args.config.parent, args.mode)
+        until_full = args.until_full or args.builder is not None or args.home is not None
+        goals = parse_goals(config, args.builder, args.home, args.first) if until_full else None
+        mode = (next(iter(goals)) if len(goals) == 1 else 'both') if goals else args.mode
+        validate_config(config, args.config.parent, mode)
         adb = executable(config.get('adb'), 'ADB')
-        if args.mode != 'builder' and any(config.get('minimum', {}).values()):
+        if mode != 'builder' and any(config.get('minimum', {}).values()):
             executable(config.get('tesseract'), 'Tesseract')
         device = ADB(adb, config['serial'], config['resolution'], live=args.live,
                      touch=config.get('touch_device'))
         emulator = Emulator(executable(config['ldconsole'], 'ldconsole'), config.get('ld_index', 0))             if config.get('ldconsole') else None
-        runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator)
-        if args.until_full and args.live:
+        runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals)
+        if until_full and args.live:
             runner.run_until_full_resilient(args.searches, args.max_recoveries)
         else:
             runner.run(args.mode, args.cycles, args.searches)

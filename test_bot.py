@@ -422,8 +422,8 @@ class BotTests(unittest.TestCase):
         runner.navigate = lambda village: setattr(device, 'state', village)
         runner.collect_cart = lambda: setattr(device, 'state', 'builder_cart')
         seen = []
-        runner.builder_done = lambda image: seen.append(device.state) or True
-        runner.village_full = lambda village, image: True
+        runner.goals = {'builder': {'gold', 'elixir', 'cart'}}
+        runner.village_done = lambda village, image: seen.append(device.state) or True
         runner.run_until_full(0)
         self.assertEqual(seen, ['builder'])
         self.assertIn((150, 10), device.inputs)
@@ -883,23 +883,14 @@ class BotTests(unittest.TestCase):
         bar = {'row': 43, 'left': 21, 'right': 120, 'hue': [125, 165], 'min_saturation': 100, 'from': 'left'}
         self.assertAlmostEqual(bot.storage_fill(image, bar), 0.40, places=2)
 
-    def test_builder_not_done_until_cart_full(self):
-        runner = self.make_bot(Device(self.frames), True)
-        runner.cart_full = False
-        runner.config = {**runner.config, 'cart_bar': {'row': 1}}
-        storage = lambda village, image: True
-        runner.village_full = storage
-        self.assertFalse(runner.builder_done(None))
-        runner.cart_full = True
-        self.assertTrue(runner.builder_done(None))
-
     def test_until_full_attacks_unfilled_village_then_switches_and_stops(self):
         runner = self.make_bot(Device(self.frames), True)
+        runner.goals = {'builder': {'gold', 'elixir'}, 'home': {'gold', 'elixir'}}
         fills = {'builder': iter([False, False, True]), 'home': iter([False, True])}
         calls = []
         runner.navigate = lambda village: calls.append(('go', village)) or setattr(runner, 'here', village)
         runner.observe = lambda: (runner.here, None)
-        runner.village_full = lambda village, image: next(fills[village])
+        runner.village_done = lambda village, image: next(fills[village])
         runner.home_attack = lambda searches: calls.append(('attack', 'home'))
         runner.builder_attack = lambda collect=True: calls.append(('attack', 'builder'))
         runner.here = 'home'
@@ -907,6 +898,83 @@ class BotTests(unittest.TestCase):
         attacks = [c[1] for c in calls if c[0] == 'attack']
         self.assertEqual(attacks, ['builder', 'builder', 'home'])
         self.assertEqual(calls[0], ('go', 'builder'))
+
+    def goal_config(self):
+        bar = {'row': 1, 'left': 0, 'right': 10, 'hue': [0, 10], 'min_saturation': 1, 'from': 'left'}
+        return {**self.config, 'cart_bar': bar,
+                'storage': {'home': {'gold': bar, 'elixir': bar, 'dark': bar},
+                            'builder': {'gold': bar, 'elixir': bar}}}
+
+    def test_goals_default_to_both_villages_builder_first_without_dark(self):
+        goals = bot.parse_goals(self.goal_config(), None, None, 'builder')
+        self.assertEqual(list(goals), ['builder', 'home'])
+        self.assertEqual(goals['builder'], {'gold', 'elixir', 'cart'})
+        self.assertEqual(goals['home'], {'gold', 'elixir'})
+
+    def test_goals_pick_resources_village_and_order(self):
+        config = self.goal_config()
+        self.assertEqual(bot.parse_goals(config, 'gold', None, 'builder'), {'builder': {'gold'}})
+        self.assertEqual(bot.parse_goals(config, None, 'elixir,dark', 'builder'), {'home': {'elixir', 'dark'}})
+        both = bot.parse_goals(config, 'all', 'all', 'home')
+        self.assertEqual(list(both), ['home', 'builder'])
+        self.assertEqual(both['home'], {'gold', 'elixir', 'dark'})
+        self.assertEqual(both['builder'], {'gold', 'elixir', 'cart'})
+
+    def test_goals_reject_unknown_and_uncalibrated_resources(self):
+        config = self.goal_config()
+        for builder, home in (('dark', None), (None, 'cart'), ('', None), ('gold,,elixir', None)):
+            with self.assertRaises(bot.BotError):
+                bot.parse_goals(config, builder, home, 'builder')
+        without_dark = {**config, 'storage': {**config['storage'], 'home': {'gold': config['cart_bar']}}}
+        with self.assertRaises(bot.BotError):
+            bot.parse_goals(without_dark, None, 'dark', 'builder')
+
+    def test_village_done_checks_only_the_chosen_resources(self):
+        runner = self.make_bot(Device(self.frames), True)
+        asked = []
+        runner.village_full = lambda village, image, keys: asked.append(set(keys)) or True
+        runner.cart_full = False
+        runner.goals = {'builder': {'cart'}}
+        self.assertFalse(runner.village_done('builder', None))
+        self.assertEqual(asked, [])
+        runner.cart_full = True
+        self.assertTrue(runner.village_done('builder', None))
+        runner.goals = {'builder': {'gold'}, 'home': {'elixir', 'dark'}}
+        runner.cart_full = False
+        self.assertTrue(runner.village_done('builder', None))
+        self.assertTrue(runner.village_done('home', None))
+        self.assertEqual(asked, [{'gold'}, {'elixir', 'dark'}])
+
+    def test_until_full_farms_only_the_chosen_village(self):
+        runner = self.make_bot(Device(self.frames), True)
+        runner.goals = {'home': {'gold'}}
+        fills = iter([False, False, True])
+        calls = []
+        runner.navigate = lambda village: calls.append(('go', village)) or setattr(runner, 'here', village)
+        runner.observe = lambda: (runner.here, None)
+        runner.village_done = lambda village, image: next(fills)
+        runner.home_attack = lambda searches: calls.append(('attack', 'home'))
+        runner.builder_attack = lambda collect=True: calls.append(('attack', 'builder'))
+        runner.collect_cart = lambda: calls.append(('cart',))
+        runner.here = 'builder'
+        self.assertEqual(runner.run_until_full(0), 2)
+        self.assertEqual({c[1] for c in calls if c[0] in ('go', 'attack')}, {'home'})
+        self.assertNotIn(('cart',), calls)
+
+    def test_until_full_follows_the_chosen_village_order(self):
+        runner = self.make_bot(Device(self.frames), True)
+        runner.goals = {'home': {'gold'}, 'builder': {'gold'}}
+        fills = {'home': iter([False, True]), 'builder': iter([True])}
+        calls = []
+        runner.navigate = lambda village: calls.append(('go', village)) or setattr(runner, 'here', village)
+        runner.observe = lambda: (runner.here, None)
+        runner.village_done = lambda village, image: next(fills[village])
+        runner.home_attack = lambda searches: calls.append(('attack', 'home'))
+        runner.builder_attack = lambda collect=True: calls.append(('attack', 'builder'))
+        runner.collect_cart = lambda: None
+        runner.here = 'builder'
+        self.assertEqual(runner.run_until_full(0), 1)
+        self.assertEqual([c[1] for c in calls if c[0] == 'go'], ['home', 'home', 'builder'])
 
     def test_unlimited_searches_keep_skipping_until_loot_passes(self):
         lows = [{'gold': 1, 'elixir': 1}] * 25

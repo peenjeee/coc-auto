@@ -105,6 +105,35 @@ python bot.py --until-full --live
 | `python bot.py --mode both --cycles 3 --live` | Alternate villages, three rounds. |
 | `python bot.py --until-full --live` | Farm until both villages are full, with self-recovery. |
 
+### Choosing what to fill
+
+`--builder` and `--home` pick the village and the resources to fill. Each takes a comma-separated list or `all`,
+and either one alone farms only that village. Without both, `--until-full` fills Builder Base gold, elixir and the
+Elixir Cart, then Home Village gold and elixir.
+
+| Village | Resources | `all` means |
+| --- | --- | --- |
+| `--builder` | `gold`, `elixir`, `cart` (Elixir Cart) | `gold,elixir,cart` |
+| `--home` | `gold`, `elixir`, `dark` (dark elixir) | `gold,elixir,dark` |
+
+```bash
+python bot.py --builder gold --live
+```
+```bash
+python bot.py --builder elixir,cart --live
+```
+```bash
+python bot.py --home gold,dark --live
+```
+```bash
+python bot.py --builder all --home all --first home --live
+```
+
+The first command fills Builder Base gold only, the second Builder Base elixir and the Elixir Cart, and the third
+Home Village gold and dark elixir. The last fills everything in both villages, Home Village first. Use
+`--home gold,elixir` instead of `--home all` to leave dark elixir out. A resource must be calibrated before it can
+be chosen (dark elixir needs a `capacity.home.dark` entry); the bot refuses to start otherwise.
+
 ### CLI options — `bot.py`
 
 | Option | Default | Description |
@@ -114,6 +143,9 @@ python bot.py --until-full --live
 | `--cycles N` | `1` | Rounds to attack (1–100). |
 | `--searches N` | `0` | Opponent searches per Home attack; `0` means unlimited. |
 | `--until-full` | off | Attack until gold and elixir are full in both villages. |
+| `--builder RESOURCES` | – | Fill these Builder Base resources (`gold`, `elixir`, `cart`, or `all`). Implies `--until-full`. |
+| `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
+| `--first {builder,home}` | `builder` | Which village to fill first when both are chosen. |
 | `--max-recoveries N` | `20` | How many times `--until-full` may restart LDPlayer / CoC. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 
@@ -225,7 +257,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (117 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (122 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure
