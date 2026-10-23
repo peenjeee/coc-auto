@@ -2385,7 +2385,8 @@
         "min_white": 300,
         "max_score": 0.05,
         "icons": {
-          "gold": "calibration/wall-icon-builder-gold-aa1d2c3cfa14435e863de2fd1e1536e6.png"
+          "gold": "calibration/wall-icon-builder-gold-aa1d2c3cfa14435e863de2fd1e1536e6.png",
+          "elixir": "calibration/wall-icon-builder-elixir-f41855d738aa4709af5072749108d4b0.png"
         }
       },
       "button": {

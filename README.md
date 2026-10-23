@@ -184,7 +184,7 @@ in storage: it opens the builder list, finds a "Tembok" row, and upgrades one wa
 elixir is still affordable. It always takes the lowest wall level first, and moves on to the next level only when that one is used up. Each wall level costs more than the one below, so it reads the price on every "Tembok" row and picks the cheapest. Position in the list says nothing about level: the game puts affordable rows above ones the storage cannot pay for. When neither resource is affordable any more, it
 farms until gold and elixir are both full, spends them again, and repeats. It stops once no "Tembok" row is left, which means
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
-Elixir Cart first; its walls cost gold only until they reach higher levels, and only the upgrade buttons a wall actually shows are used. Builder Base walls also need a free builder: with every builder busy the game offers to free one for gems, and the bot closes that offer with X and skips the Builder Base walls for that run. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
+Elixir Cart first; its lower walls cost gold only, higher ones gold or elixir (gold first, like the Home Village), and only the upgrade buttons a wall actually shows are used. Builder Base walls also need a free builder: with every builder busy the game offers to free one for gems, and the bot closes that offer with X and skips the Builder Base walls for that run. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
 The bot never spends gems. It taps an upgrade only when its price is shown in white, and taps Konfirmasi only when
 the dialog is a wall upgrade, its price is white, and its icon is the chosen gold or elixir. It reads the gem count
 before and after every upgrade and keeps the last trusted count across recoveries. A count that drops with the same
@@ -357,7 +357,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot
 ```
 
-The suite (190 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
+The suite (191 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

@@ -1752,6 +1752,15 @@ class BotTests(unittest.TestCase):
             with self.subTest(list=name):
                 self.assertEqual([bot.row_price(image, row['price'], y, templates) for y in ys], expected)
 
+    def test_the_bundled_builder_wall_confirm_takes_elixir_by_its_own_icon(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        image = np.zeros((720, 1280, 3), dtype=np.uint8)
+        image[590:665, 530:770] = cv2.imread(str(root / 'fixtures' / 'builder-wall-confirm-elixir.png'))
+        runner = bot.Bot(config, root, None, live=True)
+        self.assertTrue(runner.confirm_safe(image, config['walls']['builder'], 'elixir'))
+        self.assertFalse(runner.confirm_safe(image, config['walls']['builder'], 'gold'))
+
     def test_the_gem_count_reads_over_pale_walls_behind_the_see_through_bar(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
