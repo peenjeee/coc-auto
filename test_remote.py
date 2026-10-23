@@ -482,6 +482,15 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(self.request('GET', '/', host='evil.example')[0], 403)
         self.assertEqual(self.request('GET', '/../remote.py')[0], 404)
 
+    def test_the_sample_deploy_maps_are_served_as_images(self):
+        maps = Path(self.temp.name) / 'web' / 'maps'
+        maps.mkdir()
+        (maps / 'builder_stage2.jpg').write_bytes(b'jpg')
+        self.assertEqual(self.request('GET', '/maps/builder_stage2.jpg')[0], 200)
+        self.assertEqual(self.last_headers.get('Content-Type'), 'image/jpeg')
+        self.assertEqual(self.request('GET', '/maps/home_scout.jpg')[0], 404)
+        self.assertEqual(self.request('GET', '/maps/../../remote.py')[0], 404)
+
     def test_other_sites_cannot_post_commands_or_fill_the_log(self):
         body, sig = signed('open_coc')
         for headers in ({'Origin': 'https://evil.example'}, {'Content-Type': 'text/plain'}):

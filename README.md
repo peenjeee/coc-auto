@@ -277,8 +277,9 @@ LDPlayer, turn LDPlayer off; the last three stop the bot first. When the PC is o
 running, the dashboard says so instead of sending, and a command that gets no answer within 10 seconds is reported.
 Recovery and `settle` work as before: the task runs as a child process (`--worker`) of the dashboard link.
 
-**Deploy points:** "load from device" shows the deploy pins of the Home Village and both Builder Base stages over
-the last screenshot the bot took of each deploy screen (taken while attacking, kept in `captures/`). For a map
+**Deploy points:** the deploy pins of the Home Village and both Builder Base stages are loaded when the dashboard
+connects and drawn over a real attack screen of each (`web/maps/`), or over the last screenshot the bot took of
+that deploy screen on this PC (taken while attacking, kept in `captures/`). For a map
 without attacking, open the deploy screen in LDPlayer yourself and press "take screen now": the bot takes one
 screenshot (no tap), recognises which deploy screen it is and uses it as that tab's map. Drag pins to
 move them, add or remove numbered pins, and save: `D` is the deploy point (troops, siege and heroes; the Battle
@@ -464,7 +465,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot test_remote test_relay test_ldplayer
 ```
 
-The suites (280 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
+The suites (281 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
 deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake Realtime server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.

@@ -5,7 +5,7 @@ import { t } from './i18n.js';
 
 const SCREENS = ['home_scout', 'builder_scout', 'builder_stage2'];
 // Maps shipped with the dashboard, taken from a real attack screen; the device's own screenshot replaces them.
-const BUNDLED_MAPS = { home_scout: 'maps/home_scout.jpg' };
+const BUNDLED_MAPS = Object.fromEntries(SCREENS.map((screen) => [screen, `maps/${screen}.jpg`]));
 const MAX_POINTS = { spells: 30, points: 20 };
 const $ = (id) => document.getElementById(id);
 

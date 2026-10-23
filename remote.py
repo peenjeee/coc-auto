@@ -34,7 +34,7 @@ STREAM_PING_SECONDS = 15
 MAX_COMMAND_BYTES = 64 * 1024
 STATIC_FILES = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js',
                 '/realtime.js': 'realtime.js', '/deploy.js': 'deploy.js', '/settings.js': 'settings.js',
-                '/style.css': 'style.css', '/maps/home_scout.jpg': 'maps/home_scout.jpg',
+                '/style.css': 'style.css',
                 '/config.js': 'config.js', '/favicon.svg': 'favicon.svg'}
 CONTENT_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
                  '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg'}
@@ -66,6 +66,8 @@ TASK_OPTIONS = {
 }
 # Deploy screen -> its list of spread points: Home Village spells, Builder Base troop points.
 DEPLOY_POINTS = {'home_scout': 'spells', 'builder_scout': 'points', 'builder_stage2': 'points'}
+# The deploy editor's sample maps, one real attack screen per deploy screen.
+MAP_FILES = {f'/maps/{name}.jpg': f'maps/{name}.jpg' for name in DEPLOY_POINTS}
 # A battle screen shows the same map as its deploy screen once the scout timer has run out.
 BATTLE_MAPS = {'home_battle': 'home_scout', 'builder_battle': 'builder_scout', 'builder_battle2': 'builder_stage2'}
 MAX_DEPLOY_POINTS = {'spells': 30, 'points': 20}
@@ -715,7 +717,7 @@ def serve_dashboard(supervisor: Supervisor, web_dir: Path, port: int) -> Threadi
             if url.path == '/api/stream':
                 self.stream(parse_qs(url.query).get('channel', [''])[0])
                 return
-            name = STATIC_FILES.get(url.path)
+            name = STATIC_FILES.get(url.path) or MAP_FILES.get(url.path)
             if name is None or not (web_dir / name).is_file():
                 self.send_error(404)
                 return

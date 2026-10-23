@@ -113,10 +113,13 @@ function setOnline(isOnline, reason) {
     notify(reason || t('offline_text'), 'error');
   } else if (isOnline && changed) {
     notify(t('connected'), 'ok');
-    // Show the device's minimums and LDPlayer setup once per connection, without a click.
+    // Show the device's settings and its deploy pins over the maps once per connection, without a click.
     if (!settingsAsked) {
       settingsAsked = true;
-      setTimeout(() => send('get_settings', {}, { quiet: true }), 0);
+      setTimeout(async () => {
+        await send('get_settings', {}, { quiet: true });
+        await send('get_deploy', {}, { quiet: true });
+      }, 0);
     }
   }
 }
