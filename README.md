@@ -23,7 +23,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **One command** | `python bot.py --until-full --live` starts LDPlayer if it is off, opens CoC, and farms. |
 | **Self-recovery** | Restarts a stopped LDPlayer (`ldconsole`), waits for ADB after a disconnect, and reopens CoC after a crash. |
 | **Home Village** | Searches opponents with a minimum gold / elixir / dark-elixir filter (unlimited searches by default). |
-| **Deploy plan** | Holds the main troop card until it is empty, drops the Grand Warden and fires its ability, throws spells along the troop path, then deploys the other heroes and the siege machine. |
+| **Deploy plan** | Holds each troop card at the deploy point until it is empty, drops the siege machine, then the Grand Warden and the other heroes, each followed by its ability, and throws the spells in a triangle: one ahead of the deploy point and one to each side. |
 | **Builder Base** | Spreads troops around the base, handles stage 2, and claims the **Elixir Cart** before every attack. |
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Unknown screens stop the bot. |
