@@ -165,14 +165,15 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs.count((40, 40)), 6)
         self.assertEqual(device.inputs.count((150, 75)), 1)
 
-    def test_ocr_failure_stops_before_any_deploy(self):
+    def test_unreadable_loot_never_deploys_and_skips_until_the_search_limit(self):
         device = Device(self.frames)
         runner = self.make_bot(device, True)
         runner.reader = lambda image, screen: (_ for _ in ()).throw(bot.BotError('OCR ambiguous'))
+        runner.wait_new_scout = lambda image: 'home_scout'
         with self.assertRaises(bot.BotError):
             runner.run('home', 1, 3)
         self.assertNotIn((40, 40), device.inputs)
-        self.assertNotIn((140, 60), device.inputs)
+        self.assertEqual(device.inputs.count((140, 60)), 2)
 
     def test_search_limit_prevents_unbounded_skipping(self):
         device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 3)
@@ -1245,6 +1246,28 @@ class BotTests(unittest.TestCase):
         bot.validate_walls(config, self.root, ('home',))
         with self.assertRaises(bot.BotError):
             bot.validate_walls(config, self.root, ('builder',))
+
+    def test_unreadable_loot_is_read_again_then_the_base_is_skipped(self):
+        device = Device(self.frames, loot=[{'gold': 100, 'elixir': 200}])
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=0.02, poll=0.001)
+        reads = iter([bot.BotError('Angka loot meragukan'), {'gold': 100, 'elixir': 200}])
+
+        def reader(image, screen):
+            value = next(reads)
+            if isinstance(value, Exception):
+                raise value
+            return value
+        runner.reader = reader
+        runner.wait_new_scout = lambda image: 'home_scout'
+        runner.home_attack(0)
+        self.assertIn((40, 40), device.inputs)
+        device = Device(self.frames)
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=0.02, poll=0)
+        reads = iter([bot.BotError('Angka loot meragukan'), {'gold': 100, 'elixir': 200}])
+        runner.reader = reader
+        runner.wait_new_scout = lambda image: 'home_scout'
+        runner.home_attack(0)
+        self.assertEqual(device.inputs.count((140, 60)), 1)
 
     def test_unlimited_searches_keep_skipping_until_loot_passes(self):
         lows = [{'gold': 1, 'elixir': 1}] * 25

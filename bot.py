@@ -91,7 +91,7 @@ SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', *MENU_SCREENS)
-SEARCH_RETRY_SECONDS = 60
+SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 15, 5
 WHITE_LEVEL = 200
@@ -1240,6 +1240,12 @@ class Bot:
             time.sleep(self.poll)
         raise BotError('Lawan belum berubah/stabil; hentikan pencarian')
 
+    def scout_loot(self, image: np.ndarray) -> tuple:
+        """(loot, frame) from a scout frame; a passing cloud or banner can make a single read fail."""
+        if self.detector.detect(image) != 'home_scout':
+            raise BotError('Scout berubah sebelum OCR')
+        return self.reader(image, self.config['screens']['home_scout']), image
+
     def home_attack(self, searches: int) -> None:
         self.tap_until('home', 'attack', {'home_menu'}, 30)
         # After the game restarts the search button shows a short cooldown; keep tapping until it is available.
@@ -1250,9 +1256,13 @@ class Bot:
             state, image = self.observe()
             if state != 'home_scout':
                 raise BotError('Scout berubah sebelum OCR')
-            loot = self.reader(image, self.config['screens']['home_scout'])
-            LOG.info('Loot terbaca: %s', loot)
-            if meets_minimum(loot, self.config.get('minimum', {})):
+            try:
+                loot, image = self.read_until(self.scout_loot, LOOT_READ_SECONDS if self.poll else 0)
+                LOG.info('Loot terbaca: %s', loot)
+            except BotError as exc:
+                LOG.warning('Loot lawan tidak terbaca (%s); lewati lawan ini', exc)
+                loot = None
+            if loot is not None and meets_minimum(loot, self.config.get('minimum', {})):
                 self.deploy('home_scout', {'home_scout', 'home_battle'})
                 if self.wait({'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':
                     LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
