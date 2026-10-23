@@ -321,6 +321,24 @@ class BotTests(unittest.TestCase):
             runner.wait({'home_army'}, {'home_menu'}, 1)
         self.assertEqual(device.inputs, [(20, 80)])
 
+    def test_another_device_on_the_account_stops_the_run_without_reloading(self):
+        taken = np.random.default_rng(37).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        anchors = []
+        for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'taken-{number}.png'), taken[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'taken-{number}.png'})
+        config = {**self.config, 'screens': {**self.config['screens'], 'other_device': {'anchors': anchors}}}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, 'other_device': taken}, 'other_device')
+        device.connected = device.game_in_front = lambda: True
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        with self.assertRaises(bot.OtherDevice):
+            runner.wait({'home'}, set(), 1)
+        with self.assertRaises(bot.OtherDevice):
+            runner.run_until_full_resilient(0, max_recoveries=3)
+        self.assertEqual(device.inputs, [])
+
     def test_league_window_is_closed_while_waiting_for_the_village(self):
         league = np.random.default_rng(17).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []

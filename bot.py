@@ -90,7 +90,7 @@ RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
-OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', *MENU_SCREENS)
+OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', *MENU_SCREENS)
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO = 2, 1.2
 WALL_RESOURCES = ('gold', 'elixir')
@@ -130,6 +130,10 @@ class TargetMissing(BotError):
 
 class OutOfGold(BotError):
     """Skipping to the next opponent costs gold and none is left; the game offered gems instead."""
+
+
+class OtherDevice(Exception):
+    """The account was opened on another device; the run stops and never reloads, so that session stays."""
 
 
 class GemSpent(Exception):
@@ -960,7 +964,10 @@ class Bot:
 
     def observe(self) -> tuple[str, np.ndarray]:
         image = self.device.capture()
-        return self.detector.detect(image), image
+        state = self.detector.detect(image)
+        if state == 'other_device':
+            raise OtherDevice('Akun dibuka di perangkat lain; bot berhenti tanpa memuat ulang')
+        return state, image
 
     def read_loot(self, image: np.ndarray, screen: dict) -> dict:
         active = [key for key in RESOURCES if self.config.get('minimum', {}).get(key, 0)]
@@ -2014,6 +2021,9 @@ def main() -> int:
     except GemSpent as exc:
         LOG.error('BERHENTI DARURAT: %s', exc)
         return 3
+    except OtherDevice as exc:
+        LOG.warning('%s', exc)
+        return 4
     except (BotError, KeyError, TypeError, cv2.error) as exc:
         LOG.error('Berhenti: %s', exc)
         return 1

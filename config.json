@@ -1580,6 +1580,32 @@
           218
         ]
       }
+    },
+    "other_device": {
+      "anchors": [
+        {
+          "roi": [
+            284,
+            276,
+            282,
+            32
+          ],
+          "file": "calibration/other_device-title-cdafdf1b920846acab00744e40264eb0.png"
+        },
+        {
+          "roi": [
+            284,
+            326,
+            410,
+            28
+          ],
+          "file": "calibration/other_device-text-b8726e4e271148d0b9680237e012971c.png"
+        }
+      ],
+      "overrides": [
+        "home",
+        "builder"
+      ]
     }
   },
   "digits": "calibration/digits",
