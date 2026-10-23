@@ -579,7 +579,7 @@ first error instead of recovering.
 python -m unittest -v test_bot test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (281 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
+The suites (284 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
 deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
