@@ -255,6 +255,10 @@ dashboard (open the address it prints in a browser). Enter the key there to foll
 - **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The PC connects out to an online relay channel
   named after a hash of the key, so no router port has to be opened.
 
+![Dashboard walkthrough: one Builder Base attack started from the dashboard (LDPlayer and CoC started by the bot, Elixir Cart, deploy, 4x), LDPlayer auto-detect, the screen and language notes, deploy pins on all three maps, and the Indonesian view](docs/dashboard.gif)
+
+▶️ [Dashboard walkthrough video (MP4)](docs/dashboard.mp4)
+
 ![Web dashboard on a PC: device status, task options and the live log of a running bot](docs/dashboard-desktop.jpg)
 
 <p>
@@ -606,5 +610,5 @@ calibration/           anchor, target and digit templates for config.json
 config.legacy.json     calibration for the previous game UI
 calibration-legacy/    templates for config.legacy.json
 config.example.json    minimal config skeleton
-docs/                  demo GIF and video, dashboard screenshots
+docs/                  demo GIF and video, dashboard walkthrough (GIF, MP4) and screenshots
 ```
