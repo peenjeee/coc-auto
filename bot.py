@@ -2220,7 +2220,8 @@ def main() -> int:
                 raise BotError('--walls butuh --live')
             validate_walls(config, args.config.parent, walls)
         adb = executable(config.get('adb'), 'ADB')
-        if mode != 'builder' and any(config.get('minimum', {}).values()):
+        # Loot is read with Tesseract only when no digit templates are configured.
+        if mode != 'builder' and any(config.get('minimum', {}).values()) and not config.get('digits'):
             executable(config.get('tesseract'), 'Tesseract')
         device = ADB(adb, config['serial'], config['resolution'], live=args.live,
                      touch=config.get('touch_device'))
