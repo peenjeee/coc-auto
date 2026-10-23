@@ -55,8 +55,11 @@ flowchart LR
     R --> A
 ```
 
-- **Screens** are recognised by two small UI crops per screen (`anchors`), matched with OpenCV.
+- **Screens** are recognised by two or more small UI crops per screen (`anchors`), matched with OpenCV.
   A screen can have alternative anchor sets (`alt_anchors`) when it has two layouts, such as the win and loss result screens.
+  The two villages are told apart by their elixir icons (pink in the Home Village, violet in the Builder Base), which
+  every Town Hall and Builder Hall level shows, so a Town Hall below 7 (no dark elixir bar) is still the Home Village
+  and never taken for the Builder Base.
 - **Numbers** (loot, storage bars, the "Maks" tooltip, the Elixir Cart) are read with per-digit templates built from real screenshots.
   Several font variants per digit are supported.
 - **Input** is sent as raw multitouch events written to `/dev/input/eventN`, which makes holds and pinches possible.
@@ -284,7 +287,7 @@ How to change it:
 | `touch_device` | Raw touch input device, e.g. `/dev/input/event4`. |
 | `tesseract` | Tesseract executable; used for loot only when `digits` is not set. |
 | `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
-| `screens.<name>.anchors` | Two UI crops that identify a screen; optional `margin` for small UI shifts. |
+| `screens.<name>.anchors` | Two or more UI crops that must all match to identify a screen; optional `margin` for small UI shifts. |
 | `screens.<name>.alt_anchors` | Alternative anchor sets for screens with two layouts. |
 | `screens.<name>.overrides` | Screens this one wins over when both match (e.g. stage 2 over battle). |
 | `screens.<name>.actions` | Fixed tap points (attack, find, next, return, …). Menus may add an optional `close`. |
@@ -330,7 +333,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot
 ```
 
-The suite (161 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (162 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

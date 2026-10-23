@@ -124,7 +124,29 @@
           ],
           "pan_attempts": 3
         }
-      }
+      },
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              30,
+              676,
+              118,
+              20
+            ],
+            "file": "calibration/home-attack-label.png"
+          },
+          {
+            "roi": [
+              1244,
+              74,
+              14,
+              26
+            ],
+            "file": "calibration/home-elixir-52c8cc22e8fb40cfbac3bc587cdef168.png"
+          }
+        ]
+      ]
     },
     "home_menu": {
       "anchors": [
@@ -637,6 +659,15 @@
             22
           ],
           "file": "calibration/builder-gem-icon.png"
+        },
+        {
+          "roi": [
+            1244,
+            74,
+            14,
+            26
+          ],
+          "file": "calibration/builder-elixir-bfc89b8b51fd4ccf9ea502b6929c5087.png"
         }
       ],
       "actions": {

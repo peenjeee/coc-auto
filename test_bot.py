@@ -147,6 +147,26 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.BotError):
             matcher.detect(np.zeros((100, 160, 3), dtype=np.uint8))
 
+    def test_the_bundled_calibration_never_takes_a_low_town_hall_for_the_builder_base(self):
+        root = Path(bot.__file__).parent
+        config = bot.load_config(root / 'config.json')
+        screens = config['screens']
+        bot.validate_config(config, root, 'both')
+
+        def frame(*anchors):
+            image = np.zeros((720, 1280, 3), dtype=np.uint8)
+            for anchor in anchors:
+                x, y, w, h = anchor['roi']
+                image[y:y + h, x:x + w] = cv2.imread(str(root / anchor['file']))
+            return image
+        detector = bot.Detector(config, root)
+        home, builder, low = screens['home']['anchors'], screens['builder']['anchors'], screens['home']['alt_anchors'][0]
+        self.assertEqual(detector.detect(frame(*home, *low)), 'home')
+        self.assertEqual(detector.detect(frame(*builder)), 'builder')
+        # Below Town Hall 7 there is no dark elixir, and the gem count moves up to where the Builder Base shows it.
+        gems = next(anchor for anchor in builder if 'gem' in anchor['file'])
+        self.assertEqual(detector.detect(frame(*low, gems)), 'home')
+
     def test_ambiguous_templates_abort(self):
         config = copy.deepcopy(self.config)
         config['screens']['builder']['anchors'] = config['screens']['home']['anchors']
