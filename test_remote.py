@@ -127,7 +127,8 @@ class DeployPointsTests(unittest.TestCase):
         self.points = remote.DeployPoints(self.config, self.captures, REPO)
 
     def screen(self, name):
-        return json.loads(self.config.read_text(encoding='utf-8'))['screens'][name]
+        import bot
+        return bot.load_config(self.config)['screens'][name]
 
     def test_the_pins_of_every_deploy_screen_are_read(self):
         data = self.points.read()
@@ -137,15 +138,23 @@ class DeployPointsTests(unittest.TestCase):
                          ('spells', self.screen('home_scout')['deploy'], self.screen('home_scout')['auto']['spells']))
         self.assertEqual((builder['kind'], builder['bar']), ('points', self.screen('builder_stage2')['auto']['bar']))
 
-    def test_moved_pins_are_written_and_the_rest_of_the_config_is_kept(self):
-        before = json.loads(self.config.read_text(encoding='utf-8'))
+    def test_moved_pins_go_to_the_local_config_and_the_shared_one_is_kept(self):
+        import bot
+        shared = self.config.read_text(encoding='utf-8')
+        before = bot.load_config(self.config)
         self.points.write('builder_scout', [200, 380], [[300, 200], [800, 150], [1100, 360]])
-        after = json.loads(self.config.read_text(encoding='utf-8'))
+        after = bot.load_config(self.config)
         self.assertEqual(after['screens']['builder_scout']['deploy'], [200, 380])
         self.assertEqual(after['screens']['builder_scout']['auto']['points'], [[300, 200], [800, 150], [1100, 360]])
         after['screens']['builder_scout'] = before['screens']['builder_scout']
         self.assertEqual(after, before)
-        self.assertTrue(self.config.with_suffix('.json.bak').is_file())
+        # A git pull of new calibration never collides with the pins this PC moved.
+        self.assertEqual(self.config.read_text(encoding='utf-8'), shared)
+        local = json.loads(self.config.with_name('config.local.json').read_text(encoding='utf-8'))
+        self.assertEqual(local, {'screens': {'builder_scout': {'deploy': [200, 380], 'auto': {'points':
+                                                                [[300, 200], [800, 150], [1100, 360]]}}}})
+        self.points.write('builder_scout', [210, 380], [[300, 200]])
+        self.assertTrue(self.config.with_name('config.local.json.bak').is_file())
 
     def test_pins_off_the_screen_on_the_card_bar_or_malformed_are_refused(self):
         original = self.config.read_text(encoding='utf-8')
@@ -160,6 +169,7 @@ class DeployPointsTests(unittest.TestCase):
             with self.subTest(screen=screen, deploy=deploy, points=points[:2]), self.assertRaises(remote.CommandRefused):
                 self.points.write(screen, deploy, points)
         self.assertEqual(self.config.read_text(encoding='utf-8'), original)
+        self.assertFalse(self.config.with_name('config.local.json').exists())
 
     def test_the_last_deploy_screenshot_is_sent_small(self):
         import base64
@@ -182,6 +192,9 @@ class DeployPointsTests(unittest.TestCase):
         points = remote.DeployPoints(self.config, self.captures, REPO, screen=lambda: (frame, 'builder_stage2'))
         self.assertEqual(points.capture(), 'builder_stage2')
         self.assertEqual([shot['screen'] for shot in points.snapshots()], ['builder_stage2'])
+        # Once the scout timer runs out the same map is a battle screen; it still makes the deploy screen's map.
+        battle = remote.DeployPoints(self.config, self.captures, REPO, screen=lambda: (frame, 'home_battle'))
+        self.assertEqual(battle.capture(), 'home_scout')
         for name in ('home', 'home_army'):
             other = remote.DeployPoints(self.config, self.captures, REPO, screen=lambda: (frame, name))
             with self.subTest(screen=name), self.assertRaises(remote.CommandRefused):
@@ -229,7 +242,8 @@ class SettingsTests(unittest.TestCase):
                                         {'adb': 'C:/LD/adb.exe', 'problems': []})
 
     def stored(self):
-        return json.loads(self.config.read_text(encoding='utf-8'))
+        import bot
+        return bot.load_config(self.config)
 
     def setup(self, **changes):
         return {'adb': str(self.ld / 'adb.exe'), 'ldconsole': str(self.ld / 'ldconsole.exe'), 'serial': 'emulator-5556',
@@ -242,12 +256,14 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(data['setup']['touch_device'], config['touch_device'])
 
     def test_minimums_are_saved_and_the_rest_of_the_config_is_kept(self):
-        before = self.stored()
+        before, shared = self.stored(), self.config.read_text(encoding='utf-8')
         self.settings.write_minimum({'gold': 300000, 'elixir': 250000, 'dark': 4000})
         after = self.stored()
         self.assertEqual(after['minimum'], {'gold': 300000, 'elixir': 250000, 'dark': 4000})
         self.assertEqual({**after, 'minimum': before['minimum']}, before)
-        self.assertTrue(self.config.with_suffix('.json.bak').is_file())
+        self.assertEqual(self.config.read_text(encoding='utf-8'), shared)
+        self.assertEqual(json.loads(self.config.with_name('config.local.json').read_text(encoding='utf-8')),
+                         {'minimum': {'gold': 300000, 'elixir': 250000, 'dark': 4000}})
 
     def test_bad_minimums_are_refused(self):
         original = self.config.read_text(encoding='utf-8')
@@ -341,10 +357,20 @@ class DisplayTests(unittest.TestCase):
         self.display = remote.Display(self.config, self.store, sleep=lambda seconds: None,
                                       emulator=lambda console, index: self.emulator)
 
-    def write_instance(self, width, height, dpi):
+    def write_instance(self, width, height, dpi, adb=1):
         self.instance.write_text(json.dumps({'propertySettings.phoneModel': 'X', 'advancedSettings.resolution':
                                              {'width': width, 'height': height}, 'advancedSettings.resolutionDpi': dpi,
-                                             'basicSettings.adbDebug': 1}, indent=4), encoding='utf-8')
+                                             'basicSettings.adbDebug': adb}, indent=4), encoding='utf-8')
+
+    def test_fitting_also_opens_adb_debugging_and_restoring_leaves_it_open(self):
+        self.write_instance(1280, 720, 240, adb=0)
+        self.assertTrue(self.display.fit())
+        self.assertEqual(self.screen(), (1280, 720, 240, 1))
+        self.assertFalse(self.store.exists())  # the screen already fitted: nothing of the user's to put back
+        self.write_instance(1600, 900, 320, adb=0)
+        self.display.fit()
+        self.display.restore()
+        self.assertEqual(self.screen(), (1600, 900, 320, 1))
 
     def screen(self):
         data = json.loads(self.instance.read_text(encoding='utf-8'))

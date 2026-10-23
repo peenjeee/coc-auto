@@ -19,8 +19,13 @@ import sys
 import time
 from typing import Callable
 
+if sys.version_info < (3, 10):
+    sys.exit('coc-auto butuh Python 3.10 atau lebih baru')
+
 import cv2
 import numpy as np
+
+import ldplayer
 
 RESOURCES = ('gold', 'elixir', 'dark')
 VILLAGE_GOALS = {'builder': ('gold', 'elixir', 'cart'), 'home': ('gold', 'elixir', 'dark')}
@@ -91,6 +96,8 @@ POPUP_CLEAR_ATTEMPTS = 3
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
+# Attacks in a row forced by running out of gold while searching: the loot minimum does not fit the account.
+BROKE_ATTACKS_LIMIT = 3
 MEMORY_RETRY_SECONDS, BATTLE_END_SECONDS = 30, 240
 LOW_MEMORY_MB, EMULATOR_STOP_SECONDS, EMULATOR_REFRESH_SECONDS = 1000, 60, 1800
 TAP_RETRIES, TAP_RETRY_SECONDS = 3, 10
@@ -177,6 +184,11 @@ class LimitReached(Exception):
     """A --hours/--minutes/--max-upgrades limit was reached between attacks or upgrades; a normal finish."""
 
 
+class SetupError(Exception):
+    """The PC, LDPlayer or config cannot work for this account (taps that cannot land, ADB debugging off, a loot
+    minimum no opponent meets); recovering would only repeat it, so the run stops with what to change."""
+
+
 def integer(value: object, low: int, high: int, label: str) -> int:
     if type(value) is not int or not low <= value <= high:
         raise BotError(f'{label}: perlu integer {low}..{high}')
@@ -243,6 +255,12 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
     serial = config.get('serial')
     if not isinstance(serial, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]+', serial) or serial.startswith('-'):
         raise BotError('serial ADB wajib eksplisit dan valid')
+    if config.get('ldconsole') and re.fullmatch(r'emulator-\d+|127\.0\.0\.1:\d+', serial):
+        # Recovery quits and starts the instance ld_index while adb talks to serial: they must be the same one.
+        index = integer(config.get('ld_index', 0), 0, 99, 'ld_index')
+        if serial not in (f'emulator-{5554 + 2 * index}', f'127.0.0.1:{5555 + 2 * index}'):
+            raise BotError(f'serial {serial} bukan milik LDPlayer index {index} (seharusnya emulator-{5554 + 2 * index}); '
+                           'samakan lewat deteksi otomatis di dashboard')
     screens = config.get('screens', {})
     if not isinstance(screens, dict) or not screens:
         raise BotError('Belum dikalibrasi: screens kosong')
@@ -500,6 +518,15 @@ class ADB:
         except (MemoryError, IndexError) as exc:
             # A pipe reader thread that runs out of memory leaves subprocess with no output to return.
             raise MemoryError('Output ADB hilang; memori PC penuh') from exc
+
+    def touch_problem(self, *extra: str) -> str | None:
+        """Why taps sent to the touch node(s) would not land (see ldplayer.touch_problem); None when they would or
+        when there is no node, since `input` taps need none."""
+        nodes = list(dict.fromkeys(node for node in (self.touch, *extra) if node))
+        if not nodes:
+            return None
+        output = self.command('shell', 'uname -m; getevent -pl').decode('utf-8', 'replace')
+        return next(filter(None, (ldplayer.touch_problem(output, node, self.resolution) for node in nodes)), None)
 
     def connected(self) -> bool:
         try:
@@ -1251,7 +1278,10 @@ class Bot:
         self.wall_list_top = False
         self.wall_price: float | None = None
         self.emulator = emulator
-        self.emulator_started: float | None = None
+        # The run starts on the LDPlayer it finds; a low-memory restart waits the full interval from here.
+        self.emulator_started = time.monotonic()
+        self.touch_checked = False
+        self.broke_attacks = 0
         self.detector = Detector(config, root)
         self.timeout, self.poll = timeout, poll
         self.reader = reader or self.read_loot
@@ -1692,9 +1722,10 @@ class Bot:
                 self.deploy('home_scout', {'home_scout', 'home_battle'})
                 if self.wait({'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':
                     LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
-                    return
-                self.action('home_result', 'return')
-                self.wait({'home'}, {'home_result'}, 30)
+                else:
+                    self.action('home_result', 'return')
+                    self.wait({'home'}, {'home_result'}, 30)
+                self.count_broke_attack(broke and not passes)
                 return
             self.action('home_scout', 'next')
             try:
@@ -1702,6 +1733,29 @@ class Bot:
             except OutOfGold as exc:
                 LOG.warning('%s; serang lawan yang sedang tampil', exc)
                 broke = True
+
+    def count_broke_attack(self, broke: bool) -> None:
+        """Running out of gold while searching, attack after attack, means no opponent meets the loot minimum on
+        this account (a minimum above what its Town Hall finds): searching burns the gold the run should fill and
+        never ends, so the run stops, back in the village, with what to change."""
+        self.broke_attacks = self.broke_attacks + 1 if broke else 0
+        if self.broke_attacks >= BROKE_ATTACKS_LIMIT:
+            minimum = ', '.join(f'{key} {value:,}' for key, value in self.config.get('minimum', {}).items() if value)
+            raise SetupError(f'Gold habis untuk mencari lawan {self.broke_attacks}x berturut-turut tanpa lawan yang '
+                             f'memenuhi minimal loot ({minimum}); turunkan minimal loot di dashboard (pengaturan '
+                             'perangkat) atau config.json, atau batasi pencarian dengan --searches')
+
+    def check_touch(self) -> None:
+        """Once per live run, before its first tap: taps on a touchscreen that cannot take them vanish without
+        any error, so the run stops with the reason instead."""
+        problem = getattr(self.device, 'touch_problem', None)
+        if self.touch_checked or not self.live or problem is None:
+            return
+        zoom = (self.config.get('zoom_out') or {}).get('device')
+        reason = problem(zoom) if zoom else problem()
+        if reason:
+            raise SetupError(reason)
+        self.touch_checked = True
 
     def collect_cart(self) -> None:
         """Builder elixir comes only from the Elixir Cart: open it, claim, close. Skip if not visible."""
@@ -2271,7 +2325,8 @@ class Bot:
                     self.walls_done.add(village)
                     break
                 if upgraded == 0 and farmed:
-                    raise BotError(f'Tembok {village} tidak bisa di-upgrade walau gudang penuh; periksa kalibrasi')
+                    raise BotError(f'Tembok {village} tidak bisa di-upgrade walau gudang penuh; di Town Hall rendah '
+                                   'turunkan walls.home.gold_reserve, selain itu periksa kalibrasi')
                 self.goals = {village: {'gold', 'elixir'}}
                 self.run_until_full(searches)
                 farmed = True
@@ -2333,6 +2388,7 @@ class Bot:
                 if pending:
                     step, pending = pending, None
                     step()
+                self.check_touch()
                 return (job or self.run_until_full)(searches)
             except (MemoryError, cv2.error) as exc:
                 recoveries, progress = self.recoveries_since(recoveries, progress)
@@ -2443,6 +2499,7 @@ class Bot:
                 loot = self.reader(image, self.config['screens'][state])
                 LOG.info('Loot=%s; memenuhi filter=%s', loot, meets_minimum(loot, self.config.get('minimum', {})))
             return 0
+        self.check_touch()
         completed = 0
         villages = ('home', 'builder') if mode == 'both' else (mode,)
         for _ in range(cycles):
@@ -2458,19 +2515,60 @@ class Bot:
         return completed
 
 
-def load_config(path: Path) -> dict:
+def check_adb_debugging(console: str, index: int) -> None:
+    """With ADB debugging off LDPlayer never shows up in adb, and recovery would restart it again and again."""
+    path = ldplayer.instance_config(console, index)
+    try:
+        enabled = ldplayer.adb_debug(path) if path.is_file() else None
+    except (OSError, ValueError):
+        return  # Another LDPlayer layout: recovery reports a missing ADB its own way.
+    if enabled == 0:
+        raise SetupError(ldplayer.ADB_DEBUG_HINT)
+
+
+def local_config_path(path: Path) -> Path:
+    """config.local.json beside config.json: this PC's own settings (LDPlayer, loot minimums, moved deploy pins).
+    It is not in git, so pulling a new calibration never collides with them."""
+    return path.with_name(path.stem + '.local.json')
+
+
+def merged(base: dict, local: dict) -> dict:
+    """local over base: objects are merged key by key, anything else (numbers, text, lists) is replaced."""
+    result = dict(base)
+    for key, value in local.items():
+        both = isinstance(value, dict) and isinstance(base.get(key), dict)
+        result[key] = merged(base[key], value) if both else value
+    return result
+
+
+def read_config(path: Path) -> dict:
+    """The shared calibration file alone; calibrate.py edits only this."""
     try:
         config = json.loads(path.read_text(encoding='utf-8'))
-        if not isinstance(config, dict):
-            raise BotError('Config harus JSON object')
-        return config
     except (OSError, ValueError) as exc:
-        raise BotError('Config tidak terbaca; jalankan kalibrasi terlebih dahulu') from exc
+        raise BotError(f'Config tidak terbaca ({path}); jalankan kalibrasi terlebih dahulu') from exc
+    if not isinstance(config, dict):
+        raise BotError('Config harus JSON object')
+    return config
+
+
+def load_config(path: Path) -> dict:
+    """The calibration with this PC's settings from config.local.json on top."""
+    config, local_path = read_config(path), local_config_path(path)
+    if not local_path.is_file():
+        return config
+    try:
+        local = json.loads(local_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError) as exc:
+        raise BotError(f'{local_path.name} tidak terbaca: {exc}') from exc
+    if not isinstance(local, dict):
+        raise BotError(f'{local_path.name} harus JSON object')
+    return merged(config, local)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description='CoC LDPlayer: default dry-run tanpa tap')
-    parser.add_argument('--config', type=Path, default=Path('config.json'))
+    parser.add_argument('--config', type=Path, default=Path(__file__).resolve().parent / 'config.json')
     parser.add_argument('--mode', choices=('home', 'builder', 'both'), default='both')
     parser.add_argument('--cycles', type=int, default=1)
     parser.add_argument('--searches', type=int, default=0,
@@ -2555,6 +2653,8 @@ def main() -> int:
         device = ADB(adb, config['serial'], config['resolution'], live=args.live,
                      touch=config.get('touch_device'))
         emulator = Emulator(executable(config['ldconsole'], 'ldconsole'), config.get('ld_index', 0))             if config.get('ldconsole') else None
+        if emulator and args.live:
+            check_adb_debugging(emulator.console, emulator.index)
         runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals, walls=walls,
                      minutes=minutes, max_upgrades=args.max_upgrades)
         if walls:
@@ -2579,6 +2679,9 @@ def main() -> int:
     except LimitReached as exc:
         LOG.info('%s', exc)
         return 0
+    except SetupError as exc:
+        LOG.error('Berhenti, perlu diatur dulu: %s', exc)
+        return 6
     except (BotError, KeyError, TypeError, cv2.error) as exc:
         LOG.error('Berhenti: %s', exc)
         return 1

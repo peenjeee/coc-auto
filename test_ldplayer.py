@@ -14,7 +14,8 @@ add device 2: /dev/input/event4
   name:     "ldtouch"
   events:
     ABS (0003): ABS_MT_SLOT : value 0, min 0, max 9
-                ABS_MT_POSITION_X : value 0, min 0, max 1279
+                ABS_MT_POSITION_X     : value 0, min 0, max 1279, fuzz 0, flat 0, resolution 0
+                ABS_MT_POSITION_Y     : value 0, min 0, max 719, fuzz 0, flat 0, resolution 0
 '''
 
 
@@ -30,6 +31,20 @@ class ParserTests(unittest.TestCase):
     def test_the_touchscreen_is_the_node_with_multitouch_positions(self):
         self.assertEqual(ldplayer.parse_touch(GETEVENT), '/dev/input/event4')
         self.assertIsNone(ldplayer.parse_touch('add device 1: /dev/input/event2\n  KEY_ESC\n'))
+
+    def test_the_touch_range_of_a_node_is_read(self):
+        self.assertEqual(ldplayer.touch_range(GETEVENT, '/dev/input/event4'), (1279, 719))
+        self.assertIsNone(ldplayer.touch_range(GETEVENT, '/dev/input/event2'))
+        self.assertIsNone(ldplayer.touch_range(GETEVENT, '/dev/input/event9'))
+
+    def test_a_touch_problem_says_what_does_not_fit(self):
+        self.assertIsNone(ldplayer.touch_problem('x86_64\n' + GETEVENT, '/dev/input/event4', [1280, 720]))
+        for kernel, node, size, words in (('i686', '/dev/input/event4', [1280, 720], '32-bit'),
+                                          ('x86_64', '/dev/input/event9', [1280, 720], 'event9'),
+                                          ('x86_64', '/dev/input/event2', [1280, 720], 'event2'),
+                                          ('x86_64', '/dev/input/event4', [1600, 900], '1279x719')):
+            with self.subTest(kernel=kernel, node=node, size=size):
+                self.assertIn(words, ldplayer.touch_problem(kernel + '\n' + GETEVENT, node, size))
 
     def test_screen_size_prefers_the_override(self):
         self.assertEqual(ldplayer.parse_size('Physical size: 720x1280\nOverride size: 1280x720\n'), [1280, 720])
@@ -70,6 +85,21 @@ class DetectTests(unittest.TestCase):
         found = ldplayer.detect({}, self.runner({'list2': LIST2}), roots=[self.root])
         self.assertEqual(found['folders'], [str(self.folder.resolve())])
         self.assertIn('emulator-5554', found['problems'][0])
+
+    def test_a_touchscreen_for_another_screen_size_is_reported(self):
+        wide = GETEVENT.replace('max 1279', 'max 1599').replace('max 719', 'max 899')
+        run = self.runner({'Get-Process': str(self.folder / 'dnplayer.exe'), 'list2': LIST2, 'devices': DEVICES,
+                           'getevent': wide, 'wm size': 'Physical size: 1280x720\n'})
+        found = ldplayer.detect({}, run, roots=[])
+        self.assertTrue(any('1599x899' in problem for problem in found['problems']))
+
+    def test_ldplayer_with_adb_debugging_off_is_reported(self):
+        config = self.folder / 'vms' / 'config'
+        config.mkdir(parents=True)
+        (config / 'leidian0.config').write_text('{"basicSettings.adbDebug": 0}', encoding='utf-8')
+        run = self.runner({'Get-Process': str(self.folder / 'dnplayer.exe'), 'list2': LIST2})
+        found = ldplayer.detect({}, run, roots=[])
+        self.assertTrue(any('ADB' in problem and 'debug' in problem.lower() for problem in found['problems']))
 
     def test_a_wrong_screen_size_is_reported(self):
         run = self.runner({'Get-Process': str(self.folder / 'dnplayer.exe'), 'list2': LIST2, 'devices': DEVICES,
@@ -115,6 +145,15 @@ class DisplayFileTests(unittest.TestCase):
         ldplayer.write_display(self.path, {'width': 1280, 'height': 720, 'dpi': 240})
         expected = INSTANCE.replace('1600', '1280').replace('900', '720').replace('320', '240')
         self.assertEqual(self.path.read_bytes(), expected.encode())
+
+    def test_adb_debugging_is_read_and_can_be_turned_on_with_the_screen(self):
+        self.assertEqual(ldplayer.adb_debug(self.path), 1)
+        self.path.write_bytes(INSTANCE.replace('"basicSettings.adbDebug": 1', '"basicSettings.adbDebug": 0').encode())
+        self.assertEqual(ldplayer.adb_debug(self.path), 0)
+        ldplayer.write_display(self.path, {'width': 1280, 'height': 720, 'dpi': 240}, adb_debug=1)
+        self.assertEqual(ldplayer.adb_debug(self.path), 1)
+        self.path.write_text('{}', encoding='utf-8')
+        self.assertIsNone(ldplayer.adb_debug(self.path))
 
     def test_a_config_without_screen_keys_is_refused(self):
         self.path.write_text('{"basicSettings.adbDebug": 1}', encoding='utf-8')

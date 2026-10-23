@@ -27,7 +27,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Deploy plan** | Reads the card bar on the scout screen, so it follows whatever army is trained: holds each troop card at the deploy point until it is empty, drops the siege machine, then the Grand Warden (found by its green ground/air toggle) and the other heroes, each followed by its ability, and throws the spells in rounds of front, left and right, each round further into the base so no two spells share a spot. |
 | **Builder Base** | Reads the card bar too: drops the Battle Machine or Battle Copter and fires its ability, spreads one troop card per point around the base, handles stage 2, and claims the **Elixir Cart** before every attack. |
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
-| **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Unknown screens stop the bot. |
+| **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
 | **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. |
 
@@ -48,7 +48,7 @@ Dragons are deployed by holding one edge point until the card is empty, and spel
 flowchart LR
     A[ADB screenshot] --> B[Detector<br/>template anchors]
     B -->|known screen| C[State machine]
-    B -->|unknown screen| S[Stop - no input]
+    B -->|unknown screen| S[No input<br/>wait, settle, recover]
     C --> D[Digit templates<br/>loot / storage / cart]
     C --> E[Raw touch events<br/>tap / hold / pinch]
     C -->|crash or DC| R[Recovery<br/>ldconsole + am start]
@@ -68,8 +68,19 @@ flowchart LR
 
 - Windows with **LDPlayer** (tested on LDPlayer 14, Android 14, **1280×720**, Indonesian game language)
 - **Python 3.10+**
-- ADB from LDPlayer (`adb.exe`) with **local ADB debugging** enabled in LDPlayer settings
+- ADB from LDPlayer (`adb.exe`) with **local ADB debugging** enabled in LDPlayer settings (the dashboard's "fit
+  screen" turns it on)
+- A **64-bit** LDPlayer (LDPlayer 9 or newer): touch input is written as 64-bit Linux input events
 - Optional: Tesseract OCR — only a fallback when digit templates are not configured
+
+The account:
+
+- **Town Hall 7+** for `--walls home` and for dark elixir (`--dark`, `--home dark`): the Home Village gem and storage
+  readings are calibrated with the dark elixir bar on screen.
+- **Builder Base unlocked** for the default `--until-full` and for `--builder`/`--walls builder`; without it use
+  `--home`.
+- A loot `minimum` and `walls.home.gold_reserve` that fit the Town Hall (see
+  [First-time setup](#first-time-setup-for-another-pc-or-account)).
 
 ## Installation
 
@@ -95,7 +106,10 @@ C:\LDPlayer\LDPlayer14\adb.exe devices
 ## First-time setup for another PC or account
 
 The bundled `config.json` was made on one PC for one account. Before the first live run on yours, check each
-row below. Everything here is either an LDPlayer setting or a key in `config.json`.
+row below. Everything here is either an LDPlayer setting or a config key. Put your own values in
+**`config.local.json`** next to `config.json`, with only the keys you change (for example
+`{"serial": "emulator-5556", "ld_index": 1, "minimum": {"gold": 200000}}`). It is read on top of `config.json`, is
+not in git, so `git pull` never collides with it, and the dashboard saves its settings and moved deploy pins there.
 
 | What | Must be | Why / how to check |
 | --- | --- | --- |
@@ -104,7 +118,8 @@ row below. Everything here is either an LDPlayer setting or a key in `config.jso
 | `adb`, `ldconsole` | Paths in your LDPlayer install folder | e.g. `C:\LDPlayer\LDPlayer14\adb.exe` and `C:\LDPlayer\LDPlayer14\ldconsole.exe`; the folder name depends on the LDPlayer version. |
 | `ld_index`, `serial` | Your instance | `ld_index` is the instance number in LDMultiPlayer (0 for the first). `serial` is `emulator-<5554 + 2 × index>`: `emulator-5554` for index 0, `emulator-5556` for index 1. Check with `adb devices`. |
 | `touch_device`, `zoom_out.device` | The touchscreen node | Run `adb -s <serial> shell getevent -pl` and use the `/dev/input/eventN` whose block lists `ABS_MT_POSITION_X`. Set both keys to it; holds, pinches and fast taps go there. |
-| `minimum` | A loot filter that fits your Town Hall | `500000` gold and elixir suits high Town Halls. Lower it for a low Town Hall, or every opponent is skipped. `0` turns a resource off. |
+| `minimum` | A loot filter that fits your Town Hall | `500000` gold and elixir suits high Town Halls. Lower it for a low Town Hall, or every opponent is skipped. `0` turns a resource off. If searching runs out of gold 3 attacks in a row, the bot stops (exit code 6) and asks you to lower it. |
+| `walls.home.gold_reserve` | Gold kept for searching | `200000` by default; lower it for a low Town Hall whose gold storage is small, or gold wall upgrades never pass it. |
 | `tesseract` | Only when `digits` is not set | Loot is read with the digit templates in `calibration/digits`. Tesseract is needed only if you remove `digits`. |
 
 The LDPlayer rows (`adb`, `ldconsole`, `ld_index`, `serial`, `touch_device`) can also be filled from the
@@ -119,7 +134,8 @@ python bot.py
 ```
 
 It should log `Dry-run: layar=home` (or `builder`). *"Layar tidak dikenal"* means the screen does not match; recheck
-resolution, DPI and language before recalibrating anything.
+resolution, DPI and language before recalibrating anything. Like every command, it then stays on standby for the
+dashboard; leave with **Ctrl+C**, or run `python bot.py --no-remote` to exit right after the check.
 
 ## Quick start
 
@@ -215,7 +231,7 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
 | `--first {builder,home}` | `builder` | Which village to work on first when both are chosen. |
 | `--walls {home,builder,both}` | – | Spend the stored gold and elixir on walls, then farm both full and repeat until every wall is maxed. Never uses gems. |
-| `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. |
+| `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. With `--until-full`/`--builder`/`--home` it needs `--live`. |
 | `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded. `0` means no limit. |
 | `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
@@ -229,8 +245,8 @@ standby for the dashboard. Leave with **Ctrl+C** at any time.
 
 ## Web dashboard
 
-Every `bot.py` command prints this PC's **API key** (made once, kept in `~/.coc-auto/device.json`) and opens the
-dashboard. Enter the key there to follow the terminal log live and control the bot:
+Every `bot.py` command prints this PC's **API key** (made once, kept in `~/.coc-auto/device.json`) and serves the
+dashboard (open the address it prints in a browser). Enter the key there to follow the terminal log live and control the bot:
 
 - **Local:** `http://localhost:8765`, served by the bot itself (works without internet).
 - **Online:** `https://coc.0xpnj.dev` (the `web/` folder, deployed on Netlify), for checking from a phone. The PC
@@ -268,15 +284,16 @@ screenshot (no tap), recognises which deploy screen it is and uses it as that ta
 move them, add or remove numbered pins, and save: `D` is the deploy point (troops, siege and heroes; the Battle
 Machine/Copter), the numbered pins are the Home Village spell points (rounds of front, left, right) or the Builder
 Base points, one per troop card. Pins cannot go on the card bar. The device checks them like any calibration,
-writes `config.json` (the previous one stays as `config.json.bak`), and they apply at the next Start.
+writes them to `config.local.json` (the previous one stays as `config.local.json.bak`; `config.json` is never
+rewritten), and they apply at the next Start.
 
 **Device settings:** loaded when the dashboard connects. *Minimum opponent loot* sets the Home Village gold, elixir
 and dark elixir filter (`minimum`; `0` = no filter). *LDPlayer* holds `adb`, `ldconsole`, `serial`, `ld_index` and
 `touch_device`; **auto-detect** fills them from what it finds on the PC (it only reads: `ldconsole list2`,
 `adb devices`, `getevent -pl`, `wm size`) and lists problems, such as LDPlayer being off or a wrong resolution.
 Nothing changes until you press save. The device accepts only LDPlayer's own `adb.exe` and `ldconsole.exe` as
-paths, checks the rest like any calibration, keeps the previous `config.json` as `config.json.bak`, and the change
-applies at the next Start.
+paths, checks the rest like any calibration, saves to `config.local.json` (the previous one stays as
+`config.local.json.bak`), and the change applies at the next Start.
 
 **LDPlayer screen:** shows the instance's resolution and DPI next to the calibration (1280×720, DPI 240). "Fit
 screen" stops the bot, closes LDPlayer, writes only the resolution and DPI into its instance file
@@ -316,7 +333,7 @@ python calibrate.py --capture shot.png                  # save a screenshot (no 
 python calibrate.py --screen home --image shot.png      # pick anchors and tap points on a screenshot
 python calibrate.py --screen home_scout --counts 1 1    # a new deploy screen needs slot counts
 python calibrate.py --screen gem_offer --image shot.png --replace  # recalibrate an existing screen
-python calibrate.py --learn-digits shot.png:GOLD:ELIXIR # build digit templates from labelled scouts
+python calibrate.py --learn-digits shot.png:GOLD:ELIXIR --digits-dir calibration/digits-new # build digit templates into a new folder
 ```
 
 Calibration only works on screenshots and never taps the game. `--screen` takes every screen the bot knows, popups
@@ -434,7 +451,9 @@ How to change it:
 | The server connection drops ("Sambungan terputus", or "Kesalahan sambungan" while loading) | Taps "Coba lagi", waiting 10 seconds between tries while the network is still down, and carries on. |
 | A game update is offered ("Pembaruan Tersedia!") | Taps outside the box to close it, never the update button, and carries on. If the offer is still there after 3 taps the update is required: stops with exit code 5 and asks you to update CoC from the Play Store first. |
 | All builders are busy when a Builder Base wall is picked ("Semua tukang sibuk!") | Closes the gem offer with X and skips that village's walls; run again once a builder is free. |
-| Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
+| Searching runs out of gold 3 attacks in a row (no opponent meets the loot `minimum`) | Stops in the village with exit code 6 and asks to lower the minimum, instead of burning the gold it should fill. |
+| A setup the bot cannot work with: LDPlayer's ADB debugging off, a `serial` that is not the `ld_index` instance, a touch node that does not exist or whose range is not the screen size, a 32-bit LDPlayer | Stops at once with exit code 6 and says what to change; restarting would only repeat it. The touch node is checked once per live run, before the first tap. |
+| Any other error | Stops without sending input, so nothing is tapped blindly. |
 
 Every recovery counts towards `--max-recoveries` (20). A finished attack or an upgraded wall starts the count again,
 so the run stops only after that many recoveries with no progress in between.
@@ -445,7 +464,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot test_remote test_relay test_ldplayer
 ```
 
-The suites (267 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
+The suites (280 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
 deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake Realtime server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
@@ -457,7 +476,7 @@ bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
 remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
 relay.py               Supabase Realtime relay for the online dashboard
 ldplayer.py            read-only LDPlayer detection for the dashboard's setup panel
-web/                   dashboard page: app.js, deploy pin editor, settings panel, own Realtime client, ID/EN text
+web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own Realtime client, ID/EN text
 netlify.toml           Netlify publish folder and security headers
 calibrate.py           calibration CLI (screenshots only, never taps)
 test_bot.py            offline unit tests
@@ -465,6 +484,7 @@ test_remote.py         dashboard link tests (key, signatures, options, child pro
 test_relay.py          relay tests against a fake Realtime server
 test_ldplayer.py       LDPlayer detection tests against fake tool output
 config.json            calibration for the current game UI
+config.local.json      this PC's own settings on top of config.json (not in git; the dashboard saves here)
 calibration/           anchor, target and digit templates for config.json
 config.legacy.json     calibration for the previous game UI
 calibration-legacy/    templates for config.legacy.json

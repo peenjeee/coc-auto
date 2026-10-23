@@ -34,10 +34,10 @@ STREAM_PING_SECONDS = 15
 MAX_COMMAND_BYTES = 64 * 1024
 STATIC_FILES = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js',
                 '/realtime.js': 'realtime.js', '/deploy.js': 'deploy.js', '/settings.js': 'settings.js',
-                '/style.css': 'style.css',
+                '/style.css': 'style.css', '/maps/home_scout.jpg': 'maps/home_scout.jpg',
                 '/config.js': 'config.js', '/favicon.svg': 'favicon.svg'}
 CONTENT_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-                 '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml'}
+                 '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg'}
 LOCAL_HOSTS = ('localhost', '127.0.0.1')
 # Device-to-dashboard messages are signed under their own prefix, so they never pass as a command.
 AGENT_SIGNATURE_PREFIX = 'agent:'
@@ -66,6 +66,8 @@ TASK_OPTIONS = {
 }
 # Deploy screen -> its list of spread points: Home Village spells, Builder Base troop points.
 DEPLOY_POINTS = {'home_scout': 'spells', 'builder_scout': 'points', 'builder_stage2': 'points'}
+# A battle screen shows the same map as its deploy screen once the scout timer has run out.
+BATTLE_MAPS = {'home_battle': 'home_scout', 'builder_battle': 'builder_scout', 'builder_battle2': 'builder_stage2'}
 MAX_DEPLOY_POINTS = {'spells': 30, 'points': 20}
 SNAPSHOT_SIZE, SNAPSHOT_QUALITY = (640, 360), 70
 MINIMUM_KEYS, MAX_MINIMUM = ('gold', 'elixir', 'dark'), 999_999_999
@@ -247,15 +249,16 @@ class Display:
         return {'current': ldplayer.read_display(path), 'target': target, 'saved': self.saved() is not None}
 
     def fit(self) -> bool:
-        """False when the screen already fits; otherwise LDPlayer is restarted on the calibrated screen."""
+        """False when the screen already fits; otherwise LDPlayer is restarted on the calibrated screen. ADB
+        debugging is opened on the way, since the bot cannot reach LDPlayer without it; a restore leaves it open."""
         emulator, path, target = self.instance()
         current = ldplayer.read_display(path)
-        if current == target:
+        if current == target and ldplayer.adb_debug(path) != 0:
             return False
-        if self.saved() is None:
+        if self.saved() is None and current != target:
             self.store.parent.mkdir(parents=True, exist_ok=True)
             self.store.write_text(json.dumps({'path': str(path), 'display': current}), encoding='utf-8')
-        self.rewrite(emulator, path, target, relaunch=True)
+        self.rewrite(emulator, path, target, relaunch=True, adb_debug=1)
         return True
 
     def restore(self) -> bool:
@@ -275,7 +278,7 @@ class Display:
         self.store.unlink()
         return True
 
-    def rewrite(self, emulator, path: Path, display: dict, relaunch: bool) -> None:
+    def rewrite(self, emulator, path: Path, display: dict, relaunch: bool, adb_debug: int | None = None) -> None:
         if emulator.running():
             emulator.quit()
             for _ in range(LD_STOP_SECONDS):
@@ -285,7 +288,7 @@ class Display:
             else:
                 raise CommandRefused('LDPlayer tidak berhenti; tutup manual lalu coba lagi')
             self.sleep(LD_SETTLE_SECONDS)  # LDPlayer writes its own config as it closes
-        ldplayer.write_display(path, display)
+        ldplayer.write_display(path, display, adb_debug)
         if relaunch:
             emulator.launch()
 
@@ -366,6 +369,7 @@ class DeployPoints:
         """Keep the screen on the device now as its deploy screen's background, for an accurate map."""
         import cv2
         image, name = self.screen()
+        name = BATTLE_MAPS.get(name, name)
         if name not in DEPLOY_POINTS:
             raise CommandRefused(f'layar sekarang "{name}", bukan layar deploy; buka layar pilih titik serangan '
                                  '(desa asal saat lawan tampil, atau desa malam tahap 1/2) lalu coba lagi')
@@ -375,7 +379,8 @@ class DeployPoints:
         return name
 
     def config(self) -> dict:
-        return json.loads(self.config_path.read_text(encoding='utf-8'))
+        import bot
+        return bot.load_config(self.config_path)
 
     def read(self) -> dict:
         config = self.config()
@@ -402,32 +407,38 @@ class DeployPoints:
         return shots
 
     def write(self, screen: object, deploy: object, points: object) -> None:
-        import bot
         if not isinstance(screen, str) or screen not in DEPLOY_POINTS:
             raise CommandRefused('Layar deploy tidak dikenal')
         config = self.config()
         kind = DEPLOY_POINTS[screen]
-        target = config['screens'][screen]
-        width, bottom = config['resolution'][0], target['auto']['bar'][1]
+        width, bottom = config['resolution'][0], config['screens'][screen]['auto']['bar'][1]
         if not isinstance(points, list) or not 1 <= len(points) <= MAX_DEPLOY_POINTS[kind]:
             raise CommandRefused(f'Jumlah titik harus 1..{MAX_DEPLOY_POINTS[kind]}')
-        target['deploy'] = pin(deploy, width, bottom)
-        target['auto'][kind] = [pin(point, width, bottom) for point in points]
-        save_config(self.config_path, config, self.root, 'Titik deploy')
+        moved = {'deploy': pin(deploy, width, bottom), 'auto': {kind: [pin(point, width, bottom) for point in points]}}
+        save_local(self.config_path, {'screens': {screen: moved}}, self.root, 'Titik deploy')
 
 
-def save_config(config_path: Path, config: dict, root: Path, what: str) -> None:
-    """Write config.json once it passes the checks bot.py makes before a run; the old file stays as .bak."""
+def save_local(config_path: Path, changes: dict, root: Path, what: str) -> None:
+    """Add changes to this PC's config.local.json once the whole config passes the checks bot.py makes before a
+    run. config.json, the shared calibration, is never rewritten; the previous local file stays as .bak."""
     import bot
+    local_path = bot.local_config_path(config_path)
     try:
-        bot.validate_config(config, root, 'both')
+        local = json.loads(local_path.read_text(encoding='utf-8')) if local_path.is_file() else {}
+    except (OSError, ValueError) as exc:
+        raise CommandRefused(f'{local_path.name} tidak terbaca: {exc}') from exc
+    if not isinstance(local, dict):
+        raise CommandRefused(f'{local_path.name} harus JSON object')
+    local = bot.merged(local, changes)
+    try:
+        bot.validate_config(bot.merged(bot.read_config(config_path), local), root, 'both')
     except bot.BotError as exc:
         raise CommandRefused(f'{what} ditolak: {exc}') from exc
-    text = json.dumps(config, indent=2) + '\n'
-    backup, temporary = config_path.with_suffix('.json.bak'), config_path.with_suffix('.json.tmp')
-    backup.write_text(config_path.read_text(encoding='utf-8'), encoding='utf-8')
-    temporary.write_text(text, encoding='utf-8')
-    os.replace(temporary, config_path)
+    if local_path.is_file():
+        local_path.with_name(local_path.name + '.bak').write_bytes(local_path.read_bytes())
+    temporary = local_path.with_name(local_path.name + '.tmp')
+    temporary.write_text(json.dumps(local, indent=2) + '\n', encoding='utf-8')
+    os.replace(temporary, local_path)
 
 
 def ld_tool(value: object, name: str) -> str:
@@ -449,7 +460,8 @@ class Settings:
         self.config_path, self.root, self.detector = config_path, root or config_path.parent, detector
 
     def config(self) -> dict:
-        return json.loads(self.config_path.read_text(encoding='utf-8'))
+        import bot
+        return bot.load_config(self.config_path)
 
     def read(self) -> dict:
         config = self.config()
@@ -463,8 +475,8 @@ class Settings:
     def write_minimum(self, minimum: object) -> None:
         if not isinstance(minimum, dict) or set(minimum) != set(MINIMUM_KEYS):
             raise CommandRefused('Minimal loot perlu gold, elixir dan dark')
-        config = {**self.config(), 'minimum': {key: required(minimum, key, 0, MAX_MINIMUM) for key in MINIMUM_KEYS}}
-        save_config(self.config_path, config, self.root, 'Minimal loot')
+        changes = {'minimum': {key: required(minimum, key, 0, MAX_MINIMUM) for key in MINIMUM_KEYS}}
+        save_local(self.config_path, changes, self.root, 'Minimal loot')
 
     def write_setup(self, setup: object) -> None:
         import bot
@@ -475,12 +487,12 @@ class Settings:
             raise CommandRefused('serial harus seperti emulator-5554 atau 127.0.0.1:5555')
         if not isinstance(touch, str) or not bot.TOUCH_DEVICE.fullmatch(touch):
             raise CommandRefused('touch_device harus /dev/input/eventN')
-        config = {**self.config(), **{name: ld_tool(setup[name], file) for name, file in LD_TOOLS.items()},
-                  'serial': serial, 'ld_index': required(setup, 'ld_index', 0, MAX_LD_INDEX), 'touch_device': touch}
+        changes = {**{name: ld_tool(setup[name], file) for name, file in LD_TOOLS.items()},
+                   'serial': serial, 'ld_index': required(setup, 'ld_index', 0, MAX_LD_INDEX), 'touch_device': touch}
         # Zooming out pinches on the same touchscreen the taps go to.
-        if config.get('zoom_out'):
-            config['zoom_out'] = {**config['zoom_out'], 'device': touch}
-        save_config(self.config_path, config, self.root, 'Pengaturan LDPlayer')
+        if self.config().get('zoom_out'):
+            changes['zoom_out'] = {'device': touch}
+        save_local(self.config_path, changes, self.root, 'Pengaturan LDPlayer')
 
 
 class Supervisor:
@@ -780,9 +792,10 @@ def serve_dashboard(supervisor: Supervisor, web_dir: Path, port: int) -> Threadi
 
 def remote_settings(config_path: Path) -> dict:
     """The `remote` block of config.json: Supabase project URL and publishable key, local port, online URL."""
+    import bot
     try:
-        raw = json.loads(config_path.read_text(encoding='utf-8')).get('remote') or {}
-    except (OSError, ValueError, AttributeError):
+        raw = bot.load_config(config_path).get('remote') or {}
+    except (bot.BotError, AttributeError):
         raw = {}
     port = raw.get('port', DEFAULT_PORT)
     if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
@@ -822,6 +835,10 @@ def leave(supervisor: Supervisor) -> None:
 def supervise(job: list[str], config_path: Path, renew_key: bool = False) -> int:
     """Every bot command runs under this: show the device's API key, open the dashboards, run the job as a
     child, then stay on standby for Start from the dashboard until Ctrl+C."""
+    # The bot's log is echoed here line by line; a console or file that cannot show a character must not stop
+    # the reader thread, or the bot would block on a full pipe.
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(errors='replace')
     settings = remote_settings(config_path)
     key = device_key(renew=renew_key)
     supervisor = Supervisor(key, [sys.executable, str(BOT_SCRIPT), '--config', str(config_path)],

@@ -502,7 +502,8 @@ class BotTests(unittest.TestCase):
             with self.subTest(argv=argv), patch('sys.argv', ['bot.py', *argv]), \
                     patch('remote.supervise', return_value=0) as supervise, patch('bot.load_config') as load:
                 self.assertEqual(bot.main(), 0)
-            supervise.assert_called_once_with(job, Path('config.json'), renew_key=False)
+            # config.json is found next to bot.py, whatever folder the command was started from.
+            supervise.assert_called_once_with(job, Path(bot.__file__).resolve().parent / 'config.json', renew_key=False)
             load.assert_not_called()
 
     def test_a_reached_limit_is_a_normal_finish(self):
@@ -1929,6 +1930,35 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs.count((140, 60)), 1)
         self.assertIn((40, 40), device.inputs)
 
+    def test_running_out_of_gold_while_searching_again_and_again_stops_with_the_reason(self):
+        device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 20)
+        runner = self.make_bot(device, True)
+
+        def no_gold(image):
+            raise bot.OutOfGold('Gold habis')
+        runner.wait_new_scout = no_gold
+        for _ in range(bot.BROKE_ATTACKS_LIMIT - 1):
+            runner.home_attack(0)
+        with self.assertRaises(bot.SetupError) as stop:
+            runner.home_attack(0)
+        self.assertIn('minimal', str(stop.exception))
+
+    def test_a_base_that_meets_the_minimum_ends_the_out_of_gold_streak(self):
+        device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 4 + [{'gold': 100, 'elixir': 200}] + [{'gold': 1, 'elixir': 1}] * 10)
+        runner = self.make_bot(device, True)
+        broke = iter([True, True])
+
+        def maybe_no_gold(image):
+            if next(broke, False):
+                raise bot.OutOfGold('Gold habis')
+            return 'home_scout'
+        runner.wait_new_scout = maybe_no_gold
+        runner.home_attack(0)
+        runner.home_attack(0)
+        self.assertEqual(runner.broke_attacks, 2)
+        runner.home_attack(0)
+        self.assertEqual(runner.broke_attacks, 0)
+
     def test_unlimited_searches_keep_skipping_until_loot_passes(self):
         lows = [{'gold': 1, 'elixir': 1}] * 25
         device = Device(self.frames, loot=lows + [{'gold': 100, 'elixir': 200}])
@@ -2158,6 +2188,10 @@ class BotTests(unittest.TestCase):
     def test_low_pc_memory_restarts_emulator_between_attacks(self):
         device, emulator = self.restartable()
         runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=emulator)
+        # A run that just started has a fresh LDPlayer; a PC that is always short of memory waits the full interval.
+        with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB - 1):
+            self.assertFalse(runner.refresh_if_low_memory())
+        runner.emulator_started -= bot.EMULATOR_REFRESH_SECONDS + 1
         with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB - 1):
             self.assertTrue(runner.refresh_if_low_memory())
         self.assertEqual(emulator.events, ['quit', 'launch'])
@@ -2306,6 +2340,72 @@ class BotTests(unittest.TestCase):
         with patch('bot.available_memory_mb', return_value=0):
             self.assertFalse(dry.refresh_if_low_memory())
         self.assertEqual(emulator.events, [])
+
+    def test_per_pc_settings_in_config_local_override_the_shared_config(self):
+        shared = self.root / 'config.json'
+        shared.write_text(json.dumps({'serial': 'emulator-5554', 'minimum': {'gold': 1, 'elixir': 2},
+                                      'screens': {'home': {'anchors': [1], 'deploy': [1, 1]}}}), encoding='utf-8')
+        self.assertEqual(bot.load_config(shared)['serial'], 'emulator-5554')
+        (self.root / 'config.local.json').write_text(json.dumps({'serial': 'emulator-5556', 'minimum': {'gold': 9},
+                                                               'screens': {'home': {'deploy': [5, 5]}}}), encoding='utf-8')
+        config = bot.load_config(shared)
+        self.assertEqual((config['serial'], config['minimum']), ('emulator-5556', {'gold': 9, 'elixir': 2}))
+        self.assertEqual(config['screens']['home'], {'anchors': [1], 'deploy': [5, 5]})
+        self.assertEqual(bot.read_config(shared)['serial'], 'emulator-5554')
+        (self.root / 'config.local.json').write_text('[1]', encoding='utf-8')
+        with self.assertRaises(bot.BotError) as broken:
+            bot.load_config(shared)
+        self.assertIn('config.local.json', str(broken.exception))
+
+    def test_a_serial_from_another_ldplayer_instance_is_refused(self):
+        # With a mismatch, recovery would quit and relaunch a different instance than the one adb talks to.
+        config = {**self.config, 'ldconsole': 'ldconsole.exe', 'ld_index': 1}
+        with self.assertRaises(bot.BotError) as refused:
+            bot.validate_config({**config, 'serial': 'emulator-5554'}, self.root, 'both')
+        self.assertIn('emulator-5556', str(refused.exception))
+        bot.validate_config({**config, 'serial': 'emulator-5556'}, self.root, 'both')
+        bot.validate_config({**config, 'serial': '127.0.0.1:5557'}, self.root, 'both')
+        with self.assertRaises(bot.BotError):
+            bot.validate_config({**config, 'serial': '127.0.0.1:5555'}, self.root, 'both')
+
+    def test_a_live_run_checks_the_touchscreen_once_and_stops_when_taps_cannot_land(self):
+        device = Device(self.frames)
+        asked = []
+        device.touch_problem = lambda: asked.append(1) or None
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=0.02, poll=0)
+        runner.check_touch()
+        runner.check_touch()
+        self.assertEqual(len(asked), 1)
+        device.touch_problem = lambda: 'LDPlayer i686 32-bit tidak didukung'
+        device.connected = device.game_in_front = lambda: True
+        fresh = bot.Bot(self.config, self.root, device, live=True, timeout=0.02, poll=0)
+        fresh.settle = lambda: None
+        fresh.run_until_full = lambda searches: self.fail('ran without working taps')
+        with self.assertRaises(bot.SetupError):
+            fresh.run_until_full_resilient(0, max_recoveries=5)
+        bot.Bot(self.config, self.root, device, live=False, timeout=0.02, poll=0).check_touch()
+
+    def test_adb_reads_the_touchscreen_with_the_kernel_bitness(self):
+        device = bot.ADB('adb.exe', 'emulator-5554', [1280, 720], live=True, touch='/dev/input/event4')
+        events = ('x86_64\nadd device 1: /dev/input/event4\n  name: "input"\n    ABS (0003): '
+                  'ABS_MT_POSITION_X : value 0, min 0, max 1279\n                ABS_MT_POSITION_Y : value 0, min 0, max 719\n')
+        with patch('bot.subprocess.run') as run:
+            run.return_value.stdout = events.encode()
+            self.assertIsNone(device.touch_problem())
+            run.return_value.stdout = events.replace('max 719', 'max 899').encode()
+            self.assertIn('1279x899', device.touch_problem())
+        self.assertIsNone(bot.ADB('adb.exe', 'emulator-5554', [1280, 720], live=True).touch_problem())
+
+    def test_ldplayer_with_adb_debugging_off_stops_a_live_run_at_once(self):
+        folder = self.root / 'LDPlayer9'
+        (folder / 'vms' / 'config').mkdir(parents=True)
+        (folder / 'vms' / 'config' / 'leidian0.config').write_text('{"basicSettings.adbDebug": 0}', encoding='utf-8')
+        with self.assertRaises(bot.SetupError) as stop:
+            bot.check_adb_debugging(str(folder / 'ldconsole.exe'), 0)
+        self.assertIn('Debug ADB', str(stop.exception))
+        (folder / 'vms' / 'config' / 'leidian0.config').write_text('{"basicSettings.adbDebug": 1}', encoding='utf-8')
+        bot.check_adb_debugging(str(folder / 'ldconsole.exe'), 0)
+        bot.check_adb_debugging(str(folder / 'ldconsole.exe'), 3)
 
     def test_recover_starts_stopped_emulator_then_game(self):
         device = Device(self.frames)

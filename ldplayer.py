@@ -19,8 +19,12 @@ FOLDER_PATTERNS = ('LDPlayer/LDPlayer*', 'LDPlayer*', 'Program Files/LDPlayer*',
 PLAYER_PROCESSES = 'Get-Process dnplayer,dnmultiplayer -ErrorAction SilentlyContinue | ForEach-Object { $_.Path }'
 TOUCH_NODE = re.compile(r'/dev/input/event\d{1,2}')
 SIZE = re.compile(r'(Override|Physical) size:\s*(\d+)x(\d+)')
+AXIS = re.compile(r'ABS_MT_POSITION_([XY])\s*:.*?max (\d+)')
 CALIBRATED_DPI = 240
 RESOLUTION_KEY, DPI_KEY = 'advancedSettings.resolution', 'advancedSettings.resolutionDpi'
+ADB_DEBUG_KEY = 'basicSettings.adbDebug'
+ADB_DEBUG_HINT = ('ADB debugging LDPlayer mati: Pengaturan LDPlayer > Lainnya > Debug ADB > Buka koneksi lokal (atau '
+                  'tombol "sesuaikan layar" di dashboard), lalu nyalakan ulang LDPlayer')
 
 Runner = Callable[[list], str]
 
@@ -100,6 +104,34 @@ def parse_touch(text: str) -> str | None:
     return None
 
 
+def touch_range(text: str, node: str) -> tuple | None:
+    """(x max, y max) of a node's multitouch axes in `getevent -pl`; None for no such node or no such axes."""
+    for block in text.split('add device')[1:]:
+        lines = block.splitlines()
+        if lines and lines[0].split(':', 1)[-1].strip() == node:
+            axes = dict(AXIS.findall(block))
+            return (int(axes['X']), int(axes['Y'])) if {'X', 'Y'} <= set(axes) else None
+    return None
+
+
+def touch_problem(text: str, node: str, resolution: list) -> str | None:
+    """Why taps sent to node would land in the wrong place or nowhere, from `uname -m` then `getevent -pl`; None
+    when they land. The bot writes 64-bit input events in screen pixels, and a wrong node fails silently."""
+    kernel = text.split('\n', 1)[0].strip()
+    if '64' not in kernel:
+        return f'LDPlayer {kernel or "?"} 32-bit tidak didukung (sentuhan bot untuk Android 64-bit); pakai LDPlayer 9 ke atas'
+    if f': {node}' not in text:
+        return f'{node} tidak ada di LDPlayer ini; isi touch_device lewat deteksi otomatis di dashboard'
+    span = touch_range(text, node)
+    if span is None:
+        return f'{node} bukan layar sentuh (tanpa ABS_MT_POSITION_X/Y); isi touch_device lewat deteksi otomatis'
+    width, height = resolution
+    if span != (width - 1, height - 1):
+        return (f'Layar sentuh {node} {span[0]}x{span[1]} tidak cocok dengan layar {width}x{height}; samakan '
+                'resolusi LDPlayer dengan kalibrasi (tombol "sesuaikan layar" di dashboard)')
+    return None
+
+
 def parse_size(text: str) -> list | None:
     """Screen size from `wm size`; an override is what the screen really shows."""
     sizes = {kind: [int(width), int(height)] for kind, width, height in SIZE.findall(text)}
@@ -119,12 +151,20 @@ def read_display(path: Path) -> dict:
     return {'width': size['width'], 'height': size['height'], 'dpi': dpi}
 
 
-def write_display(path: Path, display: dict) -> None:
-    """Change only the screen and keep every other setting, in LDPlayer's own layout (4-space JSON, CRLF).
-    `ldconsole modify` is never used: it rewrites the whole file and drops settings such as ADB debugging."""
+def adb_debug(path: Path) -> int | None:
+    """LDPlayer's ADB debugging switch (1 = local connection open); None when the file does not say."""
+    value = json.loads(path.read_text(encoding='utf-8')).get(ADB_DEBUG_KEY)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def write_display(path: Path, display: dict, adb_debug: int | None = None) -> None:
+    """Change only the screen (and ADB debugging, when given) and keep every other setting, in LDPlayer's own
+    layout (4-space JSON, CRLF). `ldconsole modify` is never used: it rewrites the whole file and drops settings."""
     config = json.loads(path.read_text(encoding='utf-8'))
     config[RESOLUTION_KEY] = {**config.get(RESOLUTION_KEY, {}), 'width': display['width'], 'height': display['height']}
     config[DPI_KEY] = display['dpi']
+    if adb_debug is not None:
+        config[ADB_DEBUG_KEY] = adb_debug
     temporary = path.with_name(path.name + '.tmp')
     temporary.write_bytes(json.dumps(config, indent=4, ensure_ascii=False).replace('\n', '\r\n').encode('utf-8'))
     os.replace(temporary, path)
@@ -153,6 +193,12 @@ def detect(config: dict, runner: Runner = run, roots: list | None = None) -> dic
         problems.append('Tidak ada instance LDPlayer yang menyala; nyalakan LDPlayer lalu deteksi lagi')
     else:
         found['ld_index'] = instance['index']
+        settings = instance_config(console, instance['index'])
+        try:
+            if settings.is_file() and adb_debug(settings) == 0:
+                problems.append(ADB_DEBUG_HINT)
+        except (OSError, ValueError) as exc:
+            problems.append(f'{settings.name} tidak terbaca: {exc}')
     devices = found['devices'] = parse_devices(safe(runner, [adb, 'devices'], problems, 'adb devices'))
     candidates = ([instance['serial']] if instance else []) + [config.get('serial')]
     serial = next((value for value in candidates if value in devices), None)
@@ -162,13 +208,18 @@ def detect(config: dict, runner: Runner = run, roots: list | None = None) -> dic
                             'deteksi lagi')
         return found
     found['serial'] = serial
-    touch = parse_touch(safe(runner, [adb, '-s', serial, 'shell', 'getevent', '-pl'], problems, 'adb getevent'))
+    expected = list(config.get('resolution') or DEFAULT_RESOLUTION)
+    events = safe(runner, [adb, '-s', serial, 'shell', 'getevent', '-pl'], problems, 'adb getevent')
+    touch = parse_touch(events)
     if touch:
         found['touch_device'] = touch
+        span = touch_range(events, touch)
+        if span and span != (expected[0] - 1, expected[1] - 1):
+            problems.append(f'Layar sentuh {touch} {span[0]}x{span[1]} tidak cocok dengan layar {expected[0]}x{expected[1]}; '
+                            'samakan resolusi LDPlayer dengan kalibrasi')
     else:
         problems.append('Layar sentuh tidak terbaca; isi touch_device manual, mis. /dev/input/event4')
     size = parse_size(safe(runner, [adb, '-s', serial, 'shell', 'wm', 'size'], problems, 'adb wm size'))
-    expected = list(config.get('resolution') or DEFAULT_RESOLUTION)
     if size is None:
         problems.append('Resolusi layar LDPlayer tidak terbaca')
     else:

@@ -4,6 +4,8 @@
 import { t } from './i18n.js';
 
 const SCREENS = ['home_scout', 'builder_scout', 'builder_stage2'];
+// Maps shipped with the dashboard, taken from a real attack screen; the device's own screenshot replaces them.
+const BUNDLED_MAPS = { home_scout: 'maps/home_scout.jpg' };
 const MAX_POINTS = { spells: 30, points: 20 };
 const $ = (id) => document.getElementById(id);
 
@@ -85,7 +87,8 @@ export class DeployEditor {
     const pins = $('pins');
     pins.textContent = '';
     const shot = $('field-shot');
-    const source = this.images[this.screen];
+    const own = this.images[this.screen];
+    const source = own || BUNDLED_MAPS[this.screen];
     shot.hidden = !source;
     if (source) shot.src = source;
     if (!screen) {
@@ -98,7 +101,7 @@ export class DeployEditor {
     const bar = $('field-bar');
     bar.hidden = false;
     bar.style.top = `${(bottom / height) * 100}%`;
-    $('deploy-message').textContent = source ? t('deploy_bar') : t('deploy_no_shot');
+    $('deploy-message').textContent = t(own ? 'deploy_bar' : source ? 'deploy_bundled' : 'deploy_no_shot');
     pins.append(this.pin('D', screen.deploy, 'deploy', null));
     screen.points.forEach((point, index) => pins.append(this.pin(String(index + 1), point, screen.kind, index)));
   }

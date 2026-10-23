@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 from bot import (ADB, ACTIONS, BotError, DEPLOY_SCREENS, KNOWN_SCREENS, RESOURCES,
-                 asset_path, crop, executable, glyphs, integer, load_config, rectangle)
+                 asset_path, crop, executable, glyphs, integer, load_config, read_config, rectangle)
 
 LOG = logging.getLogger(__name__)
 
@@ -113,14 +113,16 @@ def learn_digits(samples: list, loot: dict, folder: Path) -> None:
     missing = sorted(set('0123456789') - set(collected))
     if missing:
         raise BotError(f'Contoh angka belum lengkap: {"".join(missing)}')
-    folder.mkdir(parents=True, exist_ok=False)
+    if folder.exists():
+        raise BotError(f'Folder {folder} sudah ada; pakai --digits-dir dengan folder baru')
+    folder.mkdir(parents=True)
     for digit, items in collected.items():
         write_png(folder / f'{digit}.png', (np.mean(items, axis=0) * 255).round().astype(np.uint8))
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Kalibrasi manual CoC; tidak ada input emulator')
-    parser.add_argument('--config', type=Path, default=Path('config.json'))
+    parser.add_argument('--config', type=Path, default=Path(__file__).resolve().parent / 'config.json')
     parser.add_argument('--init', action='store_true', help='Buat config baru; tidak overwrite')
     parser.add_argument('--adb', default=r'C:\LDPlayer\LDPlayer14\adb.exe')
     parser.add_argument('--serial', help='Serial dari adb devices; jangan menebak')
@@ -155,10 +157,14 @@ def main() -> int:
                 stream.write(json.dumps(config, indent=2) + '\n')
             LOG.info('Config dibuat: %s; resolusi harus cocok dengan LDPlayer', args.config)
             return 0
-        config = load_config(args.config)
+        # The device comes from this PC's settings (config.local.json on top); only the shared calibration in
+        # config.json is written back, so local settings never end up in it.
+        config, base = load_config(args.config), read_config(args.config)
         if args.learn_digits:
             samples = []
             for spec in args.learn_digits:
+                if spec.count(':') < 2:
+                    raise BotError(f'Format --learn-digits salah: {spec!r}; pakai FILE.png:GOLD:ELIXIR')
                 path, gold, elixir = spec.rsplit(':', 2)
                 image = cv2.imread(path)
                 if image is None or list(image.shape[1::-1]) != config['resolution']:
@@ -166,12 +172,12 @@ def main() -> int:
                 samples.append((image, gold, elixir))
             folder = asset_path(args.config.parent, f'{args.digits_dir}/0.png').parent
             learn_digits(samples, config['screens']['home_scout']['loot'], folder)
-            save_config(args.config, {**config, 'digits': args.digits_dir})
+            save_config(args.config, {**base, 'digits': args.digits_dir})
             LOG.info('Template angka disimpan: %s', args.digits_dir)
             return 0
         if not args.screen and not args.capture:
             raise BotError('Pilih --screen atau --capture')
-        existing = config.get('screens', {}).get(args.screen)
+        existing = base.get('screens', {}).get(args.screen)
         if existing is not None and not args.replace:
             raise BotError('Profil sudah ada; gunakan --replace untuk menggantinya')
         counts = [integer(c, 1, 300, 'count') for c in args.counts]
@@ -189,7 +195,7 @@ def main() -> int:
             LOG.info('Screenshot tersimpan lokal: %s', args.capture)
         if args.screen:
             screen = calibrate_screen(image, args.screen, args.config.parent, counts, existing)
-            updated = {**config, 'screens': {**config.get('screens', {}), args.screen: screen}}
+            updated = {**base, 'screens': {**base.get('screens', {}), args.screen: screen}}
             save_config(args.config, updated)
             LOG.info('Kalibrasi disimpan: %s', args.screen)
         return 0

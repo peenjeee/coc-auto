@@ -14,3 +14,6 @@ captures/
 !fixtures/*.png
 config.json.bak
 config.json.tmp
+config.local.json
+config.local.json.bak
+config.local.json.tmp
