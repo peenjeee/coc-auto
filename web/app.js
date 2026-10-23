@@ -138,14 +138,20 @@ function resultText(result) {
 }
 
 const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved'];
+const DISPLAY_ANSWERS = ['display_fitted', 'display_ok', 'display_restored', 'display_unchanged'];
 
 function handleResult(result, quiet = false) {
   if (!quiet || !result.ok) notify(resultText(result), result.ok ? 'ok' : 'error');
   showState(result.state);
   if (!result.ok || !result.data) return;
   if (result.code === 'deploy_loaded') editor.load(result.data);
+  else if (result.code === 'deploy_captured') {
+    editor.load(result.data);
+    editor.show(result.data.captured);
+  }
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) settings.load(result.data);
+  else if (DISPLAY_ANSWERS.includes(result.code)) settings.showDisplay(result.data);
 }
 
 class LocalLink {
@@ -339,7 +345,7 @@ function restoreOptions() {
 }
 
 function setBusy(busy) {
-  for (const button of document.querySelectorAll('#options button, #deploy-load, #deploy-save, .settings button')) button.disabled = busy;
+  for (const button of document.querySelectorAll('#options button, #deploy-load, #deploy-capture, #deploy-save, .settings button')) button.disabled = busy;
 }
 
 /** Send a signed command; quiet ones (loading on connect) only speak up when they fail. */
@@ -423,6 +429,7 @@ function init() {
     });
   }
   $('deploy-load').addEventListener('click', () => send('get_deploy'));
+  $('deploy-capture').addEventListener('click', () => send('capture_deploy'));
   $('key-form').addEventListener('submit', (submitted) => {
     submitted.preventDefault();
     connect($('key').value);

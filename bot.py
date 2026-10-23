@@ -2500,6 +2500,8 @@ def main() -> int:
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
     parser.add_argument('--agent', action='store_true',
                         help='Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard')
+    parser.add_argument('--key', action='store_true',
+                        help='Tampilkan API key perangkat ini lalu keluar; tidak menjalankan apa pun')
     parser.add_argument('--no-remote', action='store_true',
                         help='Tanpa dashboard/API key: jalankan tugas lalu keluar seperti biasa')
     parser.add_argument('--new-key', action='store_true',
@@ -2507,6 +2509,9 @@ def main() -> int:
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    if args.key:
+        import remote
+        return remote.show_key(args.config, renew=args.new_key)
     if args.worker and hasattr(signal, 'SIGBREAK'):
         # The dashboard stops a worker with Ctrl+Break; end it like Ctrl+C so the bot stops its own way.
         signal.signal(signal.SIGBREAK, signal.default_int_handler)

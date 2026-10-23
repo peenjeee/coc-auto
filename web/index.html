@@ -132,6 +132,17 @@
               <button type="submit" class="primary" data-i18n="minimum_save"></button>
             </div>
           </form>
+          <div class="group display">
+            <h2 data-i18n="display_title"></h2>
+            <p class="hint" data-i18n="display_hint"></p>
+            <p><span data-i18n="display_now"></span>: <b id="display-now">-</b></p>
+            <p><span data-i18n="display_target"></span>: <b id="display-target">-</b></p>
+            <p id="display-note" class="hint"></p>
+            <div class="actions">
+              <button type="button" class="primary" data-action="fit_display" data-i18n="display_fit" data-i18n-confirm="confirm_display_fit"></button>
+              <button type="button" data-action="restore_display" data-i18n="display_restore" data-i18n-confirm="confirm_display_restore"></button>
+            </div>
+          </div>
           <form id="setup-form" class="group">
             <h2>LDPlayer</h2>
             <p class="hint" data-i18n="setup_hint"></p>
@@ -153,6 +164,7 @@
       <section class="panel deploy">
         <div class="log-head">
           <p class="prompt" data-i18n="deploy_prompt"></p>
+          <button id="deploy-capture" type="button" data-i18n="deploy_capture"></button>
           <button id="deploy-load" type="button" data-i18n="deploy_load"></button>
         </div>
         <div class="tabs" role="tablist">

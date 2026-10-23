@@ -1,7 +1,9 @@
 """Finds LDPlayer for the dashboard's setup panel: its folder (adb.exe, ldconsole.exe), the running instance, the
-adb serial, the touchscreen node and the screen size. Read-only: it only lists and asks, it never changes LDPlayer."""
+adb serial, the touchscreen node and the screen size. Detection only lists and asks; the one thing written is an
+instance's screen (resolution and DPI) in its config file, when the dashboard asks for it."""
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import re
@@ -17,6 +19,8 @@ FOLDER_PATTERNS = ('LDPlayer/LDPlayer*', 'LDPlayer*', 'Program Files/LDPlayer*',
 PLAYER_PROCESSES = 'Get-Process dnplayer,dnmultiplayer -ErrorAction SilentlyContinue | ForEach-Object { $_.Path }'
 TOUCH_NODE = re.compile(r'/dev/input/event\d{1,2}')
 SIZE = re.compile(r'(Override|Physical) size:\s*(\d+)x(\d+)')
+CALIBRATED_DPI = 240
+RESOLUTION_KEY, DPI_KEY = 'advancedSettings.resolution', 'advancedSettings.resolutionDpi'
 
 Runner = Callable[[list], str]
 
@@ -100,6 +104,30 @@ def parse_size(text: str) -> list | None:
     """Screen size from `wm size`; an override is what the screen really shows."""
     sizes = {kind: [int(width), int(height)] for kind, width, height in SIZE.findall(text)}
     return sizes.get('Override') or sizes.get('Physical')
+
+
+def instance_config(console: str, index: int) -> Path:
+    return Path(console).parent / 'vms' / 'config' / f'leidian{index}.config'
+
+
+def read_display(path: Path) -> dict:
+    """The instance's screen as LDPlayer will start it: {'width', 'height', 'dpi'}."""
+    config = json.loads(path.read_text(encoding='utf-8'))
+    size, dpi = config.get(RESOLUTION_KEY), config.get(DPI_KEY)
+    if not isinstance(size, dict) or not all(isinstance(value, int) for value in (size.get('width'), size.get('height'), dpi)):
+        raise ValueError(f'{path.name}: resolusi/DPI tidak dikenal')
+    return {'width': size['width'], 'height': size['height'], 'dpi': dpi}
+
+
+def write_display(path: Path, display: dict) -> None:
+    """Change only the screen and keep every other setting, in LDPlayer's own layout (4-space JSON, CRLF).
+    `ldconsole modify` is never used: it rewrites the whole file and drops settings such as ADB debugging."""
+    config = json.loads(path.read_text(encoding='utf-8'))
+    config[RESOLUTION_KEY] = {**config.get(RESOLUTION_KEY, {}), 'width': display['width'], 'height': display['height']}
+    config[DPI_KEY] = display['dpi']
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_bytes(json.dumps(config, indent=4, ensure_ascii=False).replace('\n', '\r\n').encode('utf-8'))
+    os.replace(temporary, path)
 
 
 def pick_instance(instances: list, configured: object) -> dict | None:

@@ -99,7 +99,7 @@ row below. Everything here is either an LDPlayer setting or a key in `config.jso
 
 | What | Must be | Why / how to check |
 | --- | --- | --- |
-| LDPlayer resolution | **1280×720, DPI 240** (Settings → Advanced → Resolution) | Screens are matched pixel for pixel. DPI changes the UI scale, so at another DPI no template matches even at 1280×720. |
+| LDPlayer resolution | **1280×720, DPI 240** (Settings → Advanced → Resolution, or "fit screen" in the dashboard) | Screens are matched pixel for pixel. DPI changes the UI scale, so at another DPI no template matches even at 1280×720. |
 | Game language | **Bahasa Indonesia** | Many anchors are Indonesian text ("Pertempuran", "Tembok", "Maks:"). With another language every text anchor has to be recalibrated. |
 | `adb`, `ldconsole` | Paths in your LDPlayer install folder | e.g. `C:\LDPlayer\LDPlayer14\adb.exe` and `C:\LDPlayer\LDPlayer14\ldconsole.exe`; the folder name depends on the LDPlayer version. |
 | `ld_index`, `serial` | Your instance | `ld_index` is the instance number in LDMultiPlayer (0 for the first). `serial` is `emulator-<5554 + 2 × index>`: `emulator-5554` for index 0, `emulator-5556` for index 1. Check with `adb devices`. |
@@ -220,6 +220,7 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 | `--agent` | off | Run no task: show the device's API key and wait for **Start** from the web dashboard. |
+| `--key` | off | Only show this PC's API key and the dashboard addresses, then exit. Nothing is started. |
 | `--no-remote` | off | Run the task without the dashboard link and exit when it ends (the behaviour before the dashboard). |
 | `--new-key` | off | Make a new dashboard API key for this PC; the old one stops working. |
 
@@ -243,6 +244,15 @@ PC that runs the bot; the key is printed in the terminal when the script starts.
 > yang menjalankan bot terhubung ke internet. Pantau lewat [coc.0xpnj.dev](https://coc.0xpnj.dev) dengan memasukkan
 > API key dari perangkat yang menjalankan bot; key itu tampil di terminal saat script dijalankan.
 
+To run everything from the web without starting a task first:
+
+```bash
+python bot.py --agent
+```
+
+It shows the key and waits for **Start** from the dashboard. `python bot.py --key` only shows the key and exits; the
+dashboard can control the PC only while `--agent` (or any other bot command) is running there.
+
 The dashboard (Indonesian or English, switch in the title bar) shows whether the PC is online, the bot's state and
 command, and the live log. Its form covers every command above (task, villages, resources, dark elixir, walls,
 `--first`, searches, time and upgrade limits, recoveries) and shows the equivalent `python bot.py ...` line; **Start** runs it
@@ -252,7 +262,9 @@ running, the dashboard says so instead of sending, and a command that gets no an
 Recovery and `settle` work as before: the task runs as a child process (`--worker`) of the dashboard link.
 
 **Deploy points:** "load from device" shows the deploy pins of the Home Village and both Builder Base stages over
-the last screenshot the bot took of each deploy screen (taken while attacking, kept in `captures/`). Drag pins to
+the last screenshot the bot took of each deploy screen (taken while attacking, kept in `captures/`). For a map
+without attacking, open the deploy screen in LDPlayer yourself and press "take screen now": the bot takes one
+screenshot (no tap), recognises which deploy screen it is and uses it as that tab's map. Drag pins to
 move them, add or remove numbered pins, and save: `D` is the deploy point (troops, siege and heroes; the Battle
 Machine/Copter), the numbered pins are the Home Village spell points (rounds of front, left, right) or the Builder
 Base points, one per troop card. Pins cannot go on the card bar. The device checks them like any calibration,
@@ -265,6 +277,13 @@ and dark elixir filter (`minimum`; `0` = no filter). *LDPlayer* holds `adb`, `ld
 Nothing changes until you press save. The device accepts only LDPlayer's own `adb.exe` and `ldconsole.exe` as
 paths, checks the rest like any calibration, keeps the previous `config.json` as `config.json.bak`, and the change
 applies at the next Start.
+
+**LDPlayer screen:** shows the instance's resolution and DPI next to the calibration (1280×720, DPI 240). "Fit
+screen" stops the bot, closes LDPlayer, writes only the resolution and DPI into its instance file
+(`vms\config\leidian<index>.config`; `ldconsole modify` is never used because it drops other settings such as ADB
+debugging) and starts LDPlayer again. Your own resolution and DPI are kept in `~/.coc-auto/display.json` and are put
+back when you leave the bot with **Ctrl+C**, or with "restore my screen". LDPlayer is restarted for a restore only
+if it is running.
 
 Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
 the running bot), and everything the PC sends online is signed with it too, so nobody else on the channel can pose
@@ -426,7 +445,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot test_remote test_relay test_ldplayer
 ```
 
-The suites (253 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
+The suites (267 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
 deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake Realtime server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.

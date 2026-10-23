@@ -176,6 +176,25 @@ class DeployPointsTests(unittest.TestCase):
         self.assertEqual(image.shape[:2], (360, 640))
         self.assertLess(len(shots[0]['image']), 200_000)
 
+    def test_the_screen_on_the_device_now_becomes_the_deploy_background(self):
+        import numpy as np
+        frame = np.full((720, 1280, 3), 120, np.uint8)
+        points = remote.DeployPoints(self.config, self.captures, REPO, screen=lambda: (frame, 'builder_stage2'))
+        self.assertEqual(points.capture(), 'builder_stage2')
+        self.assertEqual([shot['screen'] for shot in points.snapshots()], ['builder_stage2'])
+        for name in ('home', 'home_army'):
+            other = remote.DeployPoints(self.config, self.captures, REPO, screen=lambda: (frame, name))
+            with self.subTest(screen=name), self.assertRaises(remote.CommandRefused):
+                other.capture()
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), points)
+        seen = []
+        supervisor.subscribe(lambda kind, data: seen.append(kind))
+        result = supervisor.command(*signed('capture_deploy'))
+        self.assertEqual((result['ok'], result['code'], result['data']['captured']),
+                         (True, 'deploy_captured', 'builder_stage2'))
+        self.assertIn('home_scout', result['data']['screens'])
+        self.assertIn('snapshot', seen)
+
     def test_the_dashboard_loads_and_saves_pins_through_signed_commands(self):
         supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), self.points)
         seen = []
@@ -285,6 +304,129 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(self.stored()['minimum'], {'gold': 1, 'elixir': 2, 'dark': 0})
         bare = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice())
         self.assertEqual(bare.command(*signed('get_settings'))['code'], 'refused')
+
+
+class FakeEmulator:
+    def __init__(self, running=True, stops=True):
+        self.on, self.stops, self.calls = running, stops, []
+
+    def running(self):
+        return self.on
+
+    def quit(self):
+        self.calls.append('quit')
+        self.on = not self.stops
+
+    def launch(self):
+        self.calls.append('launch')
+        self.on = True
+
+
+class DisplayTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        folder = Path(self.temp.name)
+        ld = folder / 'LDPlayer9'
+        (ld / 'vms' / 'config').mkdir(parents=True)
+        (ld / 'ldconsole.exe').write_bytes(b'')
+        self.instance = ld / 'vms' / 'config' / 'leidian0.config'
+        self.write_instance(1600, 900, 320)
+        config = json.loads((REPO / 'config.json').read_text(encoding='utf-8'))
+        self.config = folder / 'config.json'
+        self.config.write_text(json.dumps({**config, 'ldconsole': str(ld / 'ldconsole.exe'), 'ld_index': 0}),
+                               encoding='utf-8')
+        self.store = folder / 'home' / 'display.json'
+        self.emulator = FakeEmulator()
+        self.display = remote.Display(self.config, self.store, sleep=lambda seconds: None,
+                                      emulator=lambda console, index: self.emulator)
+
+    def write_instance(self, width, height, dpi):
+        self.instance.write_text(json.dumps({'propertySettings.phoneModel': 'X', 'advancedSettings.resolution':
+                                             {'width': width, 'height': height}, 'advancedSettings.resolutionDpi': dpi,
+                                             'basicSettings.adbDebug': 1}, indent=4), encoding='utf-8')
+
+    def screen(self):
+        data = json.loads(self.instance.read_text(encoding='utf-8'))
+        return (data['advancedSettings.resolution']['width'], data['advancedSettings.resolution']['height'],
+                data['advancedSettings.resolutionDpi'], data['basicSettings.adbDebug'])
+
+    def test_the_calibrated_screen_is_set_with_ldplayer_off_and_the_users_own_is_kept(self):
+        self.assertEqual(self.display.status(), {'current': {'width': 1600, 'height': 900, 'dpi': 320},
+                                                 'target': {'width': 1280, 'height': 720, 'dpi': 240}, 'saved': False})
+        self.assertTrue(self.display.fit())
+        self.assertEqual(self.screen(), (1280, 720, 240, 1))
+        self.assertEqual(self.emulator.calls, ['quit', 'launch'])
+        self.assertTrue(self.display.status()['saved'])
+        self.assertFalse(self.display.fit())
+
+    def test_the_users_screen_comes_back_and_ldplayer_only_restarts_if_it_was_on(self):
+        self.display.fit()
+        self.emulator.calls.clear()
+        self.assertTrue(self.display.restore())
+        self.assertEqual(self.screen(), (1600, 900, 320, 1))
+        self.assertEqual(self.emulator.calls, ['quit', 'launch'])
+        self.assertFalse(self.store.exists())
+        self.assertFalse(self.display.restore())
+        self.display.fit()
+        self.emulator.on, self.emulator.calls = False, []
+        self.assertTrue(self.display.restore())
+        self.assertEqual(self.emulator.calls, [])
+
+    def test_the_first_saved_screen_is_never_overwritten(self):
+        self.display.fit()
+        self.write_instance(1920, 1080, 280)
+        self.display.fit()
+        self.display.restore()
+        self.assertEqual(self.screen(), (1600, 900, 320, 1))
+
+    def test_a_screen_that_already_fits_changes_nothing(self):
+        self.write_instance(1280, 720, 240)
+        self.assertFalse(self.display.fit())
+        self.assertEqual(self.emulator.calls, [])
+        self.assertFalse(self.store.exists())
+
+    def test_ldplayer_that_does_not_stop_leaves_the_file_alone(self):
+        self.emulator.stops = False
+        original = self.instance.read_text(encoding='utf-8')
+        with self.assertRaises(remote.CommandRefused):
+            self.display.fit()
+        self.assertEqual(self.instance.read_text(encoding='utf-8'), original)
+
+    def test_a_damaged_saved_screen_is_not_written_back(self):
+        self.display.fit()
+        self.store.write_text(json.dumps({'path': str(self.instance), 'display': {'width': 'x', 'height': 1, 'dpi': 1}}),
+                              encoding='utf-8')
+        with self.assertRaises(remote.CommandRefused):
+            self.display.restore()
+        self.assertEqual(self.screen(), (1280, 720, 240, 1))
+
+    def test_leaving_the_bot_puts_the_screen_back(self):
+        device = FakeDevice()
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], device)
+        remote.leave(supervisor)
+        self.assertEqual(device.calls, ['restore_display'])
+
+    def test_the_dashboard_switches_the_screen_after_stopping_the_bot(self):
+        device = FakeDevice()
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], device)
+        for action, code in (('fit_display', 'display_ok'), ('restore_display', 'display_unchanged')):
+            result = supervisor.command(*signed(action))
+            self.assertEqual((result['ok'], result['code']), (True, code), result)
+        self.assertEqual(device.calls[:2], ['fit_display', 'display_status'])
+
+
+class KeyTests(unittest.TestCase):
+    def test_the_key_is_shown_without_running_anything(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as home:
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                self.assertEqual(remote.show_key(REPO / 'config.json', home=Path(home)), 0)
+            key = remote.device_key(Path(home))
+        self.assertIn(key, printed.getvalue())
+        self.assertIn('--agent', printed.getvalue())
 
 
 class DashboardTests(unittest.TestCase):

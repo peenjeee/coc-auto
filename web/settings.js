@@ -19,6 +19,7 @@ export class SettingsPanel {
   /** @param {(action: string, args?: Record<string, unknown>) => void} send */
   constructor(send) {
     this.found = null;
+    this.display = null;
     $('settings-load').addEventListener('click', () => send('get_settings'));
     $('setup-detect').addEventListener('click', () => send('detect_setup'));
     $('minimum-form').addEventListener('submit', (submitted) => {
@@ -48,6 +49,26 @@ export class SettingsPanel {
     if (!data || typeof data !== 'object') return;
     fill($('minimum-form'), data.minimum, MINIMUM);
     fill($('setup-form'), data.setup, SETUP);
+    this.showDisplay(data.display);
+  }
+
+  /** @param {{current: Record<string, number>, target: Record<string, number>, saved: boolean} | null} display */
+  showDisplay(display) {
+    this.display = display && typeof display === 'object' && display.current && display.target ? display : null;
+    this.renderDisplay();
+  }
+
+  renderDisplay() {
+    const display = this.display;
+    const text = (screen) => `${screen.width}x${screen.height} DPI ${screen.dpi}`;
+    $('display-now').textContent = display ? text(display.current) : '-';
+    $('display-target').textContent = display ? text(display.target) : '-';
+    const fits = display && ['width', 'height', 'dpi'].every((name) => display.current[name] === display.target[name]);
+    const note = $('display-note');
+    if (!display) note.textContent = t('display_unknown');
+    else if (!fits) note.textContent = t('display_differs');
+    else note.textContent = t(display.saved ? 'display_saved' : 'display_fits');
+    note.className = `hint ${fits ? 'ok' : 'problem'}`;
   }
 
   /** @param {Record<string, unknown>} found what auto-detect found on the device, with its problems */
@@ -59,6 +80,7 @@ export class SettingsPanel {
   }
 
   render() {
+    this.renderDisplay();
     const notes = $('setup-notes');
     notes.textContent = '';
     if (!this.found) return;

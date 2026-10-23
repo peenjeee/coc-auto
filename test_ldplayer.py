@@ -92,5 +92,35 @@ class DetectTests(unittest.TestCase):
         self.assertTrue(any('ldconsole' in problem for problem in found['problems']))
 
 
+INSTANCE = ('{\r\n    "propertySettings.phoneModel": "SM-S9110",\r\n    "advancedSettings.resolution": {\r\n'
+            '        "width": 1600,\r\n        "height": 900\r\n    },\r\n    "advancedSettings.resolutionDpi": 320,\r\n'
+            '    "basicSettings.adbDebug": 1\r\n}')
+
+
+class DisplayFileTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / 'leidian0.config'
+        self.path.write_bytes(INSTANCE.encode())
+
+    def test_the_instance_config_sits_in_the_ldplayer_folder(self):
+        self.assertEqual(ldplayer.instance_config(r'C:\LDPlayer\LDPlayer9\ldconsole.exe', 2),
+                         Path(r'C:\LDPlayer\LDPlayer9\vms\config\leidian2.config'))
+
+    def test_the_screen_is_read(self):
+        self.assertEqual(ldplayer.read_display(self.path), {'width': 1600, 'height': 900, 'dpi': 320})
+
+    def test_only_the_screen_changes_and_the_file_keeps_ldplayers_format(self):
+        ldplayer.write_display(self.path, {'width': 1280, 'height': 720, 'dpi': 240})
+        expected = INSTANCE.replace('1600', '1280').replace('900', '720').replace('320', '240')
+        self.assertEqual(self.path.read_bytes(), expected.encode())
+
+    def test_a_config_without_screen_keys_is_refused(self):
+        self.path.write_text('{"basicSettings.adbDebug": 1}', encoding='utf-8')
+        with self.assertRaises(ValueError):
+            ldplayer.read_display(self.path)
+
+
 if __name__ == '__main__':
     unittest.main()
