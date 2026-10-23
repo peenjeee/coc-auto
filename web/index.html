@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>coc-auto remote</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <main class="window">
+    <header class="titlebar">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="title">coc-auto@remote:~</span>
+      <span id="mode" class="mode"></span>
+      <span class="lang" role="group" aria-label="language">
+        <button type="button" data-lang="id">ID</button><button type="button" data-lang="en">EN</button>
+      </span>
+    </header>
+
+    <section id="connect" class="panel">
+      <p class="prompt" data-i18n="key_prompt"></p>
+      <form id="key-form" class="row">
+        <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="coc_..." required>
+        <button type="submit" data-i18n="connect"></button>
+      </form>
+      <p id="connect-error" class="error" hidden></p>
+    </section>
+
+    <section id="dashboard" class="dashboard" hidden>
+      <div class="status panel">
+        <span id="online" class="badge offline"></span>
+        <span><span data-i18n="host"></span>: <b id="host">-</b></span>
+        <span><span data-i18n="bot"></span>: <b id="bot-state">-</b></span>
+        <span class="grow"><span data-i18n="command"></span>: <code id="bot-args">-</code></span>
+        <button id="forget" class="ghost" type="button" data-i18n="change_key"></button>
+      </div>
+      <p id="notice" class="notice" hidden></p>
+
+      <div class="columns">
+        <form id="options" class="panel options">
+          <p class="prompt" data-i18n="options_prompt"></p>
+          <fieldset class="tasks">
+            <label><input type="radio" name="task" value="walls" checked> <span data-i18n="task_walls"></span></label>
+            <label><input type="radio" name="task" value="farm"> <span data-i18n="task_farm"></span></label>
+            <label><input type="radio" name="task" value="attack"> <span data-i18n="task_attack"></span></label>
+            <label><input type="radio" name="task" value="dry"> <span data-i18n="task_dry"></span></label>
+          </fieldset>
+
+          <label data-for="walls"><span data-i18n="walls_village"></span>
+            <select name="walls"><option value="both">both</option><option value="home">home</option><option value="builder">builder</option></select>
+          </label>
+          <div data-for="farm" class="checks">
+            <span data-i18n="builder_res"></span>
+            <label><input type="checkbox" name="builder" value="gold"> gold</label>
+            <label><input type="checkbox" name="builder" value="elixir"> elixir</label>
+            <label><input type="checkbox" name="builder" value="cart"> cart</label>
+          </div>
+          <div data-for="farm" class="checks">
+            <span data-i18n="home_res"></span>
+            <label><input type="checkbox" name="home" value="gold"> gold</label>
+            <label><input type="checkbox" name="home" value="elixir"> elixir</label>
+            <label><input type="checkbox" name="home" value="dark"> dark</label>
+          </div>
+          <p data-for="farm" class="hint" data-i18n="farm_hint"></p>
+          <label data-for="walls farm"><span data-i18n="first"></span>
+            <select name="first"><option value="builder">builder</option><option value="home">home</option></select>
+          </label>
+          <label data-for="attack dry"><span data-i18n="village"></span>
+            <select name="village"><option value="both">both</option><option value="home">home</option><option value="builder">builder</option></select>
+          </label>
+          <label data-for="attack"><span data-i18n="cycles"></span> <input name="cycles" type="number" min="1" max="100" value="1"></label>
+          <label data-for="walls farm attack"><span data-i18n="searches"></span> <input name="searches" type="number" min="0" max="1000000" value="0"></label>
+          <label data-for="walls farm"><span data-i18n="hours"></span> <input name="hours" type="number" min="0" max="1000" value="0"></label>
+          <label data-for="walls farm"><span data-i18n="minutes"></span> <input name="minutes" type="number" min="0" max="60000" value="0"></label>
+          <label data-for="walls"><span data-i18n="max_upgrades"></span> <input name="max_upgrades" type="number" min="0" max="100000" value="0"></label>
+          <label data-for="walls farm"><span data-i18n="max_recoveries"></span> <input name="max_recoveries" type="number" min="0" max="1000" value="20"></label>
+
+          <pre id="preview" class="preview"></pre>
+          <div class="actions">
+            <button id="start" type="submit" class="primary" data-i18n="start"></button>
+            <button type="button" data-action="stop" data-i18n="stop"></button>
+            <button type="button" data-action="restart" data-i18n="restart"></button>
+          </div>
+          <div class="actions">
+            <button type="button" data-action="open_coc" data-i18n="open_coc"></button>
+            <button type="button" data-action="close_coc" data-i18n="close_coc" data-i18n-confirm="confirm_close_coc"></button>
+            <button type="button" data-action="restart_ld" data-i18n="restart_ld" data-i18n-confirm="confirm_restart_ld"></button>
+            <button type="button" data-action="kill_ld" data-i18n="kill_ld" data-i18n-confirm="confirm_kill_ld" class="danger"></button>
+          </div>
+        </form>
+
+        <section class="panel log">
+          <div class="log-head">
+            <p class="prompt" data-i18n="log_prompt"></p>
+            <label><input id="follow" type="checkbox" checked> <span data-i18n="follow"></span></label>
+            <button id="clear" class="ghost" type="button" data-i18n="clear"></button>
+          </div>
+          <pre id="log" class="lines" aria-live="polite"></pre>
+        </section>
+      </div>
+
+      <section class="panel deploy">
+        <div class="log-head">
+          <p class="prompt" data-i18n="deploy_prompt"></p>
+          <button id="deploy-load" type="button" data-i18n="deploy_load"></button>
+        </div>
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" data-screen="home_scout" data-i18n="deploy_home"></button>
+          <button type="button" role="tab" data-screen="builder_scout" data-i18n="deploy_builder"></button>
+          <button type="button" role="tab" data-screen="builder_stage2" data-i18n="deploy_stage2"></button>
+        </div>
+        <p id="deploy-hint" class="hint"></p>
+        <div id="field" class="field">
+          <img id="field-shot" alt="" hidden>
+          <div id="field-bar" class="bar-zone"></div>
+          <div id="pins"></div>
+        </div>
+        <p id="deploy-message" class="hint"></p>
+        <div class="actions">
+          <button id="pin-add" type="button" data-i18n="deploy_add" disabled></button>
+          <button id="pin-remove" type="button" data-i18n="deploy_remove" disabled></button>
+          <button id="deploy-save" type="button" class="primary" data-i18n="deploy_save" disabled></button>
+        </div>
+        <p class="hint" data-i18n="deploy_note"></p>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

@@ -12,8 +12,10 @@ import math
 from pathlib import Path
 import re
 import shutil
+import signal
 import struct
 import subprocess
+import sys
 import time
 from typing import Callable
 
@@ -522,6 +524,12 @@ class ADB:
         if not self.live:
             raise BotError('Input perangkat dinonaktifkan dalam dry-run')
         self.command('shell', 'am', 'start', '-n', activity)
+
+    def stop_game(self) -> None:
+        """Close the game; the dashboard's "Tutup CoC"."""
+        if not self.live:
+            raise BotError('Input perangkat dinonaktifkan dalam dry-run')
+        self.command('shell', 'am', 'force-stop', GAME_ACTIVITY.split('/')[0])
 
     def capture(self) -> np.ndarray:
         """Raw RGBA framebuffer; skips on-device PNG encoding, which costs ~0.5 s."""
@@ -1492,18 +1500,28 @@ class Bot:
         self.device.pinch(zoom['device'], zoom['center'], start_gap, end_gap)
         self.wait_still(ZOOM_SETTLE_SECONDS if self.poll else 0)
 
+    def keep_deploy_frame(self, screen_name: str, image: np.ndarray) -> None:
+        """The web dashboard places its deploy pins over the last frame of each deploy screen."""
+        folder = self.root / 'captures'
+        try:
+            folder.mkdir(exist_ok=True)
+            cv2.imwrite(str(folder / f'deploy-{screen_name}.jpg'), image, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        except (OSError, cv2.error) as exc:
+            LOG.warning('Screenshot deploy untuk dashboard tidak tersimpan: %s', exc)
+
     def deploy(self, screen_name: str, allowed: set) -> str | None:
         screen = self.config['screens'][screen_name]
         terminal = {'home_result'} if screen_name == 'home_scout' else {'builder_result'}
         if screen_name == 'builder_scout':
             terminal |= {'builder_stage2'}
-        state = self.checked_state(allowed, terminal)[0]
+        state, image = self.checked_state(allowed, terminal)
         if state in terminal:
             return state
         if self.battle_zoom():
-            state = self.checked_state(allowed, terminal)[0]
+            state, image = self.checked_state(allowed, terminal)
             if state in terminal:
                 return state
+        self.keep_deploy_frame(screen_name, image)
         if 'auto' in screen:
             # Read the card bar before any card is used; the plan follows the army that is trained.
             plan = self.bar_plan(screen['auto'], allowed)
@@ -2473,8 +2491,18 @@ def main() -> int:
     parser.add_argument('--max-upgrades', type=int, default=0,
                         help='--walls: berhenti di desa setelah sekian tembok di-upgrade; 0 = tanpa batas')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
+    parser.add_argument('--agent', action='store_true',
+                        help='Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard')
+    parser.add_argument('--no-remote', action='store_true',
+                        help='Tanpa dashboard/API key: jalankan tugas lalu keluar seperti biasa')
+    parser.add_argument('--new-key', action='store_true',
+                        help='Buat API key dashboard baru untuk perangkat ini; key lama tidak berlaku lagi')
+    parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    if args.worker and hasattr(signal, 'SIGBREAK'):
+        # The dashboard stops a worker with Ctrl+Break; end it like Ctrl+C so the bot stops its own way.
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
     try:
         # Check every number before anything touches the emulator.
         integer(args.cycles, 1, 100, 'cycles')
@@ -2489,6 +2517,11 @@ def main() -> int:
             raise BotError('--hours/--minutes hanya untuk --until-full/--builder/--home/--walls dengan --live')
         if args.max_upgrades and not args.walls:
             raise BotError('--max-upgrades hanya untuk --walls')
+        if not (args.worker or args.no_remote):
+            import remote
+            # The job runs as a child (--worker) under the dashboard link, which stays up after it ends.
+            job = [] if args.agent else [arg for arg in sys.argv[1:] if arg != '--new-key']
+            return remote.supervise(job, args.config, renew_key=args.new_key)
         config = load_config(args.config)
         if args.walls and until_full:
             raise BotError('--walls tidak bisa digabung dengan --until-full/--builder/--home')

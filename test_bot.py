@@ -496,8 +496,17 @@ class BotTests(unittest.TestCase):
             runner.upgrade_walls('builder')
         self.assertEqual(moves, [])
 
+    def test_every_command_runs_under_the_dashboard_supervisor(self):
+        for argv, job in ((['--walls', 'home', '--live'], ['--walls', 'home', '--live']),
+                          (['--agent'], [])):
+            with self.subTest(argv=argv), patch('sys.argv', ['bot.py', *argv]), \
+                    patch('remote.supervise', return_value=0) as supervise, patch('bot.load_config') as load:
+                self.assertEqual(bot.main(), 0)
+            supervise.assert_called_once_with(job, Path('config.json'), renew_key=False)
+            load.assert_not_called()
+
     def test_a_reached_limit_is_a_normal_finish(self):
-        with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--max-upgrades', '3']), \
+        with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--max-upgrades', '3', '--no-remote']), \
                 patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
                 patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as runner:
             runner.return_value.run_until_full_resilient.side_effect = bot.LimitReached('Selesai')
@@ -2491,6 +2500,9 @@ class BotTests(unittest.TestCase):
         runner = bot.Bot(config, self.root, device, live=True, timeout=0.02, poll=0)
         runner.deploy('home_scout', {'home_scout'})
         self.assertEqual(device.inputs, [(20, 60)] + [(40, 40)] * bot.DEPLOY_BURST)
+        # The dashboard shows the deploy pins over this frame.
+        kept = cv2.imread(str(self.root / 'captures' / 'deploy-home_scout.jpg'))
+        self.assertEqual(kept.shape, frame.shape)
 
     def test_troops_can_spread_to_own_deploy_points(self):
         scout = {**self.config['screens']['builder_scout'],

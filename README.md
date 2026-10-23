@@ -209,8 +209,51 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded. `0` means no limit. |
 | `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
+| `--agent` | off | Run no task: show the device's API key and wait for **Start** from the web dashboard. |
+| `--no-remote` | off | Run the task without the dashboard link and exit when it ends (the behaviour before the dashboard). |
+| `--new-key` | off | Make a new dashboard API key for this PC; the old one stops working. |
 
-Stop at any time with **Ctrl+C**.
+Every command runs under the [web dashboard](#web-dashboard) link: when its task ends (or is stopped), the bot stays on
+standby for the dashboard. Leave with **Ctrl+C** at any time.
+
+## Web dashboard
+
+Every `bot.py` command prints this PC's **API key** (made once, kept in `~/.coc-auto/device.json`) and opens the
+dashboard. Enter the key there to follow the terminal log live and control the bot:
+
+- **Local:** `http://localhost:8765`, served by the bot itself (works without internet).
+- **Online:** `https://coc.0xpnj.dev` (the `web/` folder, deployed on Netlify), for checking from a phone. The PC
+  connects out to a Supabase Realtime channel named after a hash of the key, so no router port has to be opened.
+
+The dashboard (Indonesian or English, switch in the title bar) shows whether the PC is online, the bot's state and
+command, and the live log. Its form covers every command above (task, villages, resources, walls, `--first`,
+searches, time and upgrade limits, recoveries) and shows the equivalent `python bot.py ...` line; **Start** runs it
+(a running task is stopped first). Other buttons: stop bot, repeat the last command, open CoC, close CoC, restart
+LDPlayer, turn LDPlayer off; the last three stop the bot first. When the PC is off, offline or the bot is not
+running, the dashboard says so instead of sending, and a command that gets no answer within 10 seconds is reported.
+Recovery and `settle` work as before: the task runs as a child process (`--worker`) of the dashboard link.
+
+**Deploy points:** "load from device" shows the deploy pins of the Home Village and both Builder Base stages over
+the last screenshot the bot took of each deploy screen (taken while attacking, kept in `captures/`). Drag pins to
+move them, add or remove numbered pins, and save: `D` is the deploy point (troops, siege and heroes; the Battle
+Machine/Copter), the numbered pins are the Home Village spell points (rounds of front, left, right) or the Builder
+Base points, one per troop card. Pins cannot go on the card bar. The device checks them like any calibration,
+writes `config.json` (the previous one stays as `config.json.bak`), and they apply at the next Start.
+
+Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
+the running bot), and everything the PC sends online is signed with it too, so nobody else on the channel can pose
+as the device or as the dashboard. The key itself never leaves the browser or the PC, and the page loads no
+third-party code. Only the options the CLI offers are accepted. The local dashboard listens on 127.0.0.1 only and
+refuses other sites (Host, Origin and JSON checks). Use `--new-key` if the key was shared by mistake.
+
+Online setup (once, by the owner of the deployment):
+
+1. In the Supabase project, copy the **publishable key** (Project Settings → API Keys) into `remote.supabase_key` in
+   `config.json` and `SUPABASE_KEY` in `web/config.js`; set the project URL in both (`remote.supabase_url`,
+   `SUPABASE_URL`) and its host in `connect-src` of `netlify.toml`. Realtime must allow public channels (the
+   default).
+2. Deploy the `web/` folder on Netlify (`netlify.toml` sets the folder and security headers) and point the custom
+   domain at it. Set `remote.dashboard` to that address so the terminal shows it.
 
 ## Calibration
 
@@ -354,18 +397,25 @@ so the run stops only after that many recoveries with no progress in between.
 ## Testing
 
 ```bash
-python -m unittest -v test_bot
+python -m unittest -v test_bot test_remote test_relay
 ```
 
-The suite (191 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
-deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
+The suites (234 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
+deploy plans, popups, recovery, the until-full loop, and the dashboard link (signed commands, the bot as a child
+process, the local server, and the relay against a fake Realtime server). They do not replace a live run on a real account.
 
 ## Project structure
 
 ```text
 bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
+remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
+relay.py               Supabase Realtime relay for the online dashboard
+web/                   dashboard page: app.js, deploy pin editor, own Realtime client, ID/EN text
+netlify.toml           Netlify publish folder and security headers
 calibrate.py           calibration CLI (screenshots only, never taps)
 test_bot.py            offline unit tests
+test_remote.py         dashboard link tests (key, signatures, options, child process, local server)
+test_relay.py          relay tests against a fake Realtime server
 config.json            calibration for the current game UI
 calibration/           anchor, target and digit templates for config.json
 config.legacy.json     calibration for the previous game UI

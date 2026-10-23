@@ -12,3 +12,5 @@ captures/
 !calibration-legacy/**/*.png
 !docs/*.png
 !fixtures/*.png
+config.json.bak
+config.json.tmp
