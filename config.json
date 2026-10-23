@@ -912,21 +912,26 @@
       "anchors": [
         {
           "roi": [
-            185,
-            482,
-            188,
-            38
+            644,
+            20,
+            112,
+            11
           ],
-          "file": "calibration/builder_scout-002a96267b204d7092784f558cd685bb.png"
+          "file": "calibration/builder_stage2-countdown-9d1db97a1df94bc9943149af3127e61e.png",
+          "margin": 3
         },
         {
-          "roi": [
-            402,
-            482,
-            190,
-            38
+          "file": "calibration/builder_scout-pembela-c87eba4df5fe47a48d1b16bb7beea543.png",
+          "search": [
+            40,
+            5,
+            140,
+            40
           ],
-          "file": "calibration/builder_scout-bdd5eca50f8f4370beddcb066e8ff1ba.png"
+          "scales": [
+            1.0
+          ],
+          "max_score": 0.05
         }
       ],
       "actions": {},
@@ -1046,7 +1051,29 @@
             300
           ]
         ]
-      }
+      },
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              185,
+              482,
+              188,
+              38
+            ],
+            "file": "calibration/builder_scout-002a96267b204d7092784f558cd685bb.png"
+          },
+          {
+            "roi": [
+              402,
+              482,
+              190,
+              38
+            ],
+            "file": "calibration/builder_scout-bdd5eca50f8f4370beddcb066e8ff1ba.png"
+          }
+        ]
+      ]
     },
     "builder_battle": {
       "anchors": [
@@ -1222,7 +1249,8 @@
         }
       ],
       "overrides": [
-        "builder_battle2"
+        "builder_battle2",
+        "builder_scout"
       ],
       "auto": {
         "bar": [

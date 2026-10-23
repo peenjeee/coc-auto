@@ -137,6 +137,11 @@ class WaitTimeout(BotError):
     """The expected screen did not appear in time."""
 
 
+class UnexpectedScreen(WaitTimeout):
+    """A known screen came up out of turn (a battle started before its scout screen was seen, a menu left
+    open); recovery settles it like any other stall."""
+
+
 class GemUnreadable(WaitTimeout):
     """The gem count could not be trusted (missing digits, a label or tooltip over the bar); nothing is tapped
     and recovery reads it again."""
@@ -1305,7 +1310,7 @@ class Bot:
                 self.action(state, 'close')
                 raise WaitTimeout('Resource kurang; tawaran beli dengan gem ditutup tanpa membeli')
             if state not in allowed | {'loading'}:
-                raise BotError(f'Layar tidak diharapkan saat menunggu: {state}')
+                raise UnexpectedScreen(f'Layar tidak diharapkan saat menunggu: {state}')
             time.sleep(self.poll)
         raise WaitTimeout('Timeout; tidak mencoba input pemulihan')
 
@@ -1606,7 +1611,7 @@ class Bot:
                 self.action(state, 'close')
                 raise OutOfGold('Gold habis untuk lawan berikutnya; tawaran gem ditutup')
             elif state != 'home_scout':
-                raise BotError('Layar tidak diharapkan saat mencari lawan baru')
+                raise UnexpectedScreen('Layar tidak diharapkan saat mencari lawan baru')
             else:
                 delta = cv2.absdiff(previous, image)
                 changed = float(np.mean(np.max(delta, axis=2) > 20)) > 0.02

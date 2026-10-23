@@ -520,6 +520,12 @@ class BotTests(unittest.TestCase):
         self.assertEqual(calls, ['builder', 'home'])
         self.assertEqual(runner.walls_skipped, {'builder'})
 
+    def test_a_screen_out_of_turn_is_a_stall_for_recovery(self):
+        # A Builder Base battle that started before its scout screen was seen: settle it, do not stop the run.
+        runner = self.make_bot(Device(self.frames, 'builder_battle'), True)
+        with self.assertRaises(bot.WaitTimeout):
+            runner.wait({'builder_scout'}, {'builder_menu'}, 1)
+
     def test_settle_closes_stacked_attack_menus(self):
         config = {**self.config, 'screens': {
             **self.config['screens'],

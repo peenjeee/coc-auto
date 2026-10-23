@@ -339,7 +339,7 @@ How to change it:
 | PC memory runs low (LDPlayer grows over hours) | Between attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back or its screen cannot be captured. |
 | Started mid-battle, on a result screen, or on an attack menu | Waits for the battle to end and taps return, or closes the menu (when it has a `close` point), then starts farming. |
 | A menu tap is lost (e.g. right after LDPlayer boots) | Taps the same button again, up to 3 times, while that menu is still shown. The search button is retried for up to 3 minutes to wait out the attack cooldown after a game restart. |
-| A wait times out, or an unrecognised screen passes, with the game still open (slow matchmaking, lag, an animation) | Lets a running battle end or closes the menu, then resumes. Counts as one recovery. |
+| A wait times out, an unrecognised screen passes, or a known screen comes up out of turn (slow matchmaking, lag, an animation, a battle that started on its own) | Lets a running battle end or closes the menu, then resumes. Counts as one recovery. |
 | The search is refused ("Tidak dapat menyerang desa! Coba lagi nanti.") | Taps "Ke Beranda", waits a minute, and tries again. Counts as one recovery. |
 | The game offers to buy missing resources with gems ("Perlu lebih banyak …") | Closes it with X, never the gem button. If it came from skipping an opponent with no gold left, attacks the opponent on screen; otherwise recovers. |
 | The account is opened on another device ("Perangkat lain tersambung ke desa ini") | Stops without reloading, so the other session stays; exit code 4. Run the bot again when you are done there. |
@@ -358,7 +358,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot
 ```
 
-The suite (185 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
+The suite (186 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure
