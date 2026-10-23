@@ -1077,6 +1077,19 @@ class BotTests(unittest.TestCase):
         self.assertFalse(runner.upgrade_wall(spec, 100))
         self.assertEqual(taps, [])
 
+    def test_gem_count_is_read_again_while_the_bars_slide(self):
+        spec, _, _ = self.wall_spec()
+        runner = bot.Bot(self.config, self.root, Device(self.frames), live=True, timeout=1, poll=0.01)
+        reads = iter([bot.BotError('Angka loot meragukan'), 101, 100, 100])
+
+        def read(image, spec):
+            value = next(reads)
+            if isinstance(value, Exception):
+                raise value
+            return value
+        runner.read_gems = read
+        self.assertEqual(runner.stable_gems(spec), 100)
+
     def test_gems_are_read_where_the_hud_sits(self):
         spec, _, _ = self.wall_spec()
         runner = self.make_bot(Device(self.frames), True)

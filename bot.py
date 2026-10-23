@@ -92,7 +92,7 @@ LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
 OPTIONAL_SCREENS = ('builder_cart', *MENU_SCREENS)
 WALL_RESOURCES = ('gold', 'elixir')
-WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT = 15, 2, 15
+WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 15, 5
 WHITE_LEVEL = 200
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
@@ -1450,8 +1450,12 @@ class Bot:
     def read_gems(self, image: np.ndarray, spec: dict) -> int:
         return read_number(crop(image, self.gem_region(image, spec)), self.templates(), FRACTION_MIN_SCORE)
 
-    def check_gems(self, image: np.ndarray, spec: dict, gems: int) -> None:
-        now = self.read_gems(image, spec)
+    def stable_gems(self, spec: dict) -> int:
+        """Gem count once two fresh frames agree; the resource bars slide while the builder list moves."""
+        return self.read_stable(lambda image: self.read_gems(image, spec), GEM_READ_SECONDS if self.poll else 0)
+
+    def check_gems(self, spec: dict, gems: int) -> None:
+        now = self.stable_gems(spec)
         if now < gems:
             raise GemSpent(f'Gem turun {gems:,} -> {now:,}; upgrade tembok dihentikan')
 
@@ -1507,7 +1511,7 @@ class Bot:
         state, image = self.observe()
         if state != 'wall_selected':
             raise BotError(f'Tembok tidak terpilih: layar {state}')
-        self.check_gems(image, spec, gems)
+        self.check_gems(spec, gems)
         if self.affordable_button(image, spec) is None:
             return False
         picked = []
@@ -1534,8 +1538,7 @@ class Bot:
             return False
         self.action(dialog, 'confirm')
         self.wait(after, {dialog}, WALL_TAP_SECONDS)
-        _, image = self.observe()
-        self.check_gems(image, spec, gems)
+        self.check_gems(spec, gems)
         LOG.info('Tembok di-upgrade dengan %s', resource)
         return True
 
@@ -1576,7 +1579,8 @@ class Bot:
         if village == 'builder':
             self.collect_cart()
         self.wait({village}, set(), 30)
-        gems = self.read_gems(self.open_build_list(village, spec), spec)
+        self.open_build_list(village, spec)
+        gems = self.stable_gems(spec)
         upgraded = 0
         while True:
             self.open_build_list(village, spec)
