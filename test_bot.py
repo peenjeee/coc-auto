@@ -1290,7 +1290,7 @@ class BotTests(unittest.TestCase):
         cv2.imwrite(str(self.root / 'wall-row.png'), row)
         cv2.imwrite(str(self.root / 'hammer.png'), rng.integers(0, 256, (8, 12, 3), dtype=np.uint8))
         spec = {'build': [150, 80], 'row': {'file': 'wall-row.png', 'region': [100, 0, 60, 90],
-                                           'max_score': 0.05, 'tap_x': 130},
+                                           'max_score': 0.05, 'tap_x': 130, 'price': [100, 4, 60, 8]},
                 'scroll': [[130, 70], [130, 20]], 'min_white': 100,
                 'gems': {'list': [0, 0, 30, 10], 'village': [0, 12, 30, 10]},
                 'button': {'file': 'hammer.png', 'search': [0, 40, 160, 50], 'scales': [1.0], 'max_score': 0.02,
@@ -1556,50 +1556,88 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.GemSpent):
             runner.start_gem_watch(spec)
 
-    def test_the_lowest_wall_row_is_found_coming_up_from_the_end_of_the_list(self):
-        spec, _, row = self.wall_spec()
-        blank = np.zeros((90, 160, 3), dtype=np.uint8)
-        other = blank.copy()
-        other[40:60, 100:160] = 90
-        walls = blank.copy()
-        walls[12:18, 110:130] = row
-        walls[50:56, 110:130] = row
-        device = Device(self.frames)
-        swipes = []
-        device.swipe = lambda start, end: swipes.append((tuple(start), tuple(end)))
-        runner = self.make_bot(device, True)
-        shots = iter([blank, other, other, walls])
-        runner.wait_still = lambda limit: next(shots)
-        self.assertEqual(runner.wall_row(spec), 53)
-        down, up = ((130, 70), (130, 20)), ((130, 20), (130, 70))
-        self.assertEqual(swipes, [down, down, up])
-        self.assertTrue(runner.wall_view_known)
+    def test_the_bundled_wall_list_prices_read_white_and_red(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        row = config['walls']['home']['row']
+        template = cv2.imread(str(root / row['file']))
+        templates = bot.load_digit_templates(root, config['digits'])
+        for name, expected in (('affordable', [3_000_000, 2_000_000, 1_500_000]), ('short', [3_000_000])):
+            image = np.zeros((720, 1280, 3), dtype=np.uint8)
+            image[50:670, 940:1280] = cv2.imread(str(root / 'fixtures' / f'wall-list-{name}.png'))
+            ys = bot.find_rows(image, template, row['region'], row['max_score'])
+            with self.subTest(list=name):
+                self.assertEqual([bot.row_price(image, row['price'], y, templates) for y in ys], expected)
 
-    def test_the_next_pick_takes_the_lowest_row_in_view_without_scrolling(self):
-        spec, _, row = self.wall_spec()
-        walls = np.zeros((90, 160, 3), dtype=np.uint8)
-        walls[12:18, 110:130] = row
-        walls[50:56, 110:130] = row
+    def listed_walls(self, rows):
+        """A runner over a fake list: frame k (filled with k) shows the (price, y) wall rows in rows[k]."""
+        spec, _, _ = self.wall_spec()
+        frames = [np.full((90, 160, 3), 10 * k, dtype=np.uint8) for k in range(len(rows))]
         device = Device(self.frames)
-        swipes = []
-        device.swipe = lambda start, end: swipes.append((tuple(start), tuple(end)))
-        device.capture = lambda: walls
+        swipes, at = [], [0]
+        down, up = spec['scroll'], spec['scroll'][::-1]
+
+        def swipe(start, end):
+            swipes.append('down' if [list(start), list(end)] == down else 'up')
+            at[0] = max(0, min(len(rows) - 1, at[0] + (1 if swipes[-1] == 'down' else -1)))
+        device.swipe = swipe
+        device.capture = lambda: frames[at[0]]
         runner = self.make_bot(device, True)
-        runner.wall_view_known = True
-        self.assertEqual(runner.wall_row(spec), 53)
+        runner.wait_still = lambda limit: frames[at[0]]
+        runner.wall_rows = lambda image, spec: rows[int(image[0, 0, 0]) // 10]
+        return runner, spec, swipes, at
+
+    def test_the_cheapest_wall_row_is_picked_wherever_the_list_puts_it(self):
+        # Affordable rows come first, so a wall too dear to pay sits below the cheaper ones.
+        runner, spec, swipes, at = self.listed_walls([[], [(1_500_000, 30)], [(3_000_000, 60)], []])
+        runner.wall_list_top = True
+        self.assertEqual(runner.wall_row(spec), 30)
+        self.assertEqual(swipes, ['down', 'down', 'down', 'down', 'up', 'up'])
+        self.assertEqual(runner.wall_price, 1_500_000)
+
+    def test_a_wall_list_left_part_way_down_is_walked_from_its_top(self):
+        runner, spec, swipes, at = self.listed_walls([[(2_000_000, 40)], [], [(1_000_000, 70)]])
+        at[0] = 1
+        self.assertEqual(runner.wall_row(spec), 70)
+        self.assertEqual(swipes, ['up', 'up', 'down', 'down', 'down'])
+
+    def test_the_next_pick_takes_the_cheapest_row_in_view_without_scrolling(self):
+        runner, spec, swipes, at = self.listed_walls([[], [(2_000_000, 20), (1_500_000, 50)]])
+        at[0], runner.wall_price = 1, 1_500_000
+        self.assertEqual(runner.wall_row(spec), 50)
         self.assertEqual(swipes, [])
 
+    def test_a_reopened_list_stops_at_the_first_row_with_the_cheapest_price(self):
+        runner, spec, swipes, at = self.listed_walls([[], [(1_500_000, 50)], [(2_000_000, 20)], []])
+        runner.wall_list_top, runner.wall_price = True, 1_500_000
+        self.assertEqual(runner.wall_row(spec), 50)
+        self.assertEqual(swipes, ['down'])
+
+    def test_a_finished_wall_level_moves_on_to_the_next_cheapest(self):
+        runner, spec, swipes, at = self.listed_walls([[(3_000_000, 20)], [(2_000_000, 50)], []])
+        at[0], runner.wall_price = 2, 1_500_000
+        self.assertEqual(runner.wall_row(spec), 50)
+        self.assertEqual(runner.wall_price, 2_000_000)
+
+    def test_unreadable_wall_prices_fall_back_to_the_lowest_row_in_the_list(self):
+        runner, spec, swipes, at = self.listed_walls([[(float('inf'), 20)], [(float('inf'), 40), (float('inf'), 60)]])
+        runner.wall_list_top = True
+        self.assertEqual(runner.wall_row(spec), 60)
+
+    def test_a_wall_row_lost_on_the_way_back_is_a_stall_to_retry(self):
+        # A popup or a reload over the list mid-walk: tidy the screen and walk again, do not stop the run.
+        runner, spec, swipes, at = self.listed_walls([[(1_500_000, 30)], [(2_000_000, 60)], []])
+        listed = runner.wall_rows
+        runner.wall_rows = lambda image, spec: [] if 'up' in swipes else listed(image, spec)
+        runner.wall_list_top = True
+        with self.assertRaises(bot.WaitTimeout):
+            runner.wall_row(spec)
+
     def test_no_wall_row_anywhere_in_the_list_means_every_wall_is_maxed(self):
-        spec, _, _ = self.wall_spec()
-        blank = np.zeros((90, 160, 3), dtype=np.uint8)
-        device = Device(self.frames)
-        swipes = []
-        device.swipe = lambda start, end: swipes.append((tuple(start), tuple(end)))
-        runner = self.make_bot(device, True)
-        shots = iter([blank] * 3)
-        runner.wait_still = lambda limit: next(shots)
+        runner, spec, swipes, at = self.listed_walls([[], [], []])
+        runner.wall_list_top, runner.wall_price = True, 1_500_000
         self.assertIsNone(runner.wall_row(spec))
-        self.assertFalse(runner.wall_view_known)
+        self.assertIsNone(runner.wall_price)
 
     def test_walls_farm_then_upgrade_until_maxed_in_the_chosen_order(self):
         runner = self.make_bot(Device(self.frames), True)

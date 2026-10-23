@@ -175,7 +175,7 @@ python bot.py --walls both --first home --live
 
 `--walls` takes `home`, `builder` or `both`. For each village in turn it first spends the gold and elixir already
 in storage: it opens the builder list, finds a "Tembok" row, and upgrades one wall at a time with whichever of gold or
-elixir is still affordable. It always takes the lowest wall level first: the list is sorted by price, so it scrolls to the end and picks the first wall row coming back up, and moves on to the next level only when that one is used up. When neither resource is affordable any more, it
+elixir is still affordable. It always takes the lowest wall level first, and moves on to the next level only when that one is used up. Each wall level costs more than the one below, so it reads the price on every "Tembok" row and picks the cheapest. Position in the list says nothing about level: the game puts affordable rows above ones the storage cannot pay for. When neither resource is affordable any more, it
 farms until gold and elixir are both full, spends them again, and repeats. It stops once no "Tembok" row is left, which means
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
 Elixir Cart first; its walls cost gold only until they reach higher levels, and only the upgrade buttons a wall actually shows are used. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
@@ -313,7 +313,7 @@ How to change it:
 | `storage.<village>.<resource>` | Fallback fill check by bar colour (`row`, `left`, `right`, `hue`, `min_saturation`), used when a village has no `capacity`. |
 | `cart_text` | Crop of the Elixir Cart "current / max" text, read with `digits`. |
 | `cart_bar` | Elixir Cart fill bar read by colour, used when there is no `cart_text`. Either key makes `cart` a goal. |
-| `walls.<village>` | `--walls` calibration: builder list tap point, "Tembok" row template, scroll swipe, gem count areas, upgrade button template and price offsets, the confirm dialog checks, and the Home Village `gold_reserve`. |
+| `walls.<village>` | `--walls` calibration: builder list tap point, "Tembok" row template and its price band (`row.price` = `[x, dy, w, h]`, `dy` from the row title's centre), scroll swipe, gem count areas, upgrade button template and price offsets, the confirm dialog checks, and the Home Village `gold_reserve`. |
 | `digits` | Folder of digit templates (`0.png` … `9.png`, plus variants like `9-ui2.png`). |
 | `zoom_out` | Pinch settings used before switching villages or attacking. |
 | `speed_button` | Template of the battle "1x" button, tapped once to switch to 4x. |
@@ -348,7 +348,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot
 ```
 
-The suite (168 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (175 tests) uses synthetic screens and a fake device, plus two real builder-list panels in `fixtures/`. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

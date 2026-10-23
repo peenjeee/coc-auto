@@ -11,3 +11,4 @@ captures/
 !calibration/**/*.png
 !calibration-legacy/**/*.png
 !docs/*.png
+!fixtures/*.png

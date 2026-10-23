@@ -47,6 +47,8 @@ OCR_SCALES = (3, 4, 5)
 DIGIT_HEIGHT, DIGIT_WIDTH = 24, 20
 DIGIT_MIN_SCORE, DIGIT_MIN_MARGIN = 0.75, 0.15
 FRACTION_MIN_SCORE = 0.65
+# Builder-list prices are small, so they are doubled before reading, and red when the resource is short.
+PRICE_SCALE, PRICE_MAX_SATURATION = 2, 160
 TARGET_MAX_SCORE = 0.2
 ANCHOR_MAX_MARGIN = 40
 TARGET_MAX_OFFSET = 200
@@ -757,6 +759,19 @@ def find_rows(image: np.ndarray, template: np.ndarray, region: list, max_score: 
     return [y + top + template.shape[0] // 2 for top in tops]
 
 
+def row_price(image: np.ndarray, band: list, y: int, templates: dict) -> float:
+    """Price on the builder-list row whose title is centred at y; infinite when it cannot be read."""
+    x, dy, w, h = band
+    text = crop(image, [x, y + dy, w, h])
+    if y + dy < 0 or text.shape[:2] != (h, w):
+        return math.inf
+    text = cv2.resize(text, None, fx=PRICE_SCALE, fy=PRICE_SCALE, interpolation=cv2.INTER_CUBIC)
+    try:
+        return read_trailing_number(text, templates, FRACTION_MIN_SCORE, PRICE_MAX_SATURATION)
+    except BotError:
+        return math.inf
+
+
 def wall_order(choice: str, first: str) -> tuple:
     villages = VILLAGES if choice == 'both' else (choice,)
     return tuple(sorted(villages, key=lambda village: village != first))
@@ -775,6 +790,11 @@ def validate_walls(config: dict, root: Path, villages: tuple) -> None:
         row = spec.get('row', {})
         rectangle(row.get('region'), resolution)
         integer(row.get('tap_x'), 0, resolution[0] - 1, 'walls row tap_x')
+        price = row.get('price')
+        if not isinstance(price, list) or len(price) != 4:
+            raise BotError('walls row price perlu [x, dy, w, h]')
+        rectangle([price[0], 0, price[2], price[3]], resolution)
+        integer(price[1], -200, 200, 'walls row price dy')
         scroll = spec.get('scroll')
         if not isinstance(scroll, list) or len(scroll) != 2:
             raise BotError('walls scroll perlu titik awal dan akhir')
@@ -895,11 +915,12 @@ def glyphs(image: np.ndarray) -> list:
             for index in sorted(range(1, count), key=lambda i: stats[i, cv2.CC_STAT_LEFT])]
 
 
-def read_trailing_number(image: np.ndarray, templates: dict, min_score: float = DIGIT_MIN_SCORE) -> int:
+def read_trailing_number(image: np.ndarray, templates: dict, min_score: float = DIGIT_MIN_SCORE,
+                         max_saturation: int = OCR_MAX_SATURATION) -> int:
     """A right-aligned HUD number: the run of same-size glyphs ending at the right edge. Bars are see-through,
     so a village label behind one shows up at a different size and is left out."""
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    pale = ((hsv[..., 2] >= OCR_MIN_VALUE) & (hsv[..., 1] <= OCR_MAX_SATURATION)).astype(np.uint8)
+    pale = ((hsv[..., 2] >= OCR_MIN_VALUE) & (hsv[..., 1] <= max_saturation)).astype(np.uint8)
     count, labels, stats, _ = cv2.connectedComponentsWithStats(pale, connectivity=8)
     if count <= 1:
         raise BotError('Angka tidak terlihat; hentikan tanpa input')
@@ -1144,7 +1165,8 @@ class Bot:
         self.gems_known: int | None = None
         self.wall_excluded: set = set()
         self.gems_fresh = False
-        self.wall_view_known = False
+        self.wall_list_top = False
+        self.wall_price: float | None = None
         self.emulator = emulator
         self.emulator_started: float | None = None
         self.detector = Detector(config, root)
@@ -1796,26 +1818,57 @@ class Bot:
             raise GemUnreadable(f'Gem terbaca naik {self.gems_known:,} -> {now:,}; dibaca ulang tanpa upgrade')
         self.gems_fresh = True
 
-    def wall_row(self, spec: dict) -> int | None:
-        """y of the lowest-level 'Tembok' row. The list is sorted by price and lower walls cost less, so scroll
-        to its end and come back up: the first wall row to come into view is the lowest level. While the list
-        stays put, the lowest wall row in view is still the lowest one, so later picks need no scrolling."""
-        row = spec['row']
+    def wall_rows(self, image: np.ndarray, spec: dict) -> list:
+        """(price, y) of every 'Tembok' row in view, top first."""
+        row, templates = spec['row'], self.templates()
         template = cv2.imread(str(asset_path(self.root, row['file'])))
-        if self.wall_view_known:
-            rows = find_rows(self.device.capture(), template, row['region'], row['max_score'])
-            if rows:
-                return rows[-1]
-        down = spec['scroll']
-        image = self.scroll_list(spec, down, None)
-        self.wall_view_known = False
-        while image is not None:
-            rows = find_rows(image, template, row['region'], row['max_score'])
-            if rows:
-                self.wall_view_known = True
-                return rows[-1]
-            image = self.scroll_list(spec, down[::-1], image, once=True)
-        return None
+        return [(row_price(image, row['price'], y, templates), y)
+                for y in find_rows(image, template, row['region'], row['max_score'])]
+
+    def priced_row(self, image: np.ndarray, spec: dict, price: float) -> int | None:
+        found = [y for shown, y in self.wall_rows(image, spec) if shown == price]
+        return found[-1] if found else None
+
+    def wall_row(self, spec: dict) -> int | None:
+        """y of the lowest-level 'Tembok' row, which is the cheapest: each wall level costs more than the one
+        below. The list groups rows by resource and puts what is affordable first, so a row's place says nothing
+        about its level; walk it from the top and come back to the cheapest price. Walls only level up, so while
+        that price is listed its row is still the lowest: later picks stop at it, without scrolling while the
+        list stays put."""
+        down, up = spec['scroll'], spec['scroll'][::-1]
+        if self.wall_price is not None and not self.wall_list_top:
+            y = self.priced_row(self.device.capture(), spec, self.wall_price)
+            if y is not None:
+                return y
+        settle = WALL_LIST_SETTLE_SECONDS if self.poll else 0
+        image = self.wait_still(settle) if self.wall_list_top else self.scroll_list(spec, up, None)
+        self.wall_list_top = False
+        prices = []
+        for _ in range(WALL_SCROLL_LIMIT):
+            rows = self.wall_rows(image, spec)
+            found = [y for price, y in rows if price == self.wall_price]
+            if found:
+                return found[-1]
+            prices += [price for price, _ in rows]
+            moved = self.scroll_list(spec, down, image, once=True)
+            if moved is None:
+                break
+            image = moved
+        if not prices:
+            self.wall_price = None
+            return None
+        self.wall_price = min(prices)
+        if math.isinf(self.wall_price):
+            LOG.warning('Harga tembok tidak terbaca; pakai baris tembok paling bawah')
+        for _ in range(WALL_SCROLL_LIMIT):
+            y = self.priced_row(image, spec, self.wall_price)
+            if y is not None:
+                return y
+            image = self.scroll_list(spec, up, image, once=True)
+            if image is None:
+                break
+        # Something covered the list mid-walk (a popup, a reload); a stall, so recovery tidies up and walks again.
+        raise WaitTimeout('Baris tembok termurah tidak ketemu lagi; tidak ada input')
 
     def scroll_list(self, spec: dict, swipe: list, image: np.ndarray | None, once: bool = False) -> np.ndarray | None:
         """Swipe the builder list until it stops moving (its end) and return that frame; with once, swipe one
@@ -1969,8 +2022,8 @@ class Bot:
         image = self.device.capture()
         if self.list_open(image):
             return image
-        # A reopened list starts at its top, so the lowest wall row has to be found again.
-        self.wall_view_known = False
+        # A reopened list starts at its top.
+        self.wall_list_top = True
         self.guarded_tap({village, 'wall_selected'}, spec['build'])
         return self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
 
@@ -2025,7 +2078,7 @@ class Bot:
         self.wait({village}, set(), 30)
         self.open_build_list(village, spec)
         self.start_gem_watch(spec)
-        self.wall_excluded = set()
+        self.wall_excluded, self.wall_price = set(), None
         upgraded = 0
         while True:
             self.open_build_list(village, spec)
