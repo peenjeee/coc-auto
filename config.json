@@ -1068,12 +1068,12 @@
         },
         {
           "roi": [
-            808,
-            592,
-            80,
-            24
+            644,
+            20,
+            112,
+            11
           ],
-          "file": "calibration/builder_stage2-ed163cffbf2d4b93989ed7cb197191ca.png",
+          "file": "calibration/builder_stage2-countdown-9d1db97a1df94bc9943149af3127e61e.png",
           "margin": 3
         }
       ],

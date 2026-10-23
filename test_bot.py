@@ -147,10 +147,11 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.BotError):
             matcher.detect(np.zeros((100, 160, 3), dtype=np.uint8))
 
-    def test_the_bundled_calibration_never_takes_a_low_town_hall_for_the_builder_base(self):
+    @staticmethod
+    def bundled():
+        """The shipped config.json with its templates, and a helper that draws anchors on a blank 1280x720 frame."""
         root = Path(bot.__file__).parent
         config = bot.load_config(root / 'config.json')
-        screens = config['screens']
         bot.validate_config(config, root, 'both')
 
         def frame(*anchors):
@@ -159,13 +160,26 @@ class BotTests(unittest.TestCase):
                 x, y, w, h = anchor['roi']
                 image[y:y + h, x:x + w] = cv2.imread(str(root / anchor['file']))
             return image
-        detector = bot.Detector(config, root)
+        return config, bot.Detector(config, root), frame
+
+    def test_the_bundled_calibration_never_takes_a_low_town_hall_for_the_builder_base(self):
+        config, detector, frame = self.bundled()
+        screens = config['screens']
         home, builder, low = screens['home']['anchors'], screens['builder']['anchors'], screens['home']['alt_anchors'][0]
         self.assertEqual(detector.detect(frame(*home, *low)), 'home')
         self.assertEqual(detector.detect(frame(*builder)), 'builder')
         # Below Town Hall 7 there is no dark elixir, and the gem count moves up to where the Builder Base shows it.
         gems = next(anchor for anchor in builder if 'gem' in anchor['file'])
         self.assertEqual(detector.detect(frame(*low, gems)), 'home')
+
+    def test_the_bundled_stage_two_is_recognised_whatever_army_the_bar_shows(self):
+        config, detector, frame = self.bundled()
+        army = np.random.default_rng(29).integers(0, 256, (140, 1280, 3), dtype=np.uint8)
+        for screen in ('builder_stage2', 'builder_battle2'):
+            image = frame(*config['screens'][screen]['anchors'])
+            image[580:] = army
+            with self.subTest(screen=screen):
+                self.assertEqual(detector.detect(image), screen)
 
     def test_ambiguous_templates_abort(self):
         config = copy.deepcopy(self.config)
