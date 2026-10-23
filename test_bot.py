@@ -495,6 +495,22 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
         self.assertEqual(closed, [1])
 
+    def test_an_update_offer_is_closed_without_updating(self):
+        offer = np.random.default_rng(43).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        anchors = []
+        for number, roi in enumerate(([40, 20, 30, 10], [60, 60, 30, 10])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'update-{number}.png'), offer[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'update-{number}.png'})
+        config = {**self.config, 'screens': {**self.config['screens'],
+                                             'update_offer': {'anchors': anchors, 'actions': {'close': [80, 5]}}}}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, 'update_offer': offer}, 'update_offer')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'home'))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
+        self.assertEqual(device.inputs, [(80, 5)])
+
     def test_an_idle_disconnect_is_reloaded(self):
         idle = np.random.default_rng(41).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []

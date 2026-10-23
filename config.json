@@ -1845,6 +1845,34 @@
           218
         ]
       }
+    },
+    "update_offer": {
+      "anchors": [
+        {
+          "roi": [
+            410,
+            196,
+            460,
+            40
+          ],
+          "file": "calibration/update_offer-title-5f2e4e3d56d540abb963ed4d050775ea.png"
+        },
+        {
+          "roi": [
+            540,
+            440,
+            195,
+            40
+          ],
+          "file": "calibration/update_offer-button-00c5f21cf3354b78aaa2c85022c9c288.png"
+        }
+      ],
+      "actions": {
+        "close": [
+          640,
+          110
+        ]
+      }
     }
   },
   "digits": "calibration/digits",
