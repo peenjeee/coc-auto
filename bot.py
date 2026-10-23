@@ -92,6 +92,7 @@ LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', *MENU_SCREENS)
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
+HUD_ALIGN_PX = 2
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 15, 5
 WHITE_LEVEL = 200
@@ -777,20 +778,47 @@ def digit_mask(image: np.ndarray) -> np.ndarray:
     return np.where(np.isin(labels, aligned), 0, 255).astype(np.uint8)
 
 
+def glyph_canvas(labels: np.ndarray, stats: np.ndarray, index: int) -> np.ndarray:
+    """One component scaled to the fixed glyph height, aspect kept, centred."""
+    x, y, w, h = stats[index, :4]
+    glyph = (labels[y:y + h, x:x + w] == index).astype(np.float32)
+    width = max(1, min(DIGIT_WIDTH, round(w * DIGIT_HEIGHT / h)))
+    canvas = np.zeros((DIGIT_HEIGHT, DIGIT_WIDTH), np.float32)
+    left = (DIGIT_WIDTH - width) // 2
+    canvas[:, left:left + width] = cv2.resize(glyph, (width, DIGIT_HEIGHT), interpolation=cv2.INTER_AREA)
+    return canvas
+
+
 def glyphs(image: np.ndarray) -> list:
     """Loot digits left to right, each scaled to a fixed height with aspect kept."""
     text = (digit_mask(image) == 0).astype(np.uint8)
     count, labels, stats, _ = cv2.connectedComponentsWithStats(text, connectivity=8)
-    result = []
-    for index in sorted(range(1, count), key=lambda i: stats[i, cv2.CC_STAT_LEFT]):
+    return [glyph_canvas(labels, stats, index)
+            for index in sorted(range(1, count), key=lambda i: stats[i, cv2.CC_STAT_LEFT])]
+
+
+def read_trailing_number(image: np.ndarray, templates: dict, min_score: float = DIGIT_MIN_SCORE) -> int:
+    """A right-aligned HUD number: the run of same-size glyphs ending at the right edge. Bars are see-through,
+    so a village label behind one shows up at a different size and is left out."""
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    pale = ((hsv[..., 2] >= OCR_MIN_VALUE) & (hsv[..., 1] <= OCR_MAX_SATURATION)).astype(np.uint8)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(pale, connectivity=8)
+    if count <= 1:
+        raise BotError('Angka tidak terlihat; hentikan tanpa input')
+    tallest = stats[1:, cv2.CC_STAT_HEIGHT].max()
+    tall = [i for i in range(1, count) if stats[i, cv2.CC_STAT_HEIGHT] >= OCR_MIN_HEIGHT_RATIO * tallest]
+    order = sorted(tall, key=lambda i: stats[i, cv2.CC_STAT_LEFT], reverse=True)
+    top, height = stats[order[0], cv2.CC_STAT_TOP], stats[order[0], cv2.CC_STAT_HEIGHT]
+    run = []
+    for index in order:
         x, y, w, h = stats[index, :4]
-        glyph = (labels[y:y + h, x:x + w] == index).astype(np.float32)
-        width = max(1, min(DIGIT_WIDTH, round(w * DIGIT_HEIGHT / h)))
-        canvas = np.zeros((DIGIT_HEIGHT, DIGIT_WIDTH), np.float32)
-        left = (DIGIT_WIDTH - width) // 2
-        canvas[:, left:left + width] = cv2.resize(glyph, (width, DIGIT_HEIGHT), interpolation=cv2.INTER_AREA)
-        result.append(canvas)
-    return result
+        if abs(y - top) > HUD_ALIGN_PX or abs(h - height) > HUD_ALIGN_PX or w > h:
+            break
+        run.append(index)
+    digits = [classify(glyph_canvas(labels, stats, index), templates, min_score) for index in reversed(run)]
+    if not 1 <= len(digits) <= 10 or None in digits:
+        raise BotError('Angka meragukan; hentikan tanpa input')
+    return int(''.join(digits))
 
 
 def storage_fill(image: np.ndarray, bar: dict) -> float:
@@ -1464,7 +1492,7 @@ class Bot:
         return spec['gems']['list' if self.list_open(image) else 'village']
 
     def read_gems(self, image: np.ndarray, spec: dict) -> int:
-        return read_number(crop(image, self.gem_region(image, spec)), self.templates(), FRACTION_MIN_SCORE)
+        return read_trailing_number(crop(image, self.gem_region(image, spec)), self.templates(), FRACTION_MIN_SCORE)
 
     def stable_gems(self, spec: dict) -> int:
         """Gem count once two fresh frames agree; the resource bars slide while the builder list moves."""
@@ -1472,6 +1500,9 @@ class Bot:
 
     def check_gems(self, spec: dict, gems: int) -> None:
         now = self.stable_gems(spec)
+        if now > gems:
+            # Walls never add gems; a higher count is a misread (e.g. a tooltip over the bar) that could hide a drop.
+            raise BotError(f'Gem terbaca naik {gems:,} -> {now:,}; tidak ada upgrade lanjutan')
         if now < gems:
             raise GemSpent(f'Gem turun {gems:,} -> {now:,}; upgrade tembok dihentikan')
 

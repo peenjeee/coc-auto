@@ -565,6 +565,16 @@ class BotTests(unittest.TestCase):
     def test_digit_reader_reads_grouped_number(self):
         self.assertEqual(bot.read_number(self.rendered('504 548'), self.digit_templates()), 504548)
 
+    def test_hud_number_ignores_smaller_text_showing_through_on_its_left(self):
+        image = np.zeros((30, 120, 3), dtype=np.uint8)
+        cv2.putText(image, 'ahl', (2, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+        cv2.putText(image, '1 073', (36, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        templates = self.digit_templates()
+        self.assertEqual(bot.read_trailing_number(image, templates), 1073)
+        self.assertEqual(bot.read_trailing_number(self.rendered('504 548'), templates), 504548)
+        with self.assertRaises(bot.BotError):
+            bot.read_trailing_number(np.zeros((30, 120, 3), dtype=np.uint8), templates)
+
     def test_classify_threshold_is_adjustable(self):
         templates = self.digit_templates()
         glyph = bot.glyphs(self.rendered('7'))[0]
@@ -1191,6 +1201,13 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.GemSpent):
             runner.run_until_full_resilient(0, max_recoveries=3, job=runner.run_walls)
         self.assertEqual(len(attempts), 1)
+
+    def test_a_gem_count_that_reads_higher_stops_without_upgrading(self):
+        spec, _, _ = self.wall_spec()
+        runner, taps = self.wall_runner([('wall_selected', self.priced(spec, {'gold'}))], [25001])
+        with self.assertRaises(bot.BotError):
+            runner.upgrade_wall(spec, 1073)
+        self.assertEqual(taps, [])
 
     def test_wall_row_scrolls_to_the_top_then_down_until_a_row_shows(self):
         spec, _, row = self.wall_spec()
