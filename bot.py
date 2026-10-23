@@ -36,7 +36,7 @@ ACTIONS = {
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',),
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
-    'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',),
+    'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -90,7 +90,7 @@ RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
-OPTIONAL_SCREENS = ('builder_cart', 'search_failed', *MENU_SCREENS)
+OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', *MENU_SCREENS)
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX = 2
 WALL_RESOURCES = ('gold', 'elixir')
@@ -699,6 +699,13 @@ def validate_walls(config: dict, root: Path, villages: tuple) -> None:
         for region in gems.values():
             rectangle(region, resolution)
         integer(spec.get('min_white'), 1, 100_000, 'walls min_white')
+        if 'gold_reserve' in spec:
+            integer(spec['gold_reserve'], 0, 100_000_000, 'walls gold_reserve')
+            hud = spec.get('hud_gold')
+            if not isinstance(hud, dict) or set(hud) != {'list', 'village'}:
+                raise BotError('walls gold_reserve perlu hud_gold list dan village')
+            for region in hud.values():
+                rectangle(region, resolution)
         confirm = spec.get('confirm', {})
         if confirm.get('screen') not in MENU_SCREENS:
             raise BotError('walls confirm screen tidak valid')
@@ -933,6 +940,7 @@ class Bot:
         self.goals = goals if goals is not None else parse_goals(config, None, None, 'builder')
         self.wall_order, self.walls_done = walls, set()
         self.gems_known: int | None = None
+        self.wall_excluded: set = set()
         self.emulator = emulator
         self.emulator_started: float | None = None
         self.detector = Detector(config, root)
@@ -982,6 +990,10 @@ class Bot:
                 self.action(state, 'close')
                 time.sleep(SEARCH_RETRY_SECONDS if self.poll else 0)
                 raise WaitTimeout('Pencarian lawan ditolak server; coba lagi nanti')
+            if state == 'gem_offer' and state not in targets | allowed:
+                # "Buy the missing resources with gems?" Only ever closed with X.
+                self.action(state, 'close')
+                raise WaitTimeout('Resource kurang; tawaran beli dengan gem ditutup tanpa membeli')
             if state not in allowed | {'loading'}:
                 raise BotError(f'Layar tidak diharapkan saat menunggu: {state}')
             time.sleep(self.poll)
@@ -1555,10 +1567,28 @@ class Bot:
     def affordable_button(self, image: np.ndarray, spec: dict) -> tuple | None:
         """(resource, button) of the first upgrade button shown in this layout with a white price."""
         for resource, layouts in spec['buttons'].items():
+            if resource in self.wall_excluded:
+                continue
             button = next((button for button in layouts if self.button_shown(image, button)), None)
             if button and white_pixels(image, button['price']) >= spec['min_white']:
                 return resource, button
         return None
+
+    def hud_gold(self, spec: dict) -> int:
+        regions = spec['hud_gold']
+        return self.read_stable(
+            lambda image: read_trailing_number(crop(image, regions['list' if self.list_open(image) else 'village']),
+                                               self.templates(), FRACTION_MIN_SCORE),
+            GEM_READ_SECONDS if self.poll else 0)
+
+    def confirm_price(self, image: np.ndarray, spec: dict) -> int:
+        return read_trailing_number(crop(image, spec['confirm']['price']), self.templates(), FRACTION_MIN_SCORE)
+
+    def keeps_reserve(self, image: np.ndarray, spec: dict, gold: int, reserve: int) -> bool:
+        try:
+            return gold - self.confirm_price(image, spec) >= reserve
+        except BotError:
+            return False
 
     def button_shown(self, image: np.ndarray, button: dict) -> bool:
         """The upgrade button for a resource exists in this wall's layout (Builder Base walls may be gold-only)."""
@@ -1587,6 +1617,13 @@ class Bot:
         self.check_gems(spec)
         if self.affordable_button(image, spec) is None:
             return False
+        reserve, gold = spec.get('gold_reserve'), None
+        if reserve and 'gold' not in self.wall_excluded:
+            try:
+                gold = self.hud_gold(spec)
+            except BotError:
+                self.wall_excluded.add('gold')
+                return self.upgrade_wall(spec)
         picked = []
 
         def locate(frame: np.ndarray) -> list:
@@ -1609,6 +1646,13 @@ class Bot:
             self.action(dialog, 'close')
             self.wait(after, {dialog}, WALL_TAP_SECONDS)
             return False
+        if resource == 'gold' and reserve and not self.keeps_reserve(image, spec, gold, reserve):
+            # Searching for an opponent costs gold; with none left the game offers to sell it for gems.
+            LOG.info('Gold %s disisakan untuk mencari lawan; tembok berikutnya pakai elixir', f'{reserve:,}')
+            self.action(dialog, 'close')
+            self.wait(after, {dialog}, WALL_TAP_SECONDS)
+            self.wall_excluded.add('gold')
+            return self.upgrade_wall(spec)
         self.action(dialog, 'confirm')
         self.wait(after, {dialog}, WALL_TAP_SECONDS)
         self.check_gems(spec)
@@ -1657,6 +1701,7 @@ class Bot:
         self.wait({village}, set(), 30)
         self.open_build_list(village, spec)
         self.start_gem_watch(spec)
+        self.wall_excluded = set()
         upgraded = 0
         while True:
             self.open_build_list(village, spec)

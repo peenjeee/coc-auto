@@ -1203,6 +1203,37 @@ class BotTests(unittest.TestCase):
             runner.run_until_full_resilient(0, max_recoveries=3, job=runner.run_walls)
         self.assertEqual(len(attempts), 1)
 
+    def test_gold_below_the_search_reserve_is_never_spent_on_walls(self):
+        spec, icons, _ = self.wall_spec()
+        spec['gold_reserve'] = 200_000
+        both = self.priced(spec, {'gold', 'elixir'})
+        frames = [('wall_selected', both), ('wall_confirm', self.confirm_frame(spec, icons['gold'])),
+                  ('wall_selected', both), ('wall_confirm', self.confirm_frame(spec, icons['elixir']))]
+        runner, taps = self.wall_runner(frames, [500, 500, 500])
+        runner.wall_excluded = set()
+        runner.hud_gold = lambda spec: 2_100_000
+        runner.confirm_price = lambda image, spec: 2_000_000
+        self.assertTrue(runner.upgrade_wall(spec))
+        self.assertEqual(taps, [(20, 80), ('wall_confirm', 'close'), (60, 80), ('wall_confirm', 'confirm')])
+        self.assertEqual(runner.wall_excluded, {'gold'})
+
+    def test_a_gem_offer_is_closed_and_never_accepted(self):
+        offer = np.random.default_rng(29).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        anchors = []
+        for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'offer-{number}.png'), offer[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'offer-{number}.png'})
+        config = {**self.config, 'screens': {**self.config['screens'],
+                                             'gem_offer': {'anchors': anchors, 'actions': {'close': [150, 8]}}}}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, 'gem_offer': offer}, 'gem_offer')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'home_menu'))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        with self.assertRaises(bot.WaitTimeout):
+            runner.wait({'home_army'}, {'home_menu'}, 1)
+        self.assertEqual(device.inputs, [(150, 8)])
+
     def test_a_gem_count_that_reads_higher_stops_without_upgrading(self):
         spec, _, _ = self.wall_spec()
         runner, taps = self.wall_runner([('wall_selected', self.priced(spec, {'gold'}))], [25001])

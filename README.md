@@ -153,7 +153,7 @@ The bot never spends gems. It taps an upgrade only when its price is shown in wh
 the dialog is a wall upgrade, its price is white, and its icon is the chosen gold or elixir. It reads the gem count
 before and after every upgrade and keeps the last trusted count across recoveries. A count that drops with the same
 number of digits stops the run for good, without any recovery. A count with other digits or a higher one is treated
-as a misread: nothing is tapped and recovery reads it again. A village needs a
+as a misread: nothing is tapped and recovery reads it again. In the Home Village it also keeps a gold reserve (`walls.home.gold_reserve`, 200,000) for opponent searches, which cost gold: a gold upgrade that would dip below it is closed and that session continues with elixir. A village needs a
 `walls.<village>` calibration before `--walls` accepts it.
 
 ### CLI options — `bot.py`
@@ -273,6 +273,7 @@ How to change it:
 | A menu tap is lost (e.g. right after LDPlayer boots) | Taps the same button again, up to 3 times, while that menu is still shown. The search button is retried for up to 3 minutes to wait out the attack cooldown after a game restart. |
 | A wait times out, or an unrecognised screen passes, with the game still open (slow matchmaking, lag, an animation) | Lets a running battle end or closes the menu, then resumes. Counts as one recovery. |
 | The search is refused ("Tidak dapat menyerang desa! Coba lagi nanti.") | Taps "Ke Beranda", waits a minute, and tries again. Counts as one recovery. |
+| The game offers to buy missing resources with gems ("Perlu lebih banyak …") | Closes it with X, never the gem button, and recovers. |
 | Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
 
 ## Testing
@@ -281,7 +282,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (144 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (146 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

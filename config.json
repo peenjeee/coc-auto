@@ -1552,6 +1552,34 @@
           640
         ]
       }
+    },
+    "gem_offer": {
+      "anchors": [
+        {
+          "roi": [
+            444,
+            188,
+            388,
+            36
+          ],
+          "file": "calibration/gem_offer-title-a4ae48e4d4904e43ac061e9d07f3d7a3.png"
+        },
+        {
+          "roi": [
+            868,
+            186,
+            66,
+            64
+          ],
+          "file": "calibration/gem_offer-close-9af592b14cae4585bb3bd8414bf4b0dd.png"
+        }
+      ],
+      "actions": {
+        "close": [
+          900,
+          218
+        ]
+      }
     }
   },
   "digits": "calibration/digits",
@@ -1950,6 +1978,21 @@
           "gold": "calibration/wall-icon-gold-239c7df7d5f54b5d8e5afdbd3a0caf01.png",
           "elixir": "calibration/wall-icon-elixir-d81a618d1ebb49f095bdb41dd5459204.png"
         }
+      },
+      "gold_reserve": 200000,
+      "hud_gold": {
+        "list": [
+          650,
+          26,
+          230,
+          26
+        ],
+        "village": [
+          1040,
+          26,
+          178,
+          26
+        ]
       }
     },
     "builder": {
