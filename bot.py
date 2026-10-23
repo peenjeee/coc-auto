@@ -1355,7 +1355,7 @@ class Bot:
             if state not in allowed | {'loading'}:
                 raise UnexpectedScreen(f'Layar tidak diharapkan saat menunggu: {state}')
             time.sleep(self.poll)
-        raise WaitTimeout('Timeout; tidak mencoba input pemulihan')
+        raise WaitTimeout(f'Timeout menunggu layar {"/".join(sorted(targets))}; tidak mencoba input pemulihan')
 
     def tap_until(self, state: str, name: str, targets: set, timeout: float, retries: int = TAP_RETRIES) -> str:
         """Tap a menu button and wait; repeat the tap while the same menu is still shown (a lost tap)."""
@@ -1733,6 +1733,17 @@ class Bot:
             except OutOfGold as exc:
                 LOG.warning('%s; serang lawan yang sedang tampil', exc)
                 broke = True
+
+    def game_ready(self) -> bool:
+        """LDPlayer answers over ADB and CoC is in front; a device without these checks counts as ready."""
+        connected = getattr(self.device, 'connected', None)
+        in_front = getattr(self.device, 'game_in_front', None)
+        if connected is None or in_front is None:
+            return True
+        try:
+            return connected() and in_front()
+        except DeviceError:
+            return False
 
     def count_broke_attack(self, broke: bool) -> None:
         """Running out of gold while searching, attack after attack, means no opponent meets the loot minimum on
@@ -2376,13 +2387,9 @@ class Bot:
         """Run job (until-full by default), reopening the game after a crash, closed app or ADB drop."""
         integer(max_recoveries, 0, 1000, 'max_recoveries')
         recoveries, progress = 0, self.progress
-        try:
-            ready = self.device.connected() and self.device.game_in_front()
-        except DeviceError:
-            ready = False
         # The recovery step runs inside the try, so a recovery that fails is retried like any other loss.
         # Started mid-battle or on a result screen, first let the battle end and return to the village.
-        pending = self.settle if ready else self.recover
+        pending = self.settle if self.game_ready() else self.recover
         while True:
             try:
                 if pending:
@@ -2499,6 +2506,10 @@ class Bot:
                 loot = self.reader(image, self.config['screens'][state])
                 LOG.info('Loot=%s; memenuhi filter=%s', loot, meets_minimum(loot, self.config.get('minimum', {})))
             return 0
+        # Like the farming runs, a single attack starts LDPlayer and opens CoC itself when they are not up.
+        if not self.game_ready():
+            LOG.info('CoC belum terbuka; menyalakan LDPlayer/CoC lalu menunggu desa')
+            self.recover()
         self.check_touch()
         completed = 0
         villages = ('home', 'builder') if mode == 'both' else (mode,)

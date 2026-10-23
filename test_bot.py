@@ -2357,6 +2357,28 @@ class BotTests(unittest.TestCase):
             bot.load_config(shared)
         self.assertIn('config.local.json', str(broken.exception))
 
+    def test_a_single_attack_opens_ldplayer_and_coc_first_when_they_are_not_up(self):
+        device = Device(self.frames)
+        device.connected = lambda: True
+        device.game_in_front = lambda: False
+        runner = self.make_bot(device, True)
+        steps = []
+        runner.recover = lambda: steps.append('recover')
+        runner.navigate = lambda village: steps.append('go ' + village)
+        runner.home_attack = lambda searches: steps.append('attack')
+        self.assertEqual(runner.run('home', 1, 0), 1)
+        self.assertEqual(steps, ['recover', 'go home', 'attack'])
+        device.game_in_front = lambda: True
+        steps.clear()
+        runner.run('home', 1, 0)
+        self.assertEqual(steps, ['go home', 'attack'])
+
+    def test_a_timeout_says_which_screen_it_waited_for(self):
+        runner = self.make_bot(Device(self.frames, 'home'), True)
+        with self.assertRaises(bot.WaitTimeout) as waited:
+            runner.wait({'builder'}, {'home'}, 0.01)
+        self.assertIn('builder', str(waited.exception))
+
     def test_a_serial_from_another_ldplayer_instance_is_refused(self):
         # With a mismatch, recovery would quit and relaunch a different instance than the one adb talks to.
         config = {**self.config, 'ldconsole': 'ldconsole.exe', 'ld_index': 1}
