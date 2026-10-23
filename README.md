@@ -185,9 +185,6 @@ elixir is still affordable. It always takes the lowest wall level first, and mov
 farms until gold and elixir are both full, spends them again, and repeats. It stops once no "Tembok" row is left, which means
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
 Elixir Cart first; its walls cost gold only until they reach higher levels, and only the upgrade buttons a wall actually shows are used. Builder Base walls also need a free builder: with every builder busy the game offers to free one for gems, and the bot closes that offer with X and skips the Builder Base walls for that run. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
-
-Not yet seen live: a Builder Base wall upgrade with a free builder (every builder was busy while it was tested). If its confirm dialog does not pass the checks below, it is closed with X and nothing is spent; once storage is full the run stops with "tidak bisa di-upgrade walau gudang penuh" so the calibration can be checked.
-
 The bot never spends gems. It taps an upgrade only when its price is shown in white, and taps Konfirmasi only when
 the dialog is a wall upgrade, its price is white, and its icon is the chosen gold or elixir. It reads the gem count
 before and after every upgrade and keeps the last trusted count across recoveries. A count that drops with the same
