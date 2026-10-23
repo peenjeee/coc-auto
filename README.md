@@ -191,13 +191,13 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--config PATH` | `config.json` | Calibration file to use. |
 | `--mode {home,builder,both}` | `both` | Villages used by `--cycles` runs. |
 | `--cycles N` | `1` | Rounds to attack (1–100). |
-| `--searches N` | `0` | Opponent searches per Home attack; `0` means unlimited. |
+| `--searches N` | `0` | Opponent searches per Home attack; `0` means unlimited. At the limit the base on screen is attacked whatever its loot, so the run never stops for want of a good base. |
 | `--until-full` | off | Attack until gold and elixir are full in both villages. |
 | `--builder RESOURCES` | – | Fill these Builder Base resources (`gold`, `elixir`, `cart`, or `all`). Implies `--until-full`. |
 | `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
 | `--first {builder,home}` | `builder` | Which village to work on first when both are chosen. |
 | `--walls {home,builder,both}` | – | Spend the stored gold and elixir on walls, then farm both full and repeat until every wall is maxed. Never uses gems. |
-| `--max-recoveries N` | `20` | How many times `--until-full` may restart LDPlayer / CoC. |
+| `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 
 Stop at any time with **Ctrl+C**.
@@ -321,13 +321,16 @@ How to change it:
 | All builders are busy when a Builder Base wall is picked ("Semua tukang sibuk!") | Closes the gem offer with X and skips that village's walls; run again once a builder is free. |
 | Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
 
+Every recovery counts towards `--max-recoveries` (20). A finished attack or an upgraded wall starts the count again,
+so the run stops only after that many recoveries with no progress in between.
+
 ## Testing
 
 ```bash
 python -m unittest -v test_bot
 ```
 
-The suite (160 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (161 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

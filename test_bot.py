@@ -165,24 +165,26 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs.count((40, 40)), 6)
         self.assertEqual(device.inputs.count((150, 75)), 1)
 
-    def test_unreadable_loot_never_deploys_and_skips_until_the_search_limit(self):
+    def test_unreadable_loot_is_skipped_until_the_search_limit_attacks_the_base_on_screen(self):
         device = Device(self.frames)
         runner = self.make_bot(device, True)
         runner.reader = lambda image, screen: (_ for _ in ()).throw(bot.BotError('OCR ambiguous'))
         runner.wait_new_scout = lambda image: 'home_scout'
-        with self.assertRaises(bot.BotError):
-            runner.run('home', 1, 3)
-        self.assertNotIn((40, 40), device.inputs)
+        self.assertEqual(runner.run('home', 1, 3), 1)
         self.assertEqual(device.inputs.count((140, 60)), 2)
+        last_next = len(device.inputs) - 1 - device.inputs[::-1].index((140, 60))
+        self.assertGreater(device.inputs.index((40, 40)), last_next)
 
-    def test_search_limit_prevents_unbounded_skipping(self):
+    def test_the_search_limit_attacks_the_base_on_screen_instead_of_stopping(self):
         device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 3)
         runner = self.make_bot(device, True)
         runner.timeout = 1
-        with self.assertRaises(bot.BotError):
-            runner.run('home', 1, 3)
+        with self.assertLogs('bot', level='WARNING') as logs:
+            self.assertEqual(runner.run('home', 1, 3), 1)
         self.assertEqual(device.inputs.count((140, 60)), 2)
-        self.assertNotIn((40, 40), device.inputs)
+        self.assertIn((40, 40), device.inputs)
+        self.assertTrue(any('Batas 3 pencarian' in line for line in logs.output))
+        self.assertEqual(runner.progress, 1)
 
     def test_battle_timeout_does_not_send_recovery_input(self):
         device = Device(self.frames, 'home_battle')
@@ -1071,6 +1073,7 @@ class BotTests(unittest.TestCase):
         attacks = [c[1] for c in calls if c[0] == 'attack']
         self.assertEqual(attacks, ['builder', 'builder', 'home'])
         self.assertEqual(calls[0], ('go', 'builder'))
+        self.assertEqual(runner.progress, 3)
 
     def goal_config(self):
         bar = {'row': 1, 'left': 0, 'right': 10, 'hue': [0, 10], 'min_saturation': 1, 'from': 'left'}
@@ -1309,6 +1312,7 @@ class BotTests(unittest.TestCase):
         runner, taps = self.wall_runner(frames, [500, 500])
         self.assertTrue(runner.upgrade_wall(spec))
         self.assertEqual(taps, [(66, 74), ('wall_confirm', 'confirm')])
+        self.assertEqual(runner.progress, 1)
 
     def test_confirm_with_red_price_or_wrong_icon_is_closed_not_confirmed(self):
         spec, icons, _ = self.wall_spec()
@@ -1687,6 +1691,25 @@ class BotTests(unittest.TestCase):
                 self.assertRaises(bot.WaitTimeout):
             runner.run_until_full_resilient(0, max_recoveries=2)
         self.assertEqual(len(attempts), 3)
+
+    def test_recoveries_are_counted_again_after_the_run_makes_progress(self):
+        device = Device(self.frames)
+        device.game_in_front = lambda: True
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        calls = []
+
+        def stalls_after_attacks(searches):
+            calls.append(searches)
+            if len(calls) <= 5:
+                runner.progress += 1
+            raise bot.WaitTimeout('Timeout; tidak mencoba input pemulihan')
+        runner.run_until_full = stalls_after_attacks
+        with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB + 1), \
+                self.assertRaises(bot.WaitTimeout):
+            runner.run_until_full_resilient(0, max_recoveries=2)
+        # The first five stalls each follow an attack, so the count starts again; two more use up both recoveries.
+        self.assertEqual(len(calls), 7)
 
     def test_unknown_screen_with_the_game_open_is_settled_and_retried(self):
         device = Device(self.frames)

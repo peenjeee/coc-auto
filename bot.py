@@ -1111,6 +1111,8 @@ class Bot:
         self.reader = reader or self.read_loot
         self.cart_full = False
         self.cart_misses, self.cart_lost = 0, False
+        # Attacks finished plus walls upgraded; recoveries are counted again once it moves.
+        self.progress = 0
         self.capacity: dict = {}
 
     def observe(self) -> tuple[str, np.ndarray]:
@@ -1480,9 +1482,8 @@ class Bot:
         # After the game restarts the search button shows a short cooldown; keep tapping until it is available.
         self.tap_until('home_menu', 'find', {'home_army'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
         self.tap_until('home_army', 'attack', {'home_scout'}, 60)
-        attempts = itertools.count() if searches == 0 else range(searches)
         broke = False
-        for attempt in attempts:
+        for attempt in itertools.count(1):
             state, image = self.observe()
             if state != 'home_scout':
                 raise BotError('Scout berubah sebelum OCR')
@@ -1492,8 +1493,12 @@ class Bot:
             except BotError as exc:
                 LOG.warning('Loot lawan tidak terbaca (%s); lewati lawan ini', exc)
                 loot = None
-            # Without gold for another search, the base on screen is attacked; its loot refills the gold.
-            if broke or (loot is not None and meets_minimum(loot, self.config.get('minimum', {}))):
+            passes = loot is not None and meets_minimum(loot, self.config.get('minimum', {}))
+            if attempt == searches and not (passes or broke):
+                LOG.warning('Batas %s pencarian tercapai; serang lawan yang sedang tampil', searches)
+            # Without gold for another search, or at the search limit, the base on screen is attacked instead of
+            # stopping; its loot refills the gold.
+            if passes or broke or attempt == searches:
                 self.deploy('home_scout', {'home_scout', 'home_battle'})
                 if self.wait({'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':
                     LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
@@ -1501,14 +1506,12 @@ class Bot:
                 self.action('home_result', 'return')
                 self.wait({'home'}, {'home_result'}, 30)
                 return
-            if searches == 0 or attempt + 1 < searches:
-                self.action('home_scout', 'next')
-                try:
-                    self.wait_new_scout(image)
-                except OutOfGold as exc:
-                    LOG.warning('%s; serang lawan yang sedang tampil', exc)
-                    broke = True
-        raise BotError('Batas pencarian tercapai; tidak ada serangan')
+            self.action('home_scout', 'next')
+            try:
+                self.wait_new_scout(image)
+            except OutOfGold as exc:
+                LOG.warning('%s; serang lawan yang sedang tampil', exc)
+                broke = True
 
     def collect_cart(self) -> None:
         """Builder elixir comes only from the Elixir Cart: open it, claim, close. Skip if not visible."""
@@ -1696,6 +1699,7 @@ class Bot:
             else:
                 self.builder_attack(collect=False)
             attacks += 1
+            self.progress += 1
             LOG.info('Serangan selesai: %s (%s)', village, attacks)
 
     def list_open(self, image: np.ndarray) -> bool:
@@ -1901,6 +1905,7 @@ class Bot:
         self.action(dialog, 'confirm')
         self.wait(after, {dialog}, WALL_TAP_SECONDS)
         self.check_gems(spec)
+        self.progress += 1
         LOG.info('Tembok di-upgrade dengan %s', resource)
         return True
 
@@ -2054,7 +2059,7 @@ class Bot:
                                  job: Callable | None = None) -> int:
         """Run job (until-full by default), reopening the game after a crash, closed app or ADB drop."""
         integer(max_recoveries, 0, 1000, 'max_recoveries')
-        recoveries = 0
+        recoveries, progress = 0, self.progress
         try:
             ready = self.device.connected() and self.device.game_in_front()
         except DeviceError:
@@ -2069,6 +2074,7 @@ class Bot:
                     step()
                 return (job or self.run_until_full)(searches)
             except (MemoryError, cv2.error) as exc:
+                recoveries, progress = self.recoveries_since(recoveries, progress)
                 if not out_of_memory(exc) or recoveries >= max_recoveries:
                     raise
                 recoveries += 1
@@ -2078,6 +2084,7 @@ class Bot:
                 self.release_touch()
                 pending = self.settle_after_memory
             except BotError as exc:
+                recoveries, progress = self.recoveries_since(recoveries, progress)
                 lost = isinstance(exc, DeviceError)
                 if not lost:
                     try:
@@ -2106,6 +2113,13 @@ class Bot:
                     continue
                 LOG.warning('Game tertutup/terputus (%s); pemulihan %s/%s', exc, recoveries, max_recoveries)
                 pending = self.recover
+
+    def recoveries_since(self, recoveries: int, progress: int) -> tuple[int, int]:
+        """Recoveries since the run last moved on: an attack finished or a wall upgraded since the last recovery starts
+        the count again, so rare stalls spread over a long run do not add up to the limit."""
+        if self.progress != progress:
+            return 0, self.progress
+        return recoveries, progress
 
     def settle_after_memory(self) -> None:
         self.settle()
@@ -2174,6 +2188,7 @@ class Bot:
                 else:
                     self.builder_attack()
                 completed += 1
+                self.progress += 1
                 LOG.info('Serangan selesai: %s (%s)', village, completed)
         return completed
 
@@ -2193,7 +2208,8 @@ def main() -> int:
     parser.add_argument('--config', type=Path, default=Path('config.json'))
     parser.add_argument('--mode', choices=('home', 'builder', 'both'), default='both')
     parser.add_argument('--cycles', type=int, default=1)
-    parser.add_argument('--searches', type=int, default=0, help='Batas pencarian lawan desa asal; 0 = tanpa batas')
+    parser.add_argument('--searches', type=int, default=0,
+                        help='Batas pencarian lawan desa asal; 0 = tanpa batas; di batas itu lawan yang tampil diserang')
     parser.add_argument('--until-full', action='store_true',
                         help='Serang desa yang emas/elixirnya belum penuh; berhenti saat kedua desa penuh')
     parser.add_argument('--builder', metavar='RESOURCES',
@@ -2206,7 +2222,8 @@ def main() -> int:
                         help='Habiskan gold+elixir yang ada untuk upgrade tembok, farming sampai penuh, ulangi '
                              'sampai semua tembok maksimal; tidak pernah memakai gem')
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
-                        help='--until-full: berapa kali boleh membuka ulang CoC setelah crash/DC')
+                        help='--until-full/--walls: batas pemulihan (crash, DC, layar macet) tanpa kemajuan; dihitung '
+                             'ulang setelah serangan selesai atau tembok di-upgrade')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
