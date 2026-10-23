@@ -164,6 +164,10 @@ class UpdateRequired(Exception):
     """The update offer stayed after taps outside it: the game must be updated from the Play Store first."""
 
 
+class LimitReached(Exception):
+    """A --hours/--minutes/--max-upgrades limit was reached between attacks or upgrades; a normal finish."""
+
+
 def integer(value: object, low: int, high: int, label: str) -> int:
     if type(value) is not int or not low <= value <= high:
         raise BotError(f'{label}: perlu integer {low}..{high}')
@@ -1170,10 +1174,13 @@ def ocr_resource(image: np.ndarray, program: str) -> int:
 class Bot:
     def __init__(self, config: dict, root: Path, device: ADB, live: bool = False,
                  reader: Callable | None = None, timeout: float = 240, poll: float = 0.05,
-                 emulator: 'Emulator | None' = None, goals: dict | None = None, walls: tuple = ()) -> None:
+                 emulator: 'Emulator | None' = None, goals: dict | None = None, walls: tuple = (),
+                 minutes: int = 0, max_upgrades: int = 0) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.goals = goals if goals is not None else parse_goals(config, None, None, 'builder')
         self.wall_order, self.walls_done, self.walls_skipped = walls, set(), set()
+        self.stop_at = time.monotonic() + minutes * 60 if minutes else None
+        self.upgrade_limit, self.upgrades_done = max_upgrades or None, 0
         self.gems_known: int | None = None
         self.wall_excluded: set = set()
         self.gems_fresh = False
@@ -1772,6 +1779,7 @@ class Bot:
         self.wait(set(VILLAGES), set(), 30)
         village = next(iter(self.goals))
         while True:
+            self.check_limits()
             self.refresh_if_low_memory()
             self.navigate(village)
             if village == 'builder':
@@ -1793,6 +1801,17 @@ class Bot:
             attacks += 1
             self.progress += 1
             LOG.info('Serangan selesai: %s (%s)', village, attacks)
+
+    def check_limits(self) -> None:
+        """Called only between attacks and upgrades, so a limit never cuts a battle or an upgrade short."""
+        if self.upgrade_limit is not None and self.upgrades_done >= self.upgrade_limit:
+            reason = f'{self.upgrades_done} tembok sudah di-upgrade'
+        elif self.stop_at is not None and time.monotonic() >= self.stop_at:
+            reason = 'batas waktu tercapai'
+        else:
+            return
+        self.close_menus()
+        raise LimitReached(f'Selesai: {reason}; bot berhenti di desa')
 
     def list_open(self, image: np.ndarray) -> bool:
         return self.detector.matches(image, self.detector.templates['build_list'])
@@ -1993,6 +2012,7 @@ class Bot:
             try:
                 gold = self.hud_gold(spec)
             except BotError:
+                LOG.warning('Gold di HUD tidak terbaca; cadangan gold tidak bisa dijaga, tembok pakai elixir saja')
                 self.wall_excluded.add('gold')
                 return self.upgrade_wall(spec)
         picked = []
@@ -2101,6 +2121,7 @@ class Bot:
         self.wall_excluded, self.wall_price = set(), None
         upgraded = 0
         while True:
+            self.check_limits()
             self.open_build_list(village, spec)
             y = self.wall_row(spec)
             if y is None:
@@ -2116,6 +2137,7 @@ class Bot:
                 self.close_menus()
                 return upgraded
             upgraded += 1
+            self.upgrades_done += 1
 
     def run_walls(self, searches: int) -> int:
         """Per village in order: spend gold and elixir on walls, farm both full, repeat until every wall is maxed."""
@@ -2351,6 +2373,12 @@ def main() -> int:
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
                         help='--until-full/--walls: batas pemulihan (crash, DC, layar macet) tanpa kemajuan; dihitung '
                              'ulang setelah serangan selesai atau tembok di-upgrade')
+    parser.add_argument('--hours', type=int, default=0,
+                        help='--until-full/--walls: berhenti setelah sekian jam (bisa digabung --minutes); serangan '
+                             'atau upgrade yang sedang jalan diselesaikan dulu, lalu berhenti di desa')
+    parser.add_argument('--minutes', type=int, default=0, help='Seperti --hours, dalam menit')
+    parser.add_argument('--max-upgrades', type=int, default=0,
+                        help='--walls: berhenti di desa setelah sekian tembok di-upgrade; 0 = tanpa batas')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -2359,8 +2387,16 @@ def main() -> int:
         integer(args.cycles, 1, 100, 'cycles')
         integer(args.searches, 0, 1_000_000, 'searches')
         integer(args.max_recoveries, 0, 1000, 'max_recoveries')
-        config = load_config(args.config)
+        integer(args.hours, 0, 1000, 'hours')
+        integer(args.minutes, 0, 60_000, 'minutes')
+        integer(args.max_upgrades, 0, 100_000, 'max_upgrades')
         until_full = args.until_full or args.builder is not None or args.home is not None
+        minutes = args.hours * 60 + args.minutes
+        if minutes and not (args.walls or (until_full and args.live)):
+            raise BotError('--hours/--minutes hanya untuk --until-full/--builder/--home/--walls dengan --live')
+        if args.max_upgrades and not args.walls:
+            raise BotError('--max-upgrades hanya untuk --walls')
+        config = load_config(args.config)
         if args.walls and until_full:
             raise BotError('--walls tidak bisa digabung dengan --until-full/--builder/--home')
         walls = wall_order(args.walls, args.first) if args.walls else ()
@@ -2379,7 +2415,8 @@ def main() -> int:
         device = ADB(adb, config['serial'], config['resolution'], live=args.live,
                      touch=config.get('touch_device'))
         emulator = Emulator(executable(config['ldconsole'], 'ldconsole'), config.get('ld_index', 0))             if config.get('ldconsole') else None
-        runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals, walls=walls)
+        runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals, walls=walls,
+                     minutes=minutes, max_upgrades=args.max_upgrades)
         if walls:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif until_full and args.live:
@@ -2399,6 +2436,9 @@ def main() -> int:
     except UpdateRequired as exc:
         LOG.error('Berhenti: %s', exc)
         return 5
+    except LimitReached as exc:
+        LOG.info('%s', exc)
+        return 0
     except (BotError, KeyError, TypeError, cv2.error) as exc:
         LOG.error('Berhenti: %s', exc)
         return 1

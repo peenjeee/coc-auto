@@ -436,12 +436,61 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs, [(20, 80)])
 
     def test_bad_numbers_are_refused_before_the_emulator_is_touched(self):
-        for flags in (['--searches', '-1'], ['--max-recoveries', '5000'], ['--cycles', '0']):
+        for flags in (['--searches', '-1'], ['--max-recoveries', '5000'], ['--cycles', '0'], ['--hours', '-1'],
+                      ['--minutes', '-5'], ['--max-upgrades', '5']):
             with patch('sys.argv', ['bot.py', '--until-full', '--live', *flags]), \
                     patch('bot.load_config') as load, patch('bot.ADB') as adb:
                 self.assertEqual(bot.main(), 1)
             load.assert_not_called()
             adb.assert_not_called()
+
+    def test_a_time_limit_needs_a_run_that_repeats(self):
+        with patch('sys.argv', ['bot.py', '--live', '--minutes', '30']), \
+                patch('bot.load_config') as load, patch('bot.ADB') as adb:
+            self.assertEqual(bot.main(), 1)
+        load.assert_not_called()
+        adb.assert_not_called()
+
+    def test_a_time_limit_ends_the_farm_run_after_the_attack_in_progress(self):
+        runner = self.make_bot(Device(self.frames), True)
+        runner.goals = {'home': {'gold', 'elixir'}}
+        attacks, closed = [], []
+        runner.village_done = lambda village, image: False
+        # The limit passes during the first attack; that attack still finishes.
+        runner.home_attack = lambda searches: (attacks.append(1), setattr(runner, 'stop_at', 0))
+        runner.close_menus = lambda: closed.append(1)
+        with self.assertRaises(bot.LimitReached):
+            runner.run_until_full(0)
+        self.assertEqual(attacks, [1])
+        self.assertEqual(closed, [1])
+
+    def test_max_upgrades_ends_the_wall_session_with_the_menus_closed(self):
+        spec, _, _ = self.wall_spec()
+        runner = self.make_bot(Device(self.frames), True)
+        runner.config = {**runner.config, 'walls': {'home': spec}}
+        runner.upgrade_limit = 2
+        upgrades, closed = [], []
+        runner.current_screen = lambda: 'home'
+        runner.wait = lambda targets, allowed, timeout=None: sorted(targets)[0]
+        runner.open_build_list = lambda village, spec: None
+        runner.start_gem_watch = lambda spec: None
+        runner.wall_row = lambda spec: 40
+        runner.guarded_tap = lambda states, location, terminal=None: 'ok'
+        runner.settle_selection = lambda: None
+        runner.upgrade_wall = lambda spec: upgrades.append(1) or True
+        runner.close_menus = lambda: closed.append(1)
+        with self.assertRaises(bot.LimitReached):
+            runner.upgrade_walls('home')
+        self.assertEqual(len(upgrades), 2)
+        self.assertEqual(closed, [1])
+
+    def test_a_reached_limit_is_a_normal_finish(self):
+        with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--max-upgrades', '3']), \
+                patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
+                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as runner:
+            runner.return_value.run_until_full_resilient.side_effect = bot.LimitReached('Selesai')
+            self.assertEqual(bot.main(), 0)
+        self.assertEqual(runner.call_args.kwargs['max_upgrades'], 3)
 
     def test_busy_builders_are_closed_with_x_and_stop_that_village(self):
         busy = np.random.default_rng(43).integers(0, 256, (90, 160, 3), dtype=np.uint8)

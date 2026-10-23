@@ -172,6 +172,12 @@ python bot.py --walls home --live
 ```bash
 python bot.py --walls both --first home --live
 ```
+```bash
+python bot.py --walls home --hours 3 --live
+```
+```bash
+python bot.py --walls home --max-upgrades 20 --minutes 45 --live
+```
 
 `--walls` takes `home`, `builder` or `both`. For each village in turn it first spends the gold and elixir already
 in storage: it opens the builder list, finds a "Tembok" row, and upgrades one wall at a time with whichever of gold or
@@ -200,6 +206,8 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
 | `--first {builder,home}` | `builder` | Which village to work on first when both are chosen. |
 | `--walls {home,builder,both}` | – | Spend the stored gold and elixir on walls, then farm both full and repeat until every wall is maxed. Never uses gems. |
+| `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. |
+| `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded. `0` means no limit. |
 | `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 
@@ -350,7 +358,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot
 ```
 
-The suite (179 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
+The suite (183 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure
