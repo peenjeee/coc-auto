@@ -249,7 +249,7 @@ Every `bot.py` command prints this PC's **API key** (made once, kept in `~/.coc-
 dashboard (open the address it prints in a browser). Enter the key there to follow the terminal log live and control the bot:
 
 - **Local:** `http://localhost:8765`, served by the bot itself (works without internet).
-- **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The PC connects out to a Supabase Realtime channel
+- **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The PC connects out to an online relay channel
   named after a hash of the key, so no router port has to be opened.
 
 You can open the dashboard locally, or online when you are out or away from the PC. For online use, the PC that runs
@@ -311,18 +311,8 @@ as the device or as the dashboard. The key itself never leaves the browser or th
 third-party code. Only the options the CLI offers are accepted. The local dashboard listens on 127.0.0.1 only and
 refuses other sites (Host, Origin and JSON checks). Use `--new-key` if the key was shared by mistake.
 
-Online setup (already done for this repository):
-
-- **Supabase** project `coc-auto` (Realtime with public broadcast channels). Its URL and **publishable key** are in
-  `remote` of `config.json` and in `web/config.js`. The publishable key is meant to be public: it only lets a
-  browser join a channel, while commands and device messages are signed with the device API key. On the free plan
-  Realtime allows 200 connections at once (one per PC running the bot, one per open dashboard) and 2 million
-  messages a month.
-- **Dashboard** `https://coc.0xpnj.dev` serves the `web/` folder with strict security headers (only its own
-  scripts, connections only to the Supabase project).
-
-For your own copy, create a Supabase project, put its URL and publishable key in those two places, host `web/` as a
-static site, and set `remote.dashboard` to its address so the terminal shows it.
+The online relay is already set up (`remote` in `config.json`, and `web/config.js`); there is nothing to configure
+for online use.
 
 ## Calibration
 
@@ -473,7 +463,7 @@ python -m unittest -v test_bot test_remote test_relay test_ldplayer test_device_
 
 The suites (281 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
 deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
-process, the local server, and the relay against a fake Realtime server), and LDPlayer detection against fake tool
+process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
 
 ## Project structure
@@ -481,14 +471,14 @@ output. They do not replace a live run on a real account.
 ```text
 bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
 remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
-relay.py               Supabase Realtime relay for the online dashboard
+relay.py               online relay for the dashboard
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging)
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
-web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own Realtime client, ID/EN text, app manifest, service worker and icons
+web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own relay client, ID/EN text, app manifest, service worker and icons
 calibrate.py           calibration CLI (screenshots only, never taps)
 test_bot.py            offline unit tests
 test_remote.py         dashboard link tests (key, signatures, options, child process, local server)
-test_relay.py          relay tests against a fake Realtime server
+test_relay.py          relay tests against a fake relay server
 test_ldplayer.py       LDPlayer detection tests against fake tool output
 test_device_control.py screen switch tests
 config.json            calibration for the current game UI
