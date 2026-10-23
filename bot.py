@@ -118,6 +118,11 @@ class WaitTimeout(BotError):
     """The expected screen did not appear in time."""
 
 
+class GemUnreadable(WaitTimeout):
+    """The gem count could not be trusted (missing digits, a label or tooltip over the bar); nothing is tapped
+    and recovery reads it again."""
+
+
 class TargetMissing(BotError):
     """Target icon not visible or unsafe to tap; the camera may need another pan."""
 
@@ -927,6 +932,7 @@ class Bot:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.goals = goals if goals is not None else parse_goals(config, None, None, 'builder')
         self.wall_order, self.walls_done = walls, set()
+        self.gems_known: int | None = None
         self.emulator = emulator
         self.emulator_started: float | None = None
         self.detector = Detector(config, root)
@@ -1498,13 +1504,33 @@ class Bot:
         """Gem count once two fresh frames agree; the resource bars slide while the builder list moves."""
         return self.read_stable(lambda image: self.read_gems(image, spec), GEM_READ_SECONDS if self.poll else 0)
 
-    def check_gems(self, spec: dict, gems: int) -> None:
-        now = self.stable_gems(spec)
-        if now > gems:
-            # Walls never add gems; a higher count is a misread (e.g. a tooltip over the bar) that could hide a drop.
-            raise BotError(f'Gem terbaca naik {gems:,} -> {now:,}; tidak ada upgrade lanjutan')
-        if now < gems:
-            raise GemSpent(f'Gem turun {gems:,} -> {now:,}; upgrade tembok dihentikan')
+    def gem_count(self, spec: dict) -> int:
+        try:
+            return self.stable_gems(spec)
+        except BotError as exc:
+            raise GemUnreadable(f'Gem tidak terbaca ({exc}); tidak ada upgrade') from exc
+
+    def compare_gems(self, now: int) -> None:
+        """A count with other digits than the one on record is a misread; the same digits but lower is a drop."""
+        known = self.gems_known
+        if len(str(now)) != len(str(known)):
+            raise GemUnreadable(f'Gem terbaca {now:,}, tercatat {known:,}; dibaca ulang tanpa upgrade')
+        if now < known:
+            raise GemSpent(f'Gem turun {known:,} -> {now:,}; upgrade tembok dihentikan')
+
+    def start_gem_watch(self, spec: dict) -> None:
+        """Each wall session starts from the count on record, kept across recoveries; a top-up raises it."""
+        now = self.gem_count(spec)
+        if self.gems_known is not None:
+            self.compare_gems(now)
+        self.gems_known = now
+
+    def check_gems(self, spec: dict) -> None:
+        now = self.gem_count(spec)
+        self.compare_gems(now)
+        if now > self.gems_known:
+            # Walls never add gems, so a higher count mid-session is a misread that could hide a drop.
+            raise GemUnreadable(f'Gem terbaca naik {self.gems_known:,} -> {now:,}; dibaca ulang tanpa upgrade')
 
     def wall_row(self, spec: dict) -> int | None:
         """y of the first visible 'Tembok' row; scroll the list to its top, then down to its end."""
@@ -1553,12 +1579,12 @@ class Bot:
             return False
         return True
 
-    def upgrade_wall(self, spec: dict, gems: int) -> bool:
+    def upgrade_wall(self, spec: dict) -> bool:
         """Upgrade the selected wall once with gold or elixir; False when neither price is affordable."""
         state, image = self.observe()
         if state != 'wall_selected':
             raise BotError(f'Tembok tidak terpilih: layar {state}')
-        self.check_gems(spec, gems)
+        self.check_gems(spec)
         if self.affordable_button(image, spec) is None:
             return False
         picked = []
@@ -1585,7 +1611,7 @@ class Bot:
             return False
         self.action(dialog, 'confirm')
         self.wait(after, {dialog}, WALL_TAP_SECONDS)
-        self.check_gems(spec, gems)
+        self.check_gems(spec)
         LOG.info('Tembok di-upgrade dengan %s', resource)
         return True
 
@@ -1630,7 +1656,7 @@ class Bot:
             self.collect_cart()
         self.wait({village}, set(), 30)
         self.open_build_list(village, spec)
-        gems = self.stable_gems(spec)
+        self.start_gem_watch(spec)
         upgraded = 0
         while True:
             self.open_build_list(village, spec)
@@ -1645,7 +1671,7 @@ class Bot:
             # After a pick the list may slide shut; let that finish before reading the buttons.
             time.sleep(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
             self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
-            if not self.upgrade_wall(spec, gems):
+            if not self.upgrade_wall(spec):
                 LOG.info('Gold dan elixir %s tidak cukup lagi setelah %s upgrade tembok', village, upgraded)
                 self.close_menus()
                 return upgraded

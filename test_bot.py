@@ -1048,6 +1048,7 @@ class BotTests(unittest.TestCase):
 
     def wall_runner(self, frames, gems, tap_frames=None):
         runner = self.make_bot(Device(self.frames), True)
+        runner.gems_known = 500
         taps = []
         shots = iter(frames)
         counts = iter(gems)
@@ -1083,8 +1084,8 @@ class BotTests(unittest.TestCase):
         frame[70:78, 90:102] = cv2.imread(str(self.root / 'button-gold.png'))
         frames = [('wall_selected', frame), ('wall_confirm', self.confirm_frame(spec, icons['gold'])),
                   ('wall_selected', frame)]
-        runner, taps = self.wall_runner(frames, [100, 100])
-        self.assertTrue(runner.upgrade_wall(spec, 100))
+        runner, taps = self.wall_runner(frames, [500, 500])
+        self.assertTrue(runner.upgrade_wall(spec))
         self.assertEqual(taps, [(100, 80), ('wall_confirm', 'confirm')])
 
     def test_the_upgrade_button_is_found_again_in_the_frame_it_is_tapped_on(self):
@@ -1097,12 +1098,12 @@ class BotTests(unittest.TestCase):
         closed[70:78, 90:102] = cv2.imread(str(self.root / 'button-gold.png'))
         frames = [('wall_selected', self.priced(spec, {'gold'})),
                   ('wall_confirm', self.confirm_frame(spec, icons['gold'])), ('wall_selected', closed)]
-        runner, taps = self.wall_runner(frames, [100, 100], tap_frames=[closed])
-        self.assertTrue(runner.upgrade_wall(spec, 100))
+        runner, taps = self.wall_runner(frames, [500, 500], tap_frames=[closed])
+        self.assertTrue(runner.upgrade_wall(spec))
         self.assertEqual(taps, [(100, 80), ('wall_confirm', 'confirm')])
         frames = [('wall_selected', self.priced(spec, {'gold'}))]
-        runner, taps = self.wall_runner(frames, [100], tap_frames=[self.priced(spec, set())])
-        self.assertFalse(runner.upgrade_wall(spec, 100))
+        runner, taps = self.wall_runner(frames, [500], tap_frames=[self.priced(spec, set())])
+        self.assertFalse(runner.upgrade_wall(spec))
         self.assertEqual(taps, [])
 
     def test_menus_close_layer_by_layer_even_when_the_wall_stays_selected(self):
@@ -1151,15 +1152,15 @@ class BotTests(unittest.TestCase):
 
     def test_wall_is_not_touched_when_no_price_is_affordable(self):
         spec, _, _ = self.wall_spec()
-        runner, taps = self.wall_runner([('wall_selected', self.priced(spec, set()))], [100])
-        self.assertFalse(runner.upgrade_wall(spec, 100))
+        runner, taps = self.wall_runner([('wall_selected', self.priced(spec, set()))], [500])
+        self.assertFalse(runner.upgrade_wall(spec))
         self.assertEqual(taps, [])
 
     def test_a_button_missing_from_the_layout_is_never_tapped(self):
         spec, _, _ = self.wall_spec()
         frame = self.priced(spec, {'gold', 'elixir'}, shown=())
-        runner, taps = self.wall_runner([('wall_selected', frame)], [100])
-        self.assertFalse(runner.upgrade_wall(spec, 100))
+        runner, taps = self.wall_runner([('wall_selected', frame)], [500])
+        self.assertFalse(runner.upgrade_wall(spec))
         self.assertEqual(taps, [])
 
     def test_wall_is_upgraded_with_an_affordable_resource_after_a_safe_confirm(self):
@@ -1167,8 +1168,8 @@ class BotTests(unittest.TestCase):
         frames = [('wall_selected', self.priced(spec, {'elixir'})),
                   ('wall_confirm', self.confirm_frame(spec, icons['elixir'])),
                   ('wall_selected', self.priced(spec, {'elixir'}))]
-        runner, taps = self.wall_runner(frames, [100, 100])
-        self.assertTrue(runner.upgrade_wall(spec, 100))
+        runner, taps = self.wall_runner(frames, [500, 500])
+        self.assertTrue(runner.upgrade_wall(spec))
         self.assertEqual(taps, [(60, 80), ('wall_confirm', 'confirm')])
 
     def test_confirm_with_red_price_or_wrong_icon_is_closed_not_confirmed(self):
@@ -1176,22 +1177,22 @@ class BotTests(unittest.TestCase):
         for confirm in (self.confirm_frame(spec, icons['elixir'], white=False),
                         self.confirm_frame(spec, icons['gold'])):
             frames = [('wall_selected', self.priced(spec, {'elixir'})), ('wall_confirm', confirm)]
-            runner, taps = self.wall_runner(frames, [100])
-            self.assertFalse(runner.upgrade_wall(spec, 100))
+            runner, taps = self.wall_runner(frames, [500])
+            self.assertFalse(runner.upgrade_wall(spec))
             self.assertEqual(taps, [(60, 80), ('wall_confirm', 'close')])
 
     def test_gem_drop_stops_wall_upgrades_for_good(self):
         spec, icons, _ = self.wall_spec()
-        runner, taps = self.wall_runner([('wall_selected', self.priced(spec, {'gold'}))], [99])
+        runner, taps = self.wall_runner([('wall_selected', self.priced(spec, {'gold'}))], [499])
         with self.assertRaises(bot.GemSpent):
-            runner.upgrade_wall(spec, 100)
+            runner.upgrade_wall(spec)
         self.assertEqual(taps, [])
         frames = [('wall_selected', self.priced(spec, {'gold'})),
                   ('wall_confirm', self.confirm_frame(spec, icons['gold'])),
                   ('wall_selected', self.priced(spec, {'gold'}))]
-        runner, taps = self.wall_runner(frames, [100, 98])
+        runner, taps = self.wall_runner(frames, [500, 498])
         with self.assertRaises(bot.GemSpent):
-            runner.upgrade_wall(spec, 100)
+            runner.upgrade_wall(spec)
         device = Device(self.frames)
         device.connected = device.game_in_front = lambda: True
         runner = self.make_bot(device, True)
@@ -1205,9 +1206,33 @@ class BotTests(unittest.TestCase):
     def test_a_gem_count_that_reads_higher_stops_without_upgrading(self):
         spec, _, _ = self.wall_spec()
         runner, taps = self.wall_runner([('wall_selected', self.priced(spec, {'gold'}))], [25001])
-        with self.assertRaises(bot.BotError):
-            runner.upgrade_wall(spec, 1073)
+        runner.gems_known = 1073
+        with self.assertRaises(bot.GemUnreadable):
+            runner.upgrade_wall(spec)
         self.assertEqual(taps, [])
+
+    def test_a_gem_count_with_missing_digits_is_read_again_not_an_emergency(self):
+        spec, _, _ = self.wall_spec()
+        runner, taps = self.wall_runner([('wall_selected', self.priced(spec, {'gold'}))], [73])
+        runner.gems_known = 1073
+        with self.assertRaises(bot.GemUnreadable):
+            runner.upgrade_wall(spec)
+        self.assertEqual(taps, [])
+        self.assertTrue(issubclass(bot.GemUnreadable, bot.WaitTimeout))
+
+    def test_each_wall_session_must_match_the_gem_count_on_record(self):
+        spec, _, _ = self.wall_spec()
+        runner = self.make_bot(Device(self.frames), True)
+        reads = iter([1073, 1080, 73, 1070])
+        runner.read_gems = lambda image, spec: next(reads)
+        runner.start_gem_watch(spec)
+        self.assertEqual(runner.gems_known, 1073)
+        runner.start_gem_watch(spec)
+        self.assertEqual(runner.gems_known, 1080)
+        with self.assertRaises(bot.GemUnreadable):
+            runner.start_gem_watch(spec)
+        with self.assertRaises(bot.GemSpent):
+            runner.start_gem_watch(spec)
 
     def test_wall_row_scrolls_to_the_top_then_down_until_a_row_shows(self):
         spec, _, row = self.wall_spec()

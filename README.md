@@ -151,7 +151,9 @@ Elixir Cart first; its walls cost gold only until they reach higher levels, and 
 
 The bot never spends gems. It taps an upgrade only when its price is shown in white, and taps Konfirmasi only when
 the dialog is a wall upgrade, its price is white, and its icon is the chosen gold or elixir. It reads the gem count
-before and after every upgrade and stops for good, without any recovery, if the count drops. A village needs a
+before and after every upgrade and keeps the last trusted count across recoveries. A count that drops with the same
+number of digits stops the run for good, without any recovery. A count with other digits or a higher one is treated
+as a misread: nothing is tapped and recovery reads it again. A village needs a
 `walls.<village>` calibration before `--walls` accepts it.
 
 ### CLI options — `bot.py`
@@ -279,7 +281,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (142 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (144 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure
