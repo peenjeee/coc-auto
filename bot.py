@@ -37,7 +37,7 @@ ACTIONS = {
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',),
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
     'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
-    'idle': ('reload',), 'builders_busy': ('close',), 'update_offer': ('close',),
+    'idle': ('reload',), 'builders_busy': ('close',), 'update_offer': ('close',), 'disconnected': ('retry',),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -80,8 +80,11 @@ RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
 POPUP_ACTIONS = {'star_bonus': 'ok', 'builder_star_bonus': 'ok', 'reward_chest': 'open', 'reward_card': 'continue',
                  'layout_blocked': 'ok', 'league': 'close', 'welcome': 'ok', 'idle': 'reload',
                  # "Pembaruan Tersedia!": a tap outside the box closes it; the update button is never tapped.
-                 'update_offer': 'close'}
+                 'update_offer': 'close', 'disconnected': 'retry'}
 POPUPS = tuple(POPUP_ACTIONS)
+# A retry with the network still down brings the dialog straight back, so give it time between tries.
+POPUP_PAUSE_SECONDS = {'update_offer': 2, 'disconnected': 10}
+UPDATE_CLOSE_ATTEMPTS = 3
 POPUP_CLEAR_ATTEMPTS = 3
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
@@ -155,6 +158,10 @@ class OtherDevice(Exception):
 
 class GemSpent(Exception):
     """The gem count dropped during wall upgrades; never recovered, the run stops at once."""
+
+
+class UpdateRequired(Exception):
+    """The update offer stayed after taps outside it: the game must be updated from the Play Store first."""
 
 
 def integer(value: object, low: int, high: int, label: str) -> int:
@@ -1181,6 +1188,7 @@ class Bot:
         self.cart_misses, self.cart_lost = 0, False
         # Attacks finished plus walls upgraded; recoveries are counted again once it moves.
         self.progress = 0
+        self.update_taps = 0
         self.capacity: dict = {}
 
     def observe(self) -> tuple[str, np.ndarray]:
@@ -1188,6 +1196,10 @@ class Bot:
         state = self.detector.detect(image)
         if state == 'other_device':
             raise OtherDevice('Akun dibuka di perangkat lain; bot berhenti tanpa memuat ulang')
+        if state != 'update_offer':
+            self.update_taps = 0
+        elif self.update_taps >= UPDATE_CLOSE_ATTEMPTS:
+            raise UpdateRequired('CoC wajib di-update; update dulu lewat Play Store lalu jalankan bot lagi')
         return state, image
 
     def read_loot(self, image: np.ndarray, screen: dict) -> dict:
@@ -1218,6 +1230,7 @@ class Bot:
                     self.action(state, POPUP_ACTIONS[state])
                 except BotError:
                     LOG.info('Popup %s sudah tertutup sendiri', state)
+                time.sleep(POPUP_PAUSE_SECONDS.get(state, 0) if self.poll else 0)
                 continue
             if state == 'builder_cart' and state not in targets | allowed:
                 self.action(state, 'close')
@@ -1317,6 +1330,8 @@ class Bot:
         target = screen.get('targets', {}).get(name)
         if target is None:
             self.guarded_tap({state}, screen['actions'][name])
+            if state == 'update_offer':
+                self.update_taps += 1
             return
         def locate(image: np.ndarray) -> list:
             return self.locate_target(image, target)
@@ -2381,6 +2396,9 @@ def main() -> int:
     except OtherDevice as exc:
         LOG.warning('%s', exc)
         return 4
+    except UpdateRequired as exc:
+        LOG.error('Berhenti: %s', exc)
+        return 5
     except (BotError, KeyError, TypeError, cv2.error) as exc:
         LOG.error('Berhenti: %s', exc)
         return 1

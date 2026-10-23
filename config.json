@@ -1873,6 +1873,40 @@
           110
         ]
       }
+    },
+    "disconnected": {
+      "anchors": [
+        {
+          "roi": [
+            284,
+            276,
+            282,
+            32
+          ],
+          "file": "calibration/disconnected-title-5aff079c63124cdead90c42f6d8d7fc5.png"
+        },
+        {
+          "roi": [
+            284,
+            326,
+            450,
+            28
+          ],
+          "file": "calibration/disconnected-text-84847c41ae1440d38389da336bfc4886.png"
+        }
+      ],
+      "overrides": [
+        "home",
+        "builder",
+        "build_list",
+        "wall_selected"
+      ],
+      "actions": {
+        "retry": [
+          336,
+          436
+        ]
+      }
     }
   },
   "digits": "calibration/digits",

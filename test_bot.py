@@ -495,21 +495,39 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
         self.assertEqual(closed, [1])
 
-    def test_an_update_offer_is_closed_without_updating(self):
-        offer = np.random.default_rng(43).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+    def popup(self, name, seed, actions, closes=True):
+        """A runner whose game shows the named popup; a tap closes it to the village unless closes is False."""
+        frame = np.random.default_rng(seed).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
         for number, roi in enumerate(([40, 20, 30, 10], [60, 60, 30, 10])):
             x, y, w, h = roi
-            cv2.imwrite(str(self.root / f'update-{number}.png'), offer[y:y+h, x:x+w])
-            anchors.append({'roi': roi, 'file': f'update-{number}.png'})
-        config = {**self.config, 'screens': {**self.config['screens'],
-                                             'update_offer': {'anchors': anchors, 'actions': {'close': [80, 5]}}}}
+            cv2.imwrite(str(self.root / f'{name}-{number}.png'), frame[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'{name}-{number}.png'})
+        config = {**self.config, 'screens': {**self.config['screens'], name: {'anchors': anchors, 'actions': actions}}}
         bot.validate_config(config, self.root, 'both')
-        device = Device({**self.frames, 'update_offer': offer}, 'update_offer')
-        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'home'))
-        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        device = Device({**self.frames, name: frame}, name)
+        device.connected = device.game_in_front = lambda: True
+        device.tap = lambda point: (device.inputs.append(tuple(point)),
+                                    setattr(device, 'state', 'home' if closes else name))
+        return bot.Bot(config, self.root, device, live=True, timeout=1, poll=0), device
+
+    def test_an_update_offer_is_closed_without_updating(self):
+        runner, device = self.popup('update_offer', 43, {'close': [80, 5]})
         self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
         self.assertEqual(device.inputs, [(80, 5)])
+
+    def test_an_update_offer_that_stays_stops_the_run_asking_for_an_update(self):
+        runner, device = self.popup('update_offer', 43, {'close': [80, 5]}, closes=False)
+        with self.assertRaises(bot.UpdateRequired):
+            runner.wait({'home'}, set(), 1)
+        self.assertEqual(device.inputs, [(80, 5)] * bot.UPDATE_CLOSE_ATTEMPTS)
+        with self.assertRaises(bot.UpdateRequired):
+            runner.run_until_full_resilient(0, max_recoveries=3)
+
+    def test_a_lost_server_connection_is_retried(self):
+        runner, device = self.popup('disconnected', 47, {'retry': [30, 70]})
+        self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
+        self.assertEqual(device.inputs, [(30, 70)])
 
     def test_an_idle_disconnect_is_reloaded(self):
         idle = np.random.default_rng(41).integers(0, 256, (90, 160, 3), dtype=np.uint8)
