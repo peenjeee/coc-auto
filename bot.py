@@ -92,7 +92,7 @@ LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', *MENU_SCREENS)
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
-HUD_ALIGN_PX = 2
+HUD_ALIGN_PX, HUD_GAP_RATIO = 2, 1.2
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 15, 5
 WHITE_LEVEL = 200
@@ -829,6 +829,9 @@ def read_trailing_number(image: np.ndarray, templates: dict, min_score: float = 
     for index in order:
         x, y, w, h = stats[index, :4]
         if abs(y - top) > HUD_ALIGN_PX or abs(h - height) > HUD_ALIGN_PX or w > h:
+            continue
+        # A thousands gap is narrower than a digit is tall; anything further left belongs to something else.
+        if run and stats[run[-1], cv2.CC_STAT_LEFT] - (x + w) > HUD_GAP_RATIO * height:
             break
         run.append(index)
     digits = [classify(glyph_canvas(labels, stats, index), templates, min_score) for index in reversed(run)]

@@ -572,6 +572,10 @@ class BotTests(unittest.TestCase):
         templates = self.digit_templates()
         self.assertEqual(bot.read_trailing_number(image, templates), 1073)
         self.assertEqual(bot.read_trailing_number(self.rendered('504 548'), templates), 504548)
+        speck = np.zeros((30, 120, 3), dtype=np.uint8)
+        cv2.putText(speck, '1  073', (20, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        speck[12:22, 38:42] = 255
+        self.assertEqual(bot.read_trailing_number(speck, templates), 1073)
         with self.assertRaises(bot.BotError):
             bot.read_trailing_number(np.zeros((30, 120, 3), dtype=np.uint8), templates)
 
