@@ -23,6 +23,7 @@ import time
 from typing import Callable
 from urllib.parse import parse_qs, urlsplit
 
+from device_control import DeviceActions, SettingRefused
 import ldplayer
 
 HERE = Path(__file__).resolve().parent
@@ -44,15 +45,12 @@ AGENT_SIGNATURE_PREFIX = 'agent:'
 
 KEY_PREFIX = 'coc_'
 KEY_FILE = Path('.coc-auto') / 'device.json'
-DISPLAY_FILE = Path('.coc-auto') / 'display.json'
-LD_STOP_SECONDS, LD_SETTLE_SECONDS = 30, 2
-DISPLAY_LIMITS = {'width': (320, 7680), 'height': (240, 4320), 'dpi': (72, 640)}
 COMMAND_MAX_AGE_SECONDS = 120
 # Settings action -> its answer code; every one answers with the settings as they are now (or what was found).
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
                     'set_setup': 'setup_saved'}
 ACTIONS = ('start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
-           'capture_deploy', 'fit_display', 'restore_display', *SETTINGS_ACTIONS)
+           'fit_display', 'restore_display', 'fit_language', 'restore_language', *SETTINGS_ACTIONS)
 VILLAGE_CHOICES = ('home', 'builder', 'both')
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
 # Option name, CLI flag, range; zero means "no limit" and is left out, except for recoveries.
@@ -68,8 +66,6 @@ TASK_OPTIONS = {
 DEPLOY_POINTS = {'home_scout': 'spells', 'builder_scout': 'points', 'builder_stage2': 'points'}
 # The deploy editor's sample maps, one real attack screen per deploy screen.
 MAP_FILES = {f'/maps/{name}.jpg': f'maps/{name}.jpg' for name in DEPLOY_POINTS}
-# A battle screen shows the same map as its deploy screen once the scout timer has run out.
-BATTLE_MAPS = {'home_battle': 'home_scout', 'builder_battle': 'builder_scout', 'builder_battle2': 'builder_stage2'}
 MAX_DEPLOY_POINTS = {'spells': 30, 'points': 20}
 SNAPSHOT_SIZE, SNAPSHOT_QUALITY = (640, 360), 70
 MINIMUM_KEYS, MAX_MINIMUM = ('gold', 'elixir', 'dark'), 999_999_999
@@ -217,124 +213,6 @@ def build_args(options: dict) -> list[str]:
     return args + ['--live']
 
 
-class Display:
-    """Puts the LDPlayer instance on the screen the bot was calibrated on (resolution and DPI) and back on the
-    user's own. The user's screen is kept in ~/.coc-auto/display.json until it is put back, and only the first one
-    is kept, so switching twice never loses it. LDPlayer reads its config when it starts and writes it when it
-    quits, so the file is changed only while the instance is off."""
-
-    def __init__(self, config_path: Path, store: Path | None = None, sleep: Callable[[float], None] = time.sleep,
-                 emulator: Callable | None = None) -> None:
-        self.config_path, self.store = config_path, store or Path.home() / DISPLAY_FILE
-        self.sleep, self.make_emulator = sleep, emulator
-
-    def instance(self) -> tuple:
-        import bot
-        config = bot.load_config(self.config_path)
-        console, index = bot.executable(config.get('ldconsole'), 'ldconsole'), config.get('ld_index', 0)
-        path = ldplayer.instance_config(console, index)
-        if not path.is_file():
-            raise CommandRefused(f'config LDPlayer tidak ditemukan: {path}')
-        width, height = config['resolution']
-        target = {'width': width, 'height': height, 'dpi': config.get('dpi', ldplayer.CALIBRATED_DPI)}
-        return (self.make_emulator or bot.Emulator)(console, index), path, target
-
-    def saved(self) -> dict | None:
-        try:
-            data = json.loads(self.store.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            return None
-        return data if isinstance(data, dict) else None
-
-    def status(self) -> dict:
-        _, path, target = self.instance()
-        return {'current': ldplayer.read_display(path), 'target': target, 'saved': self.saved() is not None}
-
-    def fit(self) -> bool:
-        """False when the screen already fits; otherwise LDPlayer is restarted on the calibrated screen. ADB
-        debugging is opened on the way, since the bot cannot reach LDPlayer without it; a restore leaves it open."""
-        emulator, path, target = self.instance()
-        current = ldplayer.read_display(path)
-        if current == target and ldplayer.adb_debug(path) != 0:
-            return False
-        if self.saved() is None and current != target:
-            self.store.parent.mkdir(parents=True, exist_ok=True)
-            self.store.write_text(json.dumps({'path': str(path), 'display': current}), encoding='utf-8')
-        self.rewrite(emulator, path, target, relaunch=True, adb_debug=1)
-        return True
-
-    def restore(self) -> bool:
-        """False when nothing was switched; LDPlayer is started again only if it was on."""
-        saved = self.saved()
-        if saved is None:
-            return False
-        display = saved.get('display')
-        if (not isinstance(saved.get('path'), str) or not isinstance(display, dict) or set(display) != set(DISPLAY_LIMITS)
-                or not all(isinstance(display[name], int) and not isinstance(display[name], bool)
-                           and low <= display[name] <= high for name, (low, high) in DISPLAY_LIMITS.items())):
-            raise CommandRefused(f'setelan layar tersimpan rusak; atur layar LDPlayer manual ({self.store})')
-        emulator, path, _ = self.instance()
-        if Path(saved['path']) != path:
-            raise CommandRefused(f'setelan layar tersimpan untuk instance lain ({saved["path"]})')
-        self.rewrite(emulator, path, display, relaunch=emulator.running())
-        self.store.unlink()
-        return True
-
-    def rewrite(self, emulator, path: Path, display: dict, relaunch: bool, adb_debug: int | None = None) -> None:
-        if emulator.running():
-            emulator.quit()
-            for _ in range(LD_STOP_SECONDS):
-                if not emulator.running():
-                    break
-                self.sleep(1)
-            else:
-                raise CommandRefused('LDPlayer tidak berhenti; tutup manual lalu coba lagi')
-            self.sleep(LD_SETTLE_SECONDS)  # LDPlayer writes its own config as it closes
-        ldplayer.write_display(path, display, adb_debug)
-        if relaunch:
-            emulator.launch()
-
-
-class DeviceActions:
-    """CoC and LDPlayer controls for the dashboard, through the adb and ldconsole set in config.json."""
-
-    def __init__(self, config_path: Path, display: Display | None = None) -> None:
-        self.config_path, self.display = config_path, display or Display(config_path)
-
-    def fit_display(self) -> bool:
-        return self.display.fit()
-
-    def restore_display(self) -> bool:
-        return self.display.restore()
-
-    def display_status(self) -> dict:
-        return self.display.status()
-
-    def adb(self):
-        import bot
-        config = bot.load_config(self.config_path)
-        return bot.ADB(bot.executable(config.get('adb'), 'ADB'), config['serial'], config['resolution'], live=True,
-                       touch=config.get('touch_device'))
-
-    def emulator(self):
-        import bot
-        config = bot.load_config(self.config_path)
-        return bot.Emulator(bot.executable(config.get('ldconsole'), 'ldconsole'), config.get('ld_index', 0))
-
-    def open_coc(self) -> None:
-        import bot
-        self.adb().launch(bot.GAME_ACTIVITY)
-
-    def close_coc(self) -> None:
-        self.adb().stop_game()
-
-    def kill_ld(self) -> None:
-        self.emulator().quit()
-
-    def launch_ld(self) -> None:
-        self.emulator().launch()
-
-
 def pin(value: object, width: int, bottom: int) -> list[int]:
     """One deploy point: whole pixels on the battlefield, above the card bar."""
     if (not isinstance(value, list) or len(value) != 2
@@ -350,35 +228,9 @@ class DeployPoints:
     """The deploy pins of config.json for the dashboard: read with the last screenshot of each deploy screen,
     and written back only after the checks bot.py makes on a calibration."""
 
-    def __init__(self, config_path: Path, captures: Path, root: Path | None = None,
-                 screen: Callable[[], tuple] | None = None) -> None:
+    def __init__(self, config_path: Path, captures: Path, root: Path | None = None) -> None:
         self.config_path, self.captures = config_path, captures
         self.root = root or config_path.parent
-        self.screen = screen or self.screen_now
-
-    def screen_now(self) -> tuple:
-        """The device's screen and which calibrated screen it is; only a screenshot, never a tap."""
-        import bot
-        config = bot.load_config(self.config_path)
-        device = bot.ADB(bot.executable(config.get('adb'), 'ADB'), config['serial'], config['resolution'])
-        image = device.capture()
-        try:
-            return image, bot.Detector(config, self.root).detect(image)
-        except bot.BotError as exc:
-            raise CommandRefused(f'layar sekarang tidak dikenali ({exc})') from exc
-
-    def capture(self) -> str:
-        """Keep the screen on the device now as its deploy screen's background, for an accurate map."""
-        import cv2
-        image, name = self.screen()
-        name = BATTLE_MAPS.get(name, name)
-        if name not in DEPLOY_POINTS:
-            raise CommandRefused(f'layar sekarang "{name}", bukan layar deploy; buka layar pilih titik serangan '
-                                 '(desa asal saat lawan tampil, atau desa malam tahap 1/2) lalu coba lagi')
-        self.captures.mkdir(parents=True, exist_ok=True)
-        if not cv2.imwrite(str(self.captures / f'deploy-{name}.jpg'), image, [cv2.IMWRITE_JPEG_QUALITY, 80]):
-            raise CommandRefused('screenshot tidak bisa disimpan di folder captures')
-        return name
 
     def config(self) -> dict:
         import bot
@@ -600,7 +452,7 @@ class Supervisor:
                 result['data'] = data
         except Unsigned as exc:
             return {'ok': False, 'code': 'unsigned', 'message': str(exc)}
-        except CommandRefused as exc:
+        except (CommandRefused, SettingRefused) as exc:
             text = str(exc)
             result = {'ok': False, 'code': 'refused',
                       'message': text if text.startswith('Perintah ditolak') else f'Perintah ditolak: {text}'}
@@ -624,18 +476,15 @@ class Supervisor:
         if action == 'open_coc':
             self.device.open_coc()
             return 'coc_opened', 'CoC dibuka', None
-        if action in ('get_deploy', 'set_deploy', 'capture_deploy'):
+        if action in ('get_deploy', 'set_deploy'):
             if self.deploy is None:
                 raise CommandRefused('titik deploy tidak tersedia di perangkat ini')
             if action == 'set_deploy':
                 self.deploy.write(options.get('screen'), options.get('deploy'), options.get('points'))
                 return 'deploy_saved', 'Titik deploy disimpan; berlaku saat Start berikutnya', None
-            captured = self.deploy.capture() if action == 'capture_deploy' else None
             data = self.deploy.read()
             for shot in self.deploy.snapshots():
                 self.publish('snapshot', shot)
-            if captured:
-                return 'deploy_captured', f'Layar {captured} diambil sebagai peta titik deploy', {**data, 'captured': captured}
             return 'deploy_loaded', 'Titik deploy dimuat', data
         if action in SETTINGS_ACTIONS:
             return self.configure(action, options)
@@ -652,6 +501,14 @@ class Supervisor:
             if self.device.restore_display():
                 return 'display_restored', 'Layar LDPlayer dikembalikan ke setelan semula', self.display_data()
             return 'display_unchanged', 'Tidak ada setelan layar yang perlu dikembalikan', self.display_data()
+        if action == 'fit_language':
+            if self.device.fit_language():
+                return 'language_fitted', 'Bahasa CoC diubah ke Indonesia; CoC dibuka ulang', self.language_data()
+            return 'language_ok', 'Bahasa CoC sudah Indonesia', self.language_data()
+        if action == 'restore_language':
+            if self.device.restore_language():
+                return 'language_restored', 'Bahasa CoC dikembalikan ke setelan semula', self.language_data()
+            return 'language_unchanged', 'Tidak ada setelan bahasa yang perlu dikembalikan', self.language_data()
         self.device.kill_ld()
         if action == 'kill_ld':
             return 'ld_off', 'Bot dihentikan dan LDPlayer dimatikan', None
@@ -675,14 +532,21 @@ class Supervisor:
             message = 'Pengaturan LDPlayer disimpan; berlaku saat Start berikutnya'
         else:
             message = 'Pengaturan dimuat'
-        return code, message, {**self.settings.read(), 'display': self.display_data()}
+        return code, message, {**self.settings.read(), 'display': self.display_data(), 'language': self.language_data()}
 
     def display_data(self) -> dict | None:
-        """The LDPlayer screen for the settings panel; None when it cannot be read (no ldconsole, other layout)."""
+        return self.status_of(self.device.display_status, 'layar LDPlayer')
+
+    def language_data(self) -> dict | None:
+        return self.status_of(self.device.language_status, 'bahasa CoC')
+
+    def status_of(self, read: Callable[[], dict], what: str) -> dict | None:
+        """The screen or language for the settings panel; None when it cannot be read (LDPlayer off, no
+        ldconsole, Android without per-app languages)."""
         try:
-            return self.device.display_status()
-        except Exception as exc:  # The rest of the settings still load; the panel shows the screen as unknown.
-            self.log(f'REMOTE: layar LDPlayer tidak terbaca ({exc})')
+            return read()
+        except Exception as exc:  # The rest of the settings still load; the panel shows it as unknown.
+            self.log(f'REMOTE: {what} tidak terbaca ({exc})')
             return None
 
 
@@ -824,14 +688,17 @@ def show_key(config_path: Path, renew: bool = False, home: Path | None = None) -
 
 
 def leave(supervisor: Supervisor) -> None:
-    """Done with the bot: stop it and give LDPlayer back the screen the user had before the dashboard switched it."""
+    """Done with the bot: stop it and give back the language and screen the user had before the dashboard switched
+    them. The language goes first, while LDPlayer still runs; putting the screen back restarts LDPlayer."""
     supervisor.log('REMOTE: keluar (Ctrl+C)')
     supervisor.stop()
-    try:
-        if supervisor.device.restore_display():
-            supervisor.log('REMOTE: layar LDPlayer dikembalikan ke setelan semula')
-    except Exception as exc:  # Leaving must not fail; the saved screen stays for the next run.
-        supervisor.log(f'REMOTE: layar LDPlayer belum dikembalikan ({exc}); pakai tombol di dashboard nanti')
+    for restore, what in ((supervisor.device.restore_language, 'bahasa CoC'),
+                          (supervisor.device.restore_display, 'layar LDPlayer')):
+        try:
+            if restore():
+                supervisor.log(f'REMOTE: {what} dikembalikan ke setelan semula')
+        except Exception as exc:  # Leaving must not fail; the saved setting stays for the next run.
+            supervisor.log(f'REMOTE: {what} belum dikembalikan ({exc}); pakai tombol di dashboard nanti')
 
 
 def supervise(job: list[str], config_path: Path, renew_key: bool = False) -> int:

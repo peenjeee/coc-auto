@@ -279,9 +279,7 @@ Recovery and `settle` work as before: the task runs as a child process (`--worke
 
 **Deploy points:** the deploy pins of the Home Village and both Builder Base stages are loaded when the dashboard
 connects and drawn over a real attack screen of each (`web/maps/`), or over the last screenshot the bot took of
-that deploy screen on this PC (taken while attacking, kept in `captures/`). For a map
-without attacking, open the deploy screen in LDPlayer yourself and press "take screen now": the bot takes one
-screenshot (no tap), recognises which deploy screen it is and uses it as that tab's map. Drag pins to
+that deploy screen on this PC (taken while attacking, kept in `captures/`). Drag pins to
 move them, add or remove numbered pins, and save: `D` is the deploy point (troops, siege and heroes; the Battle
 Machine/Copter), the numbered pins are the Home Village spell points (rounds of front, left, right) or the Builder
 Base points, one per troop card. Pins cannot go on the card bar. The device checks them like any calibration,
@@ -302,6 +300,11 @@ screen" stops the bot, closes LDPlayer, writes only the resolution and DPI into 
 debugging) and starts LDPlayer again. Your own resolution and DPI are kept in `~/.coc-auto/display.json` and are put
 back when you leave the bot with **Ctrl+C**, or with "restore my screen". LDPlayer is restarted for a restore only
 if it is running.
+
+**Game language:** shows CoC's language. "Fit language" stops the bot, sets CoC to Indonesian through Android's
+per-app language (`cmd locale set-app-locales`, Android 13+, no root, LDPlayer keeps running) and reopens CoC. Your
+own setting is kept in `~/.coc-auto/language.json` and put back on **Ctrl+C** (before the screen), or with "restore
+my language". A language picked inside CoC's own settings is not changed by this.
 
 Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
 the running bot), and everything the PC sends online is signed with it too, so nobody else on the channel can pose
@@ -462,10 +465,10 @@ so the run stops only after that many recoveries with no progress in between.
 ## Testing
 
 ```bash
-python -m unittest -v test_bot test_remote test_relay test_ldplayer
+python -m unittest -v test_bot test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (281 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
+The suites (286 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
 deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake Realtime server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
@@ -476,7 +479,8 @@ output. They do not replace a live run on a real account.
 bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
 remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
 relay.py               Supabase Realtime relay for the online dashboard
-ldplayer.py            read-only LDPlayer detection for the dashboard's setup panel
+ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging)
+device_control.py      CoC and LDPlayer controls, screen and language switch for the dashboard
 web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own Realtime client, ID/EN text
 netlify.toml           Netlify publish folder and security headers
 calibrate.py           calibration CLI (screenshots only, never taps)
@@ -484,6 +488,7 @@ test_bot.py            offline unit tests
 test_remote.py         dashboard link tests (key, signatures, options, child process, local server)
 test_relay.py          relay tests against a fake Realtime server
 test_ldplayer.py       LDPlayer detection tests against fake tool output
+test_device_control.py screen and language switch tests
 config.json            calibration for the current game UI
 config.local.json      this PC's own settings on top of config.json (not in git; the dashboard saves here)
 calibration/           anchor, target and digit templates for config.json
