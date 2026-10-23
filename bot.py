@@ -103,6 +103,7 @@ WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS 
 WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS = 4, 0.4
 WHITE_LEVEL = 200
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
+CART_MISS_LIMIT = 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
 STAGE_SETTLE_SECONDS = 4
 LOG = logging.getLogger(__name__)
@@ -1109,6 +1110,7 @@ class Bot:
         self.timeout, self.poll = timeout, poll
         self.reader = reader or self.read_loot
         self.cart_full = False
+        self.cart_misses, self.cart_lost = 0, False
         self.capacity: dict = {}
 
     def observe(self) -> tuple[str, np.ndarray]:
@@ -1516,8 +1518,14 @@ class Bot:
         try:
             self.action('builder', 'cart')
         except TargetMissing:
+            self.cart_misses += 1
             LOG.warning('Gerobak Eliksir tidak terlihat; lewati klaim')
+            if self.cart_misses >= CART_MISS_LIMIT and not self.cart_lost:
+                self.cart_lost = True
+                LOG.warning('Gerobak Eliksir tidak terlihat %s kunjungan berturut-turut; target cart dianggap selesai',
+                            CART_MISS_LIMIT)
             return
+        self.cart_misses = 0
         try:
             self.wait({'builder_cart'}, {'builder'}, CART_OPEN_SECONDS)
         except BotError:
@@ -1654,12 +1662,13 @@ class Bot:
         return bool(fills) and all(value >= FULL_RATIO for value in fills.values())
 
     def village_done(self, village: str, image: np.ndarray) -> bool:
-        """Done when every chosen storage and, if chosen, the Elixir Cart is full."""
+        """Done when every chosen storage and, if chosen, the Elixir Cart is full. A cart that stays out of sight
+        visit after visit cannot be read, so it no longer keeps the run attacking."""
         wanted = self.goals[village]
         storage = wanted - {'cart'}
         if storage and not self.village_full(village, image, storage):
             return False
-        return 'cart' not in wanted or self.cart_full
+        return 'cart' not in wanted or self.cart_full or self.cart_lost
 
     def run_until_full(self, searches: int) -> int:
         """Farm the chosen villages in order until each one's chosen resources are full."""

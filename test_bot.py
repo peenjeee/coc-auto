@@ -626,6 +626,30 @@ class BotTests(unittest.TestCase):
         bot.Bot(config, self.root, device, live=True, timeout=1, poll=0).collect_cart()
         self.assertEqual(device.inputs, [])
 
+    def test_a_cart_missing_on_several_visits_in_a_row_no_longer_holds_the_run(self):
+        config, popup = self.cart_config()
+        hidden = self.frames['builder'].copy()
+        hidden[40:50, 60:72] = 255 - hidden[40:50, 60:72]
+        device = Device({**self.frames, 'builder': hidden, 'builder_cart': popup}, 'builder')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(
+            device, 'state', 'builder_cart' if tuple(point) == (66, 45) else 'builder'))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        runner.goals = {'builder': {'cart'}}
+        for _ in range(bot.CART_MISS_LIMIT - 1):
+            runner.collect_cart()
+        device.frames['builder'] = self.frames['builder']
+        runner.collect_cart()
+        self.assertIn((66, 45), device.inputs)
+        device.frames['builder'] = hidden
+        for _ in range(bot.CART_MISS_LIMIT - 1):
+            runner.collect_cart()
+        self.assertFalse(runner.village_done('builder', None))
+        with self.assertLogs('bot', level='WARNING') as logs:
+            for _ in range(3):
+                runner.collect_cart()
+        self.assertTrue(runner.village_done('builder', None))
+        self.assertEqual(sum('dianggap selesai' in line for line in logs.output), 1)
+
     def test_disabled_filters_do_not_require_ocr_executable(self):
         config = {**self.config, 'minimum': {'gold': 0, 'elixir': 0, 'dark': 0}, 'tesseract': ''}
         runner = bot.Bot(config, self.root, Device(self.frames))

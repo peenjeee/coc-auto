@@ -157,7 +157,9 @@ python bot.py --builder all --home all --first home --live
 The first command fills Builder Base gold only, the second Builder Base elixir and the Elixir Cart, and the third
 Home Village gold and dark elixir. The last fills everything in both villages, Home Village first. Use
 `--home gold,elixir` instead of `--home all` to leave dark elixir out. A resource must be calibrated before it can
-be chosen (dark elixir needs a `capacity.home.dark` entry); the bot refuses to start otherwise.
+be chosen (dark elixir needs a `capacity.home.dark` entry); the bot refuses to start otherwise. If the Elixir Cart
+cannot be found on 5 Builder Base visits in a row, its fill cannot be read, so `cart` counts as done for the rest of
+the run instead of keeping the bot attacking forever.
 
 ### Upgrading walls
 
@@ -325,7 +327,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (159 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (160 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure
