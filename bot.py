@@ -1044,6 +1044,10 @@ class Bot:
             if state == 'builder_cart' and state not in targets | allowed:
                 self.action(state, 'close')
                 continue
+            if state in MENU_SCREENS and state not in targets | allowed:
+                # A wall picked before a reload or a lost tap is still open; close it, never confirm it.
+                self.close_menus()
+                continue
             if state == 'search_failed' and state not in targets | allowed:
                 # The server refused the search ("coba lagi nanti"): go home, give it a minute, let recovery retry.
                 self.action(state, 'close')

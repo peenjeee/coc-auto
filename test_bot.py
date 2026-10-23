@@ -321,6 +321,16 @@ class BotTests(unittest.TestCase):
             runner.wait({'home_army'}, {'home_menu'}, 1)
         self.assertEqual(device.inputs, [(20, 80)])
 
+    def test_a_leftover_wall_menu_is_closed_while_waiting(self):
+        runner = self.make_bot(Device(self.frames), True)
+        screens = iter([('wall_selected', None), ('home', None)])
+        closed = []
+        runner.observe = lambda: next(screens)
+        runner.close_menus = lambda: closed.append(1)
+        runner.wait_still = lambda limit: None
+        self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
+        self.assertEqual(closed, [1])
+
     def test_an_idle_disconnect_is_reloaded(self):
         idle = np.random.default_rng(41).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
