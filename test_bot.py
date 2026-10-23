@@ -1035,30 +1035,28 @@ class BotTests(unittest.TestCase):
             icons[name] = icon
         row = rng.integers(0, 256, (6, 20, 3), dtype=np.uint8)
         cv2.imwrite(str(self.root / 'wall-row.png'), row)
-        for name in ('gold', 'elixir'):
-            cv2.imwrite(str(self.root / f'button-{name}.png'), rng.integers(0, 256, (8, 12, 3), dtype=np.uint8))
+        cv2.imwrite(str(self.root / 'hammer.png'), rng.integers(0, 256, (8, 12, 3), dtype=np.uint8))
         spec = {'build': [150, 80], 'row': {'file': 'wall-row.png', 'region': [100, 0, 60, 90],
                                            'max_score': 0.05, 'tap_x': 130},
-                'scroll': [[130, 70], [130, 20]], 'min_white': 20,
+                'scroll': [[130, 70], [130, 20]], 'min_white': 100,
                 'gems': {'list': [0, 0, 30, 10], 'village': [0, 12, 30, 10]},
-                'buttons': {'gold': [{'tap': [20, 80], 'price': [10, 60, 20, 6],
-                                      'anchor': {'file': 'button-gold.png', 'roi': [10, 70, 12, 8]}}],
-                            'elixir': [{'tap': [60, 80], 'price': [50, 60, 20, 6],
-                                        'anchor': {'file': 'button-elixir.png', 'roi': [50, 70, 12, 8]}}]},
+                'button': {'file': 'hammer.png', 'search': [0, 40, 160, 50], 'scales': [1.0], 'max_score': 0.02,
+                           'price': [-10, -12, 30, 8], 'tap': [6, 4], 'icon_min': 8},
                 'confirm': {'screen': 'wall_confirm', 'price': [10, 30, 30, 8], 'icon': [45, 25, 20, 20],
                             'min_white': 40, 'max_score': 0.05,
                             'icons': {'gold': 'wall-gold.png', 'elixir': 'wall-elixir.png'}}}
         return spec, icons, row
 
+    def place_button(self, image, x, y, resource, white):
+        image[y:y + 8, x:x + 12] = cv2.imread(str(self.root / 'hammer.png'))
+        image[y - 12:y - 4, x - 10:x + 20] = (255, 255, 255) if white else (40, 40, 230)
+        image[y - 12:y - 8, x + 14:x + 18] = (0, 200, 255) if resource == 'gold' else (200, 40, 180)
+
     def priced(self, spec, white, shown=('gold', 'elixir')):
         image = np.zeros((90, 160, 3), dtype=np.uint8)
-        for name, layouts in spec['buttons'].items():
-            button = layouts[0]
-            x, y, w, h = button['price']
-            image[y:y + h, x:x + w] = (255, 255, 255) if name in white else (40, 40, 230)
-            if name in shown:
-                x, y, w, h = button['anchor']['roi']
-                image[y:y + h, x:x + w] = cv2.imread(str(self.root / button['anchor']['file']))
+        for resource, x in (('gold', 20), ('elixir', 60)):
+            if resource in shown:
+                self.place_button(image, x, 70, resource, resource in white)
         return image
 
     def confirm_frame(self, spec, icon, white=True):
@@ -1090,39 +1088,34 @@ class BotTests(unittest.TestCase):
         runner.wait_still = lambda limit: None
         return runner, taps
 
-    def test_white_price_is_affordable_and_red_is_not(self):
+    def test_buttons_are_told_apart_by_their_price_icon_and_colour(self):
         spec, _, _ = self.wall_spec()
+        runner = self.make_bot(Device(self.frames), True)
         image = self.priced(spec, {'elixir'})
-        self.assertLess(bot.white_pixels(image, spec['buttons']['gold'][0]['price']), spec['min_white'])
-        self.assertGreaterEqual(bot.white_pixels(image, spec['buttons']['elixir'][0]['price']), spec['min_white'])
+        self.assertEqual(sorted(runner.wall_buttons(image, spec)),
+                         [('elixir', [66, 74], True), ('gold', [26, 74], False)])
+        self.assertEqual(runner.affordable_button(image, spec), ('elixir', [66, 74]))
+        self.assertIsNone(runner.affordable_button(self.priced(spec, set()), spec))
 
-    def test_the_shown_button_layout_is_used_when_the_list_closes(self):
+    def test_buttons_are_found_wherever_the_picked_wall_puts_them(self):
         spec, icons, _ = self.wall_spec()
-        moved = {'tap': [100, 80], 'price': [90, 60, 20, 6],
-                 'anchor': {'file': 'button-gold.png', 'roi': [90, 70, 12, 8]}}
-        spec['buttons'] = {'gold': [spec['buttons']['gold'][0], moved]}
         frame = np.zeros((90, 160, 3), dtype=np.uint8)
-        frame[60:66, 90:110] = 255
-        frame[70:78, 90:102] = cv2.imread(str(self.root / 'button-gold.png'))
+        self.place_button(frame, 100, 55, 'gold', True)
         frames = [('wall_selected', frame), ('wall_confirm', self.confirm_frame(spec, icons['gold'])),
                   ('wall_selected', frame)]
         runner, taps = self.wall_runner(frames, [500, 500])
         self.assertTrue(runner.upgrade_wall(spec))
-        self.assertEqual(taps, [(100, 80), ('wall_confirm', 'confirm')])
+        self.assertEqual(taps, [(106, 59), ('wall_confirm', 'confirm')])
 
     def test_the_upgrade_button_is_found_again_in_the_frame_it_is_tapped_on(self):
         spec, icons, _ = self.wall_spec()
-        moved = {'tap': [100, 80], 'price': [90, 60, 20, 6],
-                 'anchor': {'file': 'button-gold.png', 'roi': [90, 70, 12, 8]}}
-        spec['buttons'] = {'gold': [spec['buttons']['gold'][0], moved]}
         closed = np.zeros((90, 160, 3), dtype=np.uint8)
-        closed[60:66, 90:110] = 255
-        closed[70:78, 90:102] = cv2.imread(str(self.root / 'button-gold.png'))
+        self.place_button(closed, 100, 55, 'gold', True)
         frames = [('wall_selected', self.priced(spec, {'gold'})),
                   ('wall_confirm', self.confirm_frame(spec, icons['gold'])), ('wall_selected', closed)]
         runner, taps = self.wall_runner(frames, [500, 500], tap_frames=[closed])
         self.assertTrue(runner.upgrade_wall(spec))
-        self.assertEqual(taps, [(100, 80), ('wall_confirm', 'confirm')])
+        self.assertEqual(taps, [(106, 59), ('wall_confirm', 'confirm')])
         frames = [('wall_selected', self.priced(spec, {'gold'}))]
         runner, taps = self.wall_runner(frames, [500], tap_frames=[self.priced(spec, set())])
         self.assertFalse(runner.upgrade_wall(spec))
@@ -1192,7 +1185,7 @@ class BotTests(unittest.TestCase):
                   ('wall_selected', self.priced(spec, {'elixir'}))]
         runner, taps = self.wall_runner(frames, [500, 500])
         self.assertTrue(runner.upgrade_wall(spec))
-        self.assertEqual(taps, [(60, 80), ('wall_confirm', 'confirm')])
+        self.assertEqual(taps, [(66, 74), ('wall_confirm', 'confirm')])
 
     def test_confirm_with_red_price_or_wrong_icon_is_closed_not_confirmed(self):
         spec, icons, _ = self.wall_spec()
@@ -1201,7 +1194,7 @@ class BotTests(unittest.TestCase):
             frames = [('wall_selected', self.priced(spec, {'elixir'})), ('wall_confirm', confirm)]
             runner, taps = self.wall_runner(frames, [500])
             self.assertFalse(runner.upgrade_wall(spec))
-            self.assertEqual(taps, [(60, 80), ('wall_confirm', 'close')])
+            self.assertEqual(taps, [(66, 74), ('wall_confirm', 'close')])
 
     def test_gem_drop_stops_wall_upgrades_for_good(self):
         spec, icons, _ = self.wall_spec()
@@ -1233,7 +1226,7 @@ class BotTests(unittest.TestCase):
         runner, taps = self.wall_runner(frames, [500])
         runner.gems_fresh = True
         self.assertTrue(runner.upgrade_wall(spec))
-        self.assertEqual(taps, [(60, 80), ('wall_confirm', 'confirm')])
+        self.assertEqual(taps, [(66, 74), ('wall_confirm', 'confirm')])
         self.assertTrue(runner.gems_fresh)
 
     def test_the_wall_is_upgraded_once_its_button_layout_holds(self):
@@ -1258,7 +1251,7 @@ class BotTests(unittest.TestCase):
         runner.hud_gold = lambda spec: 2_100_000
         runner.confirm_price = lambda image, spec: 2_000_000
         self.assertTrue(runner.upgrade_wall(spec))
-        self.assertEqual(taps, [(20, 80), ('wall_confirm', 'close'), (60, 80), ('wall_confirm', 'confirm')])
+        self.assertEqual(taps, [(26, 74), ('wall_confirm', 'close'), (66, 74), ('wall_confirm', 'confirm')])
         self.assertEqual(runner.wall_excluded, {'gold'})
 
     def test_a_gem_offer_is_closed_and_never_accepted(self):

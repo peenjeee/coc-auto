@@ -93,6 +93,7 @@ MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_con
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', *MENU_SCREENS)
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO = 2, 1.2
+ANCHOR_MAX_SCORE, SEARCH_ANCHOR_MAX_SCORE = 0.02, 0.05
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 15, 5
 WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS = 4, 0.4
@@ -219,12 +220,15 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
         anchors = screen.get('anchors', [])
         if len(anchors) < 2:
             raise BotError(f'{name}: perlu minimal dua anchor berbeda')
-        boxes = [rectangle(a['roi'], resolution) for a in anchors]
+        boxes = [rectangle(a['roi'], resolution) for a in anchors if 'search' not in a]
         for i, (x, y, w, h) in enumerate(boxes):
             for xx, yy, ww, hh in boxes[:i]:
                 if x < xx + ww and xx < x + w and y < yy + hh and yy < y + h:
                     raise BotError(f'{name}: anchor harus berbeda dan tidak overlap')
         for anchor in anchors:
+            if 'search' in anchor:
+                validate_search_anchor(name, anchor, root, resolution)
+                continue
             roi = rectangle(anchor['roi'], resolution)
             template = cv2.imread(str(asset_path(root, anchor['file'])))
             if template is None or list(template.shape[:2]) != [roi[3], roi[2]]:
@@ -593,31 +597,59 @@ def available_memory_mb() -> int | None:
     return status.avail_commit // (1024 * 1024)
 
 
+def validate_search_anchor(name: str, anchor: dict, root: Path, resolution: list) -> None:
+    x, y, w, h = rectangle(anchor['search'], resolution)
+    template = cv2.imread(str(asset_path(root, anchor['file'])))
+    scales = anchor.get('scales', [1.0])
+    if template is None or float(template.std()) < 5 or template.shape[0] > h or template.shape[1] > w:
+        raise BotError(f'{name}: template anchor search hilang/terlalu polos/terlalu besar')
+    if not isinstance(scales, list) or not scales or not all(
+            isinstance(s, (int, float)) and TARGET_MIN_SCALE <= s <= TARGET_MAX_SCALE for s in scales):
+        raise BotError(f'{name}: scales anchor tidak valid')
+    score = anchor.get('max_score', ANCHOR_MAX_SCORE)
+    if not isinstance(score, float) or not 0 < score <= SEARCH_ANCHOR_MAX_SCORE:
+        raise BotError(f'{name}: max_score anchor tidak valid')
+
+
+def load_anchor(root: Path, anchor: dict) -> tuple:
+    """(region, template, margin, scales, max_score). A 'search' anchor may sit anywhere in its region, e.g. wall
+    buttons whose row moves with the picked wall."""
+    template = cv2.imread(str(asset_path(root, anchor['file'])))
+    if 'search' in anchor:
+        return (anchor['search'], template, 0, tuple(anchor.get('scales', [1.0])),
+                anchor.get('max_score', ANCHOR_MAX_SCORE))
+    return anchor['roi'], template, anchor.get('margin', 0), (1.0,), ANCHOR_MAX_SCORE
+
+
 class Detector:
     def __init__(self, config: dict, root: Path) -> None:
         self.resolution = config['resolution']
-        self.templates = {
-            name: [(a['roi'], cv2.imread(str(asset_path(root, a['file']))), a.get('margin', 0))
-                   for a in screen['anchors']]
-            for name, screen in config['screens'].items()
-        }
+        self.templates = {name: [load_anchor(root, a) for a in screen['anchors']]
+                          for name, screen in config['screens'].items()}
         self.overrides = {name: set(screen.get('overrides', [])) for name, screen in config['screens'].items()}
         self.alternatives = {
-            name: [[(a['roi'], cv2.imread(str(asset_path(root, a['file']))), a.get('margin', 0)) for a in group]
-                   for group in screen.get('alt_anchors', [])]
+            name: [[load_anchor(root, a) for a in group] for group in screen.get('alt_anchors', [])]
             for name, screen in config['screens'].items()
         }
 
     def matches(self, image: np.ndarray, anchors: list) -> bool:
-        scores = [self.score(image, roi, template, margin) for roi, template, margin in anchors]
-        return all(math.isfinite(score) and score <= 0.02 for score in scores)
+        for roi, template, margin, scales, max_score in anchors:
+            score = self.score(image, roi, template, margin, scales)
+            if not (math.isfinite(score) and score <= max_score):
+                return False
+        return True
 
-    def score(self, image: np.ndarray, roi: list, template: np.ndarray, margin: int) -> float:
+    def score(self, image: np.ndarray, roi: list, template: np.ndarray, margin: int, scales: tuple = (1.0,)) -> float:
         x, y, w, h = roi
         width, height = self.resolution
         left, top = max(0, x - margin), max(0, y - margin)
         region = image[top:min(height, y + h + margin), left:min(width, x + w + margin)]
-        return float(cv2.matchTemplate(region, template, cv2.TM_SQDIFF_NORMED).min())
+        best = math.inf
+        for scale in scales:
+            scaled = template if scale == 1.0 else cv2.resize(template, None, fx=scale, fy=scale)
+            if scaled.shape[0] <= region.shape[0] and scaled.shape[1] <= region.shape[1]:
+                best = min(best, float(cv2.matchTemplate(region, scaled, cv2.TM_SQDIFF_NORMED).min()))
+        return best
 
     def detect(self, image: np.ndarray) -> str:
         if list(image.shape[1::-1]) != self.resolution:
@@ -661,6 +693,17 @@ def parse_goals(config: dict, builder: str | None, home: str | None, first: str)
                 raise BotError(f'Belum dikalibrasi di {village}: {", ".join(sorted(missing))}')
             goals[village] = set(names)
     return {village: goals[village] for village in sorted(goals, key=lambda village: village != first)}
+
+
+def price_resource(band: np.ndarray, minimum: int) -> str | None:
+    """Gold prices end in a yellow coin, elixir prices in a purple drop."""
+    hsv = cv2.cvtColor(band, cv2.COLOR_BGR2HSV)
+    hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    gold = int(((hue >= 18) & (hue <= 35) & (saturation > 120) & (value > 150)).sum())
+    elixir = int(((hue >= 135) & (hue <= 165) & (saturation > 100) & (value > 100)).sum())
+    if max(gold, elixir) < minimum:
+        return None
+    return 'gold' if gold > elixir else 'elixir'
 
 
 def white_pixels(image: np.ndarray, region: list) -> int:
@@ -721,19 +764,18 @@ def validate_walls(config: dict, root: Path, villages: tuple) -> None:
         rectangle(confirm.get('price'), resolution)
         rectangle(confirm.get('icon'), resolution)
         integer(confirm.get('min_white'), 1, 100_000, 'walls confirm min_white')
-        buttons = spec.get('buttons')
-        if not isinstance(buttons, dict) or not buttons or set(buttons) - set(WALL_RESOURCES):
-            raise BotError('walls buttons hanya gold/elixir')
-        files = [row.get('file')]
-        for resource, layouts in buttons.items():
-            if not isinstance(layouts, list) or not layouts:
-                raise BotError(f'walls buttons {resource} perlu daftar tata letak')
-            files.append(confirm.get('icons', {}).get(resource))
-            for button in layouts:
-                point(button.get('tap'), resolution, f'walls {resource}')
-                rectangle(button.get('price'), resolution)
-                rectangle(button.get('anchor', {}).get('roi'), resolution)
-                files.append(button['anchor'].get('file'))
+        button = spec.get('button', {})
+        rectangle(button.get('search'), resolution)
+        for value in [*button.get('price', [None] * 4), *button.get('tap', [None] * 2)]:
+            integer(value, -200, 200, 'walls button offset')
+        integer(button.get('icon_min'), 1, 10_000, 'walls button icon_min')
+        icons = confirm.get('icons', {})
+        if not icons or set(icons) - set(WALL_RESOURCES):
+            raise BotError('walls confirm icons hanya gold/elixir')
+        files = [row.get('file'), button.get('file'), *icons.values()]
+        for score in (button.get('max_score'),):
+            if not isinstance(score, float) or not 0 < score <= SEARCH_ANCHOR_MAX_SCORE:
+                raise BotError('max_score tombol tembok tidak valid')
         for file in files:
             if cv2.imread(str(asset_path(root, file))) is None:
                 raise BotError(f'Template tembok hilang: {file}')
@@ -1592,14 +1634,47 @@ class Bot:
                     self.device.swipe(*swipe)
         return None
 
-    def affordable_button(self, image: np.ndarray, spec: dict) -> tuple | None:
-        """(resource, button) of the first upgrade button shown in this layout with a white price."""
-        for resource, layouts in spec['buttons'].items():
-            if resource in self.wall_excluded:
+    def wall_buttons(self, image: np.ndarray, spec: dict) -> list:
+        """(resource, tap, affordable) for every upgrade button on screen. The picked wall decides where its
+        buttons go and whether they wrap into two rows, so they are searched for, not read at fixed spots."""
+        button = spec['button']
+        template = cv2.imread(str(asset_path(self.root, button['file'])))
+        x0, y0, w0, h0 = button['search']
+        region = image[y0:y0 + h0, x0:x0 + w0]
+        hits = []
+        for scale in button.get('scales', [1.0]):
+            scaled = template if scale == 1.0 else cv2.resize(template, None, fx=scale, fy=scale)
+            if scaled.shape[0] > region.shape[0] or scaled.shape[1] > region.shape[1]:
                 continue
-            button = next((button for button in layouts if self.button_shown(image, button)), None)
-            if button and white_pixels(image, button['price']) >= spec['min_white']:
-                return resource, button
+            scores = cv2.matchTemplate(region, scaled, cv2.TM_SQDIFF_NORMED)
+            for y, x in zip(*np.where(scores <= button['max_score'])):
+                hits.append((float(scores[y, x]), x0 + int(x), y0 + int(y), scale))
+        height, width = template.shape[:2]
+        found = []
+        for _, x, y, scale in sorted(hits):
+            if all(abs(x - fx) >= width or abs(y - fy) >= height for fx, fy, _ in found):
+                found.append((x, y, scale))
+        result = []
+        for x, y, scale in found:
+            px, py, pw, ph = button['price']
+            band = [x + round(px * scale), y + round(py * scale), round(pw * scale), round(ph * scale)]
+            resource = price_resource(crop(image, band), button['icon_min'])
+            if resource is None:
+                continue
+            affordable = white_pixels(image, band) >= spec['min_white'] * scale * scale
+            tap = [x + round(button['tap'][0] * scale), y + round(button['tap'][1] * scale)]
+            result.append((resource, tap, affordable))
+        return result
+
+    def affordable_button(self, image: np.ndarray, spec: dict) -> tuple | None:
+        """(resource, tap) of the first upgrade button with a white price, gold before elixir."""
+        buttons = self.wall_buttons(image, spec)
+        for resource in WALL_RESOURCES:
+            if resource in self.wall_excluded or resource not in spec['confirm']['icons']:
+                continue
+            for found, tap, affordable in buttons:
+                if found == resource and affordable:
+                    return resource, tap
         return None
 
     def hud_gold(self, spec: dict) -> int:
@@ -1617,13 +1692,6 @@ class Bot:
             return gold - self.confirm_price(image, spec) >= reserve
         except BotError:
             return False
-
-    def button_shown(self, image: np.ndarray, button: dict) -> bool:
-        """The upgrade button for a resource exists in this wall's layout (Builder Base walls may be gold-only)."""
-        anchor = button['anchor']
-        template = cv2.imread(str(asset_path(self.root, anchor['file'])))
-        score = self.detector.score(image, anchor['roi'], template, 0)
-        return math.isfinite(score) and score <= 0.02
 
     def confirm_safe(self, image: np.ndarray, spec: dict, resource: str) -> bool:
         """Konfirmasi is tapped only for a white price next to the chosen resource's icon, never a gem one."""
@@ -1662,7 +1730,7 @@ class Bot:
             if choice is None:
                 raise TargetMissing('Tombol upgrade tembok tidak terjangkau lagi; tidak ada input dikirim')
             picked.append(choice[0])
-            return choice[1]['tap']
+            return choice[1]
         self.gems_fresh = False
         try:
             self.guarded_tap({'wall_selected'}, locate)

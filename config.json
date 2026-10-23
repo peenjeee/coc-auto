@@ -1347,22 +1347,32 @@
     "wall_selected": {
       "anchors": [
         {
-          "roi": [
-            272,
-            515,
-            112,
-            108
+          "file": "calibration/wall_selected-pilih-1d61e4e797e049699eddfa8aed80eacd.png",
+          "search": [
+            0,
+            380,
+            1280,
+            340
           ],
-          "file": "calibration/wall_selected-row-47b722ab78034b17a3b8a2f878802d46.png"
+          "scales": [
+            1.0,
+            1.1
+          ],
+          "max_score": 0.03
         },
         {
-          "roi": [
-            140,
-            520,
-            95,
-            90
+          "file": "calibration/wall-hammer-b6fafe3a343545f4aa4989149fc91bd8.png",
+          "search": [
+            0,
+            380,
+            1280,
+            340
           ],
-          "file": "calibration/wall_selected-info-7e5b25befe114966aebb31f17503aaa6.png"
+          "scales": [
+            1.0,
+            1.1
+          ],
+          "max_score": 0.03
         }
       ],
       "overrides": [
@@ -1379,49 +1389,7 @@
           1196,
           640
         ]
-      },
-      "alt_anchors": [
-        [
-          {
-            "roi": [
-              341,
-              515,
-              112,
-              108
-            ],
-            "file": "calibration/wall_selected-builder-row-c1cb83fdf6f4409ab18209a265b35d39.png"
-          },
-          {
-            "roi": [
-              212,
-              520,
-              95,
-              90
-            ],
-            "file": "calibration/wall_selected-builder-info-3963e28cbbb8460e9a52ec7336d42b83.png"
-          }
-        ],
-        [
-          {
-            "roi": [
-              450,
-              520,
-              100,
-              90
-            ],
-            "file": "calibration/wall_selected-open-row-d0f9c26adbe0487a8dafbf6a253edb76.png"
-          },
-          {
-            "roi": [
-              310,
-              515,
-              100,
-              95
-            ],
-            "file": "calibration/wall_selected-open-info-03a06dc117414b20be8bdf6f75bc4889.png"
-          }
-        ]
-      ]
+      }
     },
     "wall_confirm": {
       "anchors": [
@@ -1893,97 +1861,7 @@
           26
         ]
       },
-      "min_white": 150,
-      "buttons": {
-        "gold": [
-          {
-            "tap": [
-              605,
-              570
-            ],
-            "price": [
-              552,
-              518,
-              108,
-              20
-            ],
-            "anchor": {
-              "roi": [
-                570,
-                544,
-                70,
-                42
-              ],
-              "file": "calibration/wall-button-home-gold-ca8276749f204528bf2d6420f92ff844.png"
-            }
-          },
-          {
-            "tap": [
-              778,
-              565
-            ],
-            "price": [
-              722,
-              508,
-              108,
-              20
-            ],
-            "anchor": {
-              "roi": [
-                745,
-                535,
-                70,
-                42
-              ],
-              "file": "calibration/wall-button-open-gold-8d4ca67e37ba4276ae26c16b5366dd15.png"
-            }
-          }
-        ],
-        "elixir": [
-          {
-            "tap": [
-              744,
-              570
-            ],
-            "price": [
-              692,
-              518,
-              108,
-              20
-            ],
-            "anchor": {
-              "roi": [
-                710,
-                544,
-                70,
-                42
-              ],
-              "file": "calibration/wall-button-home-elixir-ad00b759d1c74376bb74a10ec3038b06.png"
-            }
-          },
-          {
-            "tap": [
-              918,
-              565
-            ],
-            "price": [
-              862,
-              508,
-              108,
-              20
-            ],
-            "anchor": {
-              "roi": [
-                885,
-                535,
-                70,
-                42
-              ],
-              "file": "calibration/wall-button-open-elixir-9e357428df49440b923fa16f65e07ac8.png"
-            }
-          }
-        ]
-      },
+      "min_white": 550,
       "confirm": {
         "screen": "wall_confirm",
         "price": [
@@ -2019,6 +1897,31 @@
           178,
           26
         ]
+      },
+      "button": {
+        "file": "calibration/wall-hammer-b6fafe3a343545f4aa4989149fc91bd8.png",
+        "search": [
+          0,
+          380,
+          1280,
+          340
+        ],
+        "scales": [
+          1.0,
+          1.1
+        ],
+        "max_score": 0.03,
+        "price": [
+          -32,
+          -34,
+          116,
+          26
+        ],
+        "tap": [
+          25,
+          19
+        ],
+        "icon_min": 40
       }
     },
     "builder": {
@@ -2061,32 +1964,7 @@
           26
         ]
       },
-      "min_white": 150,
-      "buttons": {
-        "gold": [
-          {
-            "tap": [
-              675,
-              570
-            ],
-            "price": [
-              622,
-              518,
-              108,
-              20
-            ],
-            "anchor": {
-              "roi": [
-                640,
-                544,
-                70,
-                42
-              ],
-              "file": "calibration/wall-button-builder-gold-640edf6e19e94e5c8945457e5818f9bd.png"
-            }
-          }
-        ]
-      },
+      "min_white": 550,
       "confirm": {
         "screen": "builder_wall_confirm",
         "price": [
@@ -2106,6 +1984,31 @@
         "icons": {
           "gold": "calibration/wall-icon-builder-gold-aa1d2c3cfa14435e863de2fd1e1536e6.png"
         }
+      },
+      "button": {
+        "file": "calibration/wall-hammer-b6fafe3a343545f4aa4989149fc91bd8.png",
+        "search": [
+          0,
+          380,
+          1280,
+          340
+        ],
+        "scales": [
+          1.0,
+          1.1
+        ],
+        "max_score": 0.03,
+        "price": [
+          -32,
+          -34,
+          116,
+          26
+        ],
+        "tap": [
+          25,
+          19
+        ],
+        "icon_min": 40
       }
     }
   }
