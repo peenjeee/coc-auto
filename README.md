@@ -143,9 +143,9 @@ python bot.py --walls home --live
 python bot.py --walls both --first home --live
 ```
 
-`--walls` takes `home`, `builder` or `both`. For each village in turn it farms until gold and elixir are both
-full, then opens the builder list, finds a "Tembok" row, and upgrades one wall at a time with whichever of gold or
-elixir is still affordable. When neither is, it farms again. It stops once no "Tembok" row is left, which means
+`--walls` takes `home`, `builder` or `both`. For each village in turn it opens the builder list, finds a "Tembok"
+row, and upgrades one wall at a time with whichever of gold or elixir is still affordable. When neither is, it
+farms until gold and elixir are both full and spends them again. It stops once no "Tembok" row is left, which means
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
 Elixir Cart first; its walls cost gold only until they reach higher levels, and only the upgrade buttons a wall actually shows are used. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
 

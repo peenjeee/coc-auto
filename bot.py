@@ -1602,16 +1602,19 @@ class Bot:
             upgraded += 1
 
     def run_walls(self, searches: int) -> int:
-        """Per village in order: farm gold and elixir full, spend them on walls, repeat until every wall is maxed."""
+        """Per village in order: spend gold and elixir on walls, farm both full, repeat until every wall is maxed."""
         for village in self.wall_order:
+            farmed = False
             while village not in self.walls_done:
-                self.goals = {village: {'gold', 'elixir'}}
-                self.run_until_full(searches)
                 upgraded = self.upgrade_walls(village)
                 if upgraded is None:
                     self.walls_done.add(village)
-                elif upgraded == 0:
+                    break
+                if upgraded == 0 and farmed:
                     raise BotError(f'Tembok {village} tidak bisa di-upgrade walau gudang penuh; periksa kalibrasi')
+                self.goals = {village: {'gold', 'elixir'}}
+                self.run_until_full(searches)
+                farmed = True
         LOG.info('Semua tembok sudah maksimal: %s', ', '.join(self.wall_order))
         return len(self.walls_done)
 

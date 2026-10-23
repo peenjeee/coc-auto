@@ -1182,13 +1182,14 @@ class BotTests(unittest.TestCase):
         runner = self.make_bot(Device(self.frames), True)
         runner.wall_order = ('home', 'builder')
         calls = []
-        rounds = {'home': iter([3, None]), 'builder': iter([None])}
+        rounds = {'home': iter([3, 2, None]), 'builder': iter([0, None])}
         runner.run_until_full = lambda searches: calls.append(('farm', dict(runner.goals)))
         runner.upgrade_walls = lambda village: calls.append(('walls', village)) or next(rounds[village])
         runner.run_walls(0)
-        self.assertEqual(calls, [('farm', {'home': {'gold', 'elixir'}}), ('walls', 'home'),
-                                 ('farm', {'home': {'gold', 'elixir'}}), ('walls', 'home'),
-                                 ('farm', {'builder': {'gold', 'elixir'}}), ('walls', 'builder')])
+        self.assertEqual(calls, [('walls', 'home'), ('farm', {'home': {'gold', 'elixir'}}),
+                                 ('walls', 'home'), ('farm', {'home': {'gold', 'elixir'}}), ('walls', 'home'),
+                                 ('walls', 'builder'), ('farm', {'builder': {'gold', 'elixir'}}),
+                                 ('walls', 'builder')])
 
     def test_walls_stop_when_full_storage_upgrades_nothing(self):
         runner = self.make_bot(Device(self.frames), True)
