@@ -331,22 +331,125 @@ for online use.
 | `config.json` + `calibration/` | Current game UI (after the latest update). |
 | `config.legacy.json` + `calibration-legacy/` | Previous game UI, kept for reference. Run it with `python bot.py --config config.legacy.json`. |
 
-Calibration is specific to resolution, language, UI scale, and army composition.
-After a game update, or on a different setup, recalibrate the affected screens:
+Calibration is specific to resolution, language, UI scale, and army composition. After a game update, or on a
+different setup, recalibrate the screens that are no longer recognised. Calibration only works on screenshots and
+never taps the game.
+
+#### `calibrate.py` options
+
+| Option | Meaning |
+| --- | --- |
+| `--config PATH` | Config to write (default `config.json` next to `calibrate.py`; only this shared file is written, never `config.local.json`). |
+| `--init` | Create a new config; never overwrites one that exists. Needs `--serial`. |
+| `--serial SERIAL` | ADB serial for `--init`, e.g. `emulator-5554` (see `adb devices`). |
+| `--adb PATH` | `adb.exe` for `--init` (default `C:\LDPlayer\LDPlayer14\adb.exe`). |
+| `--tesseract PATH` | Tesseract for `--init`; only needed when no digit templates are used. |
+| `--gold N`, `--elixir N`, `--dark N` | Loot minimums written by `--init` (`0` = no filter). |
+| `--capture PNG` | Save the current LDPlayer screen to a new PNG (never overwrites). |
+| `--screen NAME` | Calibrate one screen (names below), from the live LDPlayer screen or from `--image`. |
+| `--image PNG` | Calibrate from a saved screenshot instead of the live screen. |
+| `--replace` | Recalibrate a screen that already exists: new anchors and tap points, everything else kept. |
+| `--counts N …` | Units per troop card, left to right; needed the first time a deploy screen is calibrated. |
+| `--learn-digits PNG:GOLD:ELIXIR …` | Build loot digit templates from scout screenshots labelled with the loot they show. |
+| `--digits-dir DIR` | New folder for `--learn-digits` (default `calibration/digits`; it must not exist yet). |
+
+#### General commands
+
+Start a new config (first time on a new setup):
 
 ```bash
-python calibrate.py --init --serial emulator-5554 --gold 500000 --elixir 500000
-python calibrate.py --capture shot.png                  # save a screenshot (no input)
-python calibrate.py --screen home --image shot.png      # pick anchors and tap points on a screenshot
-python calibrate.py --screen home_scout --counts 1 1    # a new deploy screen needs slot counts
-python calibrate.py --screen gem_offer --image shot.png --replace  # recalibrate an existing screen
-python calibrate.py --learn-digits shot.png:GOLD:ELIXIR --digits-dir calibration/digits-new # build digit templates into a new folder
+python calibrate.py --init --serial emulator-5554 --gold 500000 --elixir 500000 --dark 0
 ```
 
-Calibration only works on screenshots and never taps the game. `--screen` takes every screen the bot knows, popups
-and wall menus included. An existing screen needs `--replace`, which picks new anchors and tap points and keeps
-everything else it has (`targets`, `auto`, `sweep`, `overrides`, `alt_anchors`, `deploy`, `troops`, `loot`); tap
-points that a target already finds are not asked again.
+Save the screen LDPlayer shows now, to calibrate from later:
+
+```bash
+python calibrate.py --capture shot.png
+```
+
+Calibrate a screen from the live LDPlayer screen, from a saved screenshot, or again after a game update:
+
+```bash
+python calibrate.py --screen home
+```
+```bash
+python calibrate.py --screen home --image shot.png
+```
+```bash
+python calibrate.py --screen home --image shot.png --replace
+```
+
+Build digit templates from two or more labelled scout screenshots (gold and elixir as shown on screen):
+
+```bash
+python calibrate.py --learn-digits scout1.png:1234567:987654 scout2.png:450210:399870 --digits-dir calibration/digits-new
+```
+
+Use the legacy calibration with any command by adding `--config config.legacy.json`.
+
+For each screen, the tool asks for two anchors (small, fixed pieces of UI that only that screen shows; not numbers,
+timers or the base), then each tap point the screen needs. Deploy screens also ask for the deploy point and one slot
+per `--counts` value, and `home_scout` asks for the gold, elixir and dark elixir loot numbers. An existing screen
+needs `--replace`, which keeps everything else it has (`targets`, `auto`, `sweep`, `overrides`, `alt_anchors`,
+`deploy`, `troops`, `loot`); tap points that a target already finds are not asked again.
+
+#### Every screen
+
+Open the screen in CoC, then run its command (add `--replace` if it is already calibrated, or `--image shot.png` to
+use a saved screenshot). "Taps" are the points the tool asks for.
+
+**Villages and attacks**
+
+| Command | Screen | Taps |
+| --- | --- | --- |
+| `python calibrate.py --screen home` | Home Village | attack, switch (boat) |
+| `python calibrate.py --screen home_menu` | Home attack menu ("Pertempuran") | find, close |
+| `python calibrate.py --screen home_army` | Army screen before searching | attack, close |
+| `python calibrate.py --screen home_scout --counts 1 1` | Opponent shown, before deploying | next; deploy point, card slots, loot numbers |
+| `python calibrate.py --screen home_battle` | Home battle in progress | – |
+| `python calibrate.py --screen home_result` | Home battle result | return |
+| `python calibrate.py --screen builder` | Builder Base | attack, switch (boat), cart |
+| `python calibrate.py --screen builder_menu` | Builder Base attack menu | find, close |
+| `python calibrate.py --screen builder_scout --counts 1 1` | Builder Base stage 1, before deploying | deploy point, card slots |
+| `python calibrate.py --screen builder_battle` | Builder Base stage 1 in progress | – |
+| `python calibrate.py --screen builder_stage2 --counts 1 1` | Builder Base stage 2, before deploying | deploy point, card slots |
+| `python calibrate.py --screen builder_battle2` | Builder Base stage 2 in progress | – |
+| `python calibrate.py --screen builder_result` | Builder Base battle result | return |
+| `python calibrate.py --screen builder_cart` | Elixir Cart window | claim, close |
+| `python calibrate.py --screen loading` | Game loading screen | – |
+
+**Popups**
+
+| Command | Screen | Taps |
+| --- | --- | --- |
+| `python calibrate.py --screen star_bonus` | Home star bonus | ok |
+| `python calibrate.py --screen builder_star_bonus` | Builder Base star bonus | ok |
+| `python calibrate.py --screen reward_chest` | Reward chest | open |
+| `python calibrate.py --screen reward_card` | Reward card | continue |
+| `python calibrate.py --screen layout_blocked` | "Defence layout blocked" warning | ok |
+| `python calibrate.py --screen league` | League popup | close |
+| `python calibrate.py --screen welcome` | Welcome back popup | ok |
+| `python calibrate.py --screen idle` | "Ada orang di sana?" (inactive) | reload |
+| `python calibrate.py --screen update_offer` | "Pembaruan Tersedia!" (update offer) | close (a point outside the box) |
+| `python calibrate.py --screen disconnected` | "Sambungan terputus" / "Kesalahan sambungan" | retry |
+| `python calibrate.py --screen search_failed` | "Tidak dapat menyerang desa! Coba lagi nanti." | close |
+| `python calibrate.py --screen gem_offer` | "Perlu lebih banyak …" (resources for gems) | close (the X, never the gem button) |
+| `python calibrate.py --screen other_device` | "Perangkat lain tersambung ke desa ini" | – |
+| `python calibrate.py --screen builders_busy` | "Semua tukang sibuk!" | close (the X) |
+
+**Walls**
+
+| Command | Screen | Taps |
+| --- | --- | --- |
+| `python calibrate.py --screen build_list` | Builder list ("Tembok" rows) | close |
+| `python calibrate.py --screen wall_selected` | A wall selected, upgrade buttons shown | close, build |
+| `python calibrate.py --screen wall_confirm` | Home Village wall upgrade dialog | confirm, close |
+| `python calibrate.py --screen builder_wall_confirm` | Builder Base wall upgrade dialog | confirm, close |
+
+The `--counts` values are the units on each troop card, left to right (for example `--counts 11 4` for 11
+dragons and 4 rage spells); with an `auto` card-bar plan they are only used for the first calibration. The wall
+details beyond these screens (price band, row template, gem count areas, confirm checks), storage bars, digit
+folder and zoom settings are keys in `config.json`; see the configuration reference below.
 
 ### Changing the army and deploy plan
 
