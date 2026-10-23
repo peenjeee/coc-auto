@@ -211,8 +211,8 @@ button.ghost { background: transparent; color: var(--text-dim); }
 .group input { width: 100%; min-width: 0; }
 .group > p { margin: 0; }
 .display b { color: var(--text); }
-#display-note.ok, #language-note.ok { color: var(--green); }
-#display-note.problem, #language-note.problem { color: var(--amber); }
+#display-note.ok { color: var(--green); }
+#display-note.problem { color: var(--amber); }
 .notes { margin: 0; padding: 0; list-style: none; font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
 .notes li { word-break: break-all; }
 .notes .info { color: var(--text-dim); }

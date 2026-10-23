@@ -114,7 +114,7 @@ not in git, so `git pull` never collides with it, and the dashboard saves its se
 | What | Must be | Why / how to check |
 | --- | --- | --- |
 | LDPlayer resolution | **1280×720, DPI 240** (Settings → Advanced → Resolution, or "fit screen" in the dashboard) | Screens are matched pixel for pixel. DPI changes the UI scale, so at another DPI no template matches even at 1280×720. |
-| Game language | **Bahasa Indonesia** | Many anchors are Indonesian text ("Pertempuran", "Tembok", "Maks:"). With another language every text anchor has to be recalibrated. |
+| Game language | **Bahasa Indonesia** | Many anchors are Indonesian text ("Pertempuran", "Tembok", "Maks:"). With another language every text anchor has to be recalibrated. Set it in CoC's own settings: CoC keeps its own language, so changing Android's or LDPlayer's language does not change it. |
 | `adb`, `ldconsole` | Paths in your LDPlayer install folder | e.g. `C:\LDPlayer\LDPlayer14\adb.exe` and `C:\LDPlayer\LDPlayer14\ldconsole.exe`; the folder name depends on the LDPlayer version. |
 | `ld_index`, `serial` | Your instance | `ld_index` is the instance number in LDMultiPlayer (0 for the first). `serial` is `emulator-<5554 + 2 × index>`: `emulator-5554` for index 0, `emulator-5556` for index 1. Check with `adb devices`. |
 | `touch_device`, `zoom_out.device` | The touchscreen node | Run `adb -s <serial> shell getevent -pl` and use the `/dev/input/eventN` whose block lists `ABS_MT_POSITION_X`. Set both keys to it; holds, pinches and fast taps go there. |
@@ -300,12 +300,6 @@ screen" stops the bot, closes LDPlayer, writes only the resolution and DPI into 
 debugging) and starts LDPlayer again. Your own resolution and DPI are kept in `~/.coc-auto/display.json` and are put
 back when you leave the bot with **Ctrl+C**, or with "restore my screen". LDPlayer is restarted for a restore only
 if it is running.
-
-**Game language:** shows CoC's language. "Fit language" stops the bot, sets CoC to Indonesian through Android's
-per-app language (`cmd locale set-app-locales`, Android 13+, no root, LDPlayer keeps running) and reopens CoC. Your
-own setting is kept in `~/.coc-auto/language.json` and put back on **Ctrl+C** (before the screen), or with "restore
-my language". A language picked inside CoC's own settings is not changed by this.
-
 Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
 the running bot), and everything the PC sends online is signed with it too, so nobody else on the channel can pose
 as the device or as the dashboard. The key itself never leaves the browser or the PC, and the page loads no
@@ -468,7 +462,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (286 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
+The suites (281 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
 deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake Realtime server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
@@ -480,7 +474,7 @@ bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
 remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
 relay.py               Supabase Realtime relay for the online dashboard
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging)
-device_control.py      CoC and LDPlayer controls, screen and language switch for the dashboard
+device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
 web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own Realtime client, ID/EN text
 netlify.toml           Netlify publish folder and security headers
 calibrate.py           calibration CLI (screenshots only, never taps)
@@ -488,7 +482,7 @@ test_bot.py            offline unit tests
 test_remote.py         dashboard link tests (key, signatures, options, child process, local server)
 test_relay.py          relay tests against a fake Realtime server
 test_ldplayer.py       LDPlayer detection tests against fake tool output
-test_device_control.py screen and language switch tests
+test_device_control.py screen switch tests
 config.json            calibration for the current game UI
 config.local.json      this PC's own settings on top of config.json (not in git; the dashboard saves here)
 calibration/           anchor, target and digit templates for config.json

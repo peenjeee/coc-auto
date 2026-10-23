@@ -1,28 +1,22 @@
 """CoC and LDPlayer controls for the dashboard: open or close the game, quit or start LDPlayer, and put the
-instance on the screen and language the bot was calibrated for (1280x720 DPI 240, Indonesian), then back to the
-user's own when the bot is left."""
+instance on the screen the bot was calibrated for (1280x720 DPI 240), then back to the user's own when the bot is
+left. CoC keeps its own language setting; neither Android's nor LDPlayer's language changes it."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
-import re
 import time
 from typing import Callable
 
 import ldplayer
 
 DISPLAY_FILE = Path('.coc-auto') / 'display.json'
-LANGUAGE_FILE = Path('.coc-auto') / 'language.json'
 LD_STOP_SECONDS, LD_SETTLE_SECONDS = 30, 2
 DISPLAY_LIMITS = {'width': (320, 7680), 'height': (240, 4320), 'dpi': (72, 640)}
-GAME_PACKAGE = 'com.supercell.clashofclans'
-BOT_LOCALE = 'id-ID'
-LOCALE_TAG = re.compile(r'[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*')
-APP_LOCALES = re.compile(r'are \[([^\]]*)\]')
 
 
 class SettingRefused(Exception):
-    """A screen or language change that cannot be made as asked; nothing was changed."""
+    """A screen change that cannot be made as asked; nothing was changed."""
 
 
 def saved_file(store: Path) -> dict | None:
@@ -111,83 +105,12 @@ class Display:
             emulator.launch()
 
 
-def app_locales(text: str) -> list:
-    """CoC's own language list from `cmd locale get-app-locales`; empty means it follows Android's language."""
-    found = APP_LOCALES.search(text)
-    if found is None:
-        raise SettingRefused(f'bahasa CoC tidak terbaca ({text.strip()[:80]}); butuh LDPlayer dengan Android 13+')
-    tags = [tag.strip() for tag in found.group(1).split(',') if tag.strip()]
-    if not all(LOCALE_TAG.fullmatch(tag) for tag in tags):
-        raise SettingRefused(f'bahasa CoC tidak dikenal: {found.group(1)}')
-    return tags
-
-
-def indonesian(tag: str) -> bool:
-    return tag.lower().replace('_', '-').split('-')[0] in ('id', 'in')
-
-
-class Language:
-    """Puts CoC in Indonesian, the language the bot's screens were calibrated in, through Android's per-app
-    language (Android 13+: no root, LDPlayer keeps running), and back to the user's own choice, kept in
-    ~/.coc-auto/language.json until then. A language picked inside CoC's own settings is not seen here."""
-
-    def __init__(self, adb: Callable[[], object], store: Path | None = None) -> None:
-        self.adb, self.store = adb, store or Path.home() / LANGUAGE_FILE
-
-    def saved(self) -> dict | None:
-        return saved_file(self.store)
-
-    def read(self, device) -> dict:
-        app = app_locales(device.command('shell', 'cmd', 'locale', 'get-app-locales', GAME_PACKAGE, '--user', '0')
-                          .decode('utf-8', 'replace'))
-        system = device.command('shell', 'getprop', 'persist.sys.locale').decode('utf-8', 'replace').strip()
-        return {'app': app, 'system': system, 'current': (app or [system])[0] or '?'}
-
-    def status(self) -> dict:
-        return {**self.read(self.adb()), 'target': BOT_LOCALE, 'saved': self.saved() is not None}
-
-    def fit(self) -> bool:
-        """False when CoC already shows Indonesian; otherwise CoC is set to it and restarted."""
-        device = self.adb()
-        now = self.read(device)
-        if indonesian(now['current']):
-            return False
-        if self.saved() is None:
-            keep(self.store, {'locales': now['app']})
-        self.apply(device, [BOT_LOCALE], relaunch=True)
-        return True
-
-    def restore(self) -> bool:
-        """False when nothing was switched; CoC is reopened only if it was in front."""
-        saved = self.saved()
-        if saved is None:
-            return False
-        locales = saved.get('locales')
-        if not isinstance(locales, list) or not all(isinstance(tag, str) and LOCALE_TAG.fullmatch(tag) for tag in locales):
-            raise SettingRefused(f'bahasa tersimpan rusak; atur bahasa CoC manual ({self.store})')
-        device = self.adb()
-        self.apply(device, locales, relaunch=device.game_in_front())
-        self.store.unlink()
-        return True
-
-    def apply(self, device, locales: list, relaunch: bool) -> None:
-        import bot
-        command = ['shell', 'cmd', 'locale', 'set-app-locales', GAME_PACKAGE, '--user', '0']
-        # No --locales sets an empty list: CoC follows Android's language again.
-        device.command(*command, *(['--locales', ','.join(locales)] if locales else []))
-        # A running game keeps the language it started with.
-        device.stop_game()
-        if relaunch:
-            device.launch(bot.GAME_ACTIVITY)
-
-
 class DeviceActions:
     """CoC and LDPlayer controls for the dashboard, through the adb and ldconsole set in the config."""
 
-    def __init__(self, config_path: Path, display: Display | None = None, language: Language | None = None) -> None:
+    def __init__(self, config_path: Path, display: Display | None = None) -> None:
         self.config_path = config_path
         self.display = display or Display(config_path)
-        self.language = language or Language(self.adb)
 
     def adb(self):
         import bot
@@ -221,12 +144,3 @@ class DeviceActions:
 
     def display_status(self) -> dict:
         return self.display.status()
-
-    def fit_language(self) -> bool:
-        return self.language.fit()
-
-    def restore_language(self) -> bool:
-        return self.language.restore()
-
-    def language_status(self) -> dict:
-        return self.language.status()

@@ -301,35 +301,32 @@ class SettingsTests(unittest.TestCase):
 
 
 class DeviceSwitchTests(unittest.TestCase):
-    def test_leaving_the_bot_puts_the_language_then_the_screen_back(self):
+    def test_leaving_the_bot_puts_the_screen_back(self):
         device = FakeDevice()
         supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], device)
         remote.leave(supervisor)
-        self.assertEqual(device.calls, ['restore_language', 'restore_display'])
+        self.assertEqual(device.calls, ['restore_display'])
 
-    def test_the_dashboard_switches_screen_and_language_after_stopping_the_bot(self):
+    def test_the_dashboard_switches_the_screen_after_stopping_the_bot(self):
         device = FakeDevice()
         supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], device)
-        for action, code, status in (('fit_display', 'display_ok', 'display_status'),
-                                     ('restore_display', 'display_unchanged', 'display_status'),
-                                     ('fit_language', 'language_ok', 'language_status'),
-                                     ('restore_language', 'language_unchanged', 'language_status')):
+        for action, code in (('fit_display', 'display_ok'), ('restore_display', 'display_unchanged')):
             device.calls.clear()
             result = supervisor.command(*signed(action))
             with self.subTest(action=action):
                 self.assertEqual((result['ok'], result['code']), (True, code), result)
-                self.assertEqual(device.calls, [action, status])
+                self.assertEqual(device.calls, [action, 'display_status'])
 
     def test_a_switch_the_device_cannot_make_is_a_refusal(self):
         import device_control
 
         class Stuck(FakeDevice):
-            def fit_language(self):
-                raise device_control.SettingRefused('bahasa CoC tidak terbaca')
+            def fit_display(self):
+                raise device_control.SettingRefused('LDPlayer tidak berhenti')
         supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], Stuck())
-        result = supervisor.command(*signed('fit_language'))
+        result = supervisor.command(*signed('fit_display'))
         self.assertEqual((result['ok'], result['code']), (False, 'refused'))
-        self.assertIn('bahasa CoC', result['message'])
+        self.assertIn('LDPlayer', result['message'])
 
 
 class KeyTests(unittest.TestCase):

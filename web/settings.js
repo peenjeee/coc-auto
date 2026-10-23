@@ -20,7 +20,6 @@ export class SettingsPanel {
   constructor(send) {
     this.found = null;
     this.display = null;
-    this.language = null;
     $('settings-load').addEventListener('click', () => send('get_settings'));
     $('setup-detect').addEventListener('click', () => send('detect_setup'));
     $('minimum-form').addEventListener('submit', (submitted) => {
@@ -51,7 +50,6 @@ export class SettingsPanel {
     fill($('minimum-form'), data.minimum, MINIMUM);
     fill($('setup-form'), data.setup, SETUP);
     this.showDisplay(data.display);
-    this.showLanguage(data.language);
   }
 
   /** @param {{current: Record<string, number>, target: Record<string, number>, saved: boolean} | null} display */
@@ -73,24 +71,6 @@ export class SettingsPanel {
     note.className = `hint ${fits ? 'ok' : 'problem'}`;
   }
 
-  /** @param {{current: string, target: string, saved: boolean} | null} language CoC's language on the device */
-  showLanguage(language) {
-    this.language = language && typeof language === 'object' && typeof language.current === 'string' ? language : null;
-    this.renderLanguage();
-  }
-
-  renderLanguage() {
-    const language = this.language;
-    const indonesian = Boolean(language) && ['id', 'in'].includes(language.current.toLowerCase().split(/[-_]/)[0]);
-    $('language-now').textContent = language ? language.current : '-';
-    $('language-target').textContent = language ? language.target : '-';
-    const note = $('language-note');
-    if (!language) note.textContent = t('language_unknown');
-    else if (!indonesian) note.textContent = t('language_differs');
-    else note.textContent = t(language.saved ? 'language_saved' : 'language_fits');
-    note.className = `hint ${indonesian ? 'ok' : 'problem'}`;
-  }
-
   /** @param {Record<string, unknown>} found what auto-detect found on the device, with its problems */
   detected(found) {
     if (!found || typeof found !== 'object') return;
@@ -101,7 +81,6 @@ export class SettingsPanel {
 
   render() {
     this.renderDisplay();
-    this.renderLanguage();
     const notes = $('setup-notes');
     notes.textContent = '';
     if (!this.found) return;

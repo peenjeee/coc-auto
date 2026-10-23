@@ -142,7 +142,6 @@ function resultText(result) {
 
 const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved'];
 const DISPLAY_ANSWERS = ['display_fitted', 'display_ok', 'display_restored', 'display_unchanged'];
-const LANGUAGE_ANSWERS = ['language_fitted', 'language_ok', 'language_restored', 'language_unchanged'];
 
 function handleResult(result, quiet = false) {
   if (!quiet || !result.ok) notify(resultText(result), result.ok ? 'ok' : 'error');
@@ -152,7 +151,6 @@ function handleResult(result, quiet = false) {
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) settings.load(result.data);
   else if (DISPLAY_ANSWERS.includes(result.code)) settings.showDisplay(result.data);
-  else if (LANGUAGE_ANSWERS.includes(result.code)) settings.showLanguage(result.data);
 }
 
 class LocalLink {

@@ -50,7 +50,7 @@ COMMAND_MAX_AGE_SECONDS = 120
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
                     'set_setup': 'setup_saved'}
 ACTIONS = ('start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
-           'fit_display', 'restore_display', 'fit_language', 'restore_language', *SETTINGS_ACTIONS)
+           'fit_display', 'restore_display', *SETTINGS_ACTIONS)
 VILLAGE_CHOICES = ('home', 'builder', 'both')
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
 # Option name, CLI flag, range; zero means "no limit" and is left out, except for recoveries.
@@ -503,14 +503,6 @@ class Supervisor:
             if self.device.restore_display():
                 return 'display_restored', 'Layar LDPlayer dikembalikan ke setelan semula', self.display_data()
             return 'display_unchanged', 'Tidak ada setelan layar yang perlu dikembalikan', self.display_data()
-        if action == 'fit_language':
-            if self.device.fit_language():
-                return 'language_fitted', 'Bahasa CoC diubah ke Indonesia; CoC dibuka ulang', self.language_data()
-            return 'language_ok', 'Bahasa CoC sudah Indonesia', self.language_data()
-        if action == 'restore_language':
-            if self.device.restore_language():
-                return 'language_restored', 'Bahasa CoC dikembalikan ke setelan semula', self.language_data()
-            return 'language_unchanged', 'Tidak ada setelan bahasa yang perlu dikembalikan', self.language_data()
         self.device.kill_ld()
         if action == 'kill_ld':
             return 'ld_off', 'Bot dihentikan dan LDPlayer dimatikan', None
@@ -534,21 +526,14 @@ class Supervisor:
             message = 'Pengaturan LDPlayer disimpan; berlaku saat Start berikutnya'
         else:
             message = 'Pengaturan dimuat'
-        return code, message, {**self.settings.read(), 'display': self.display_data(), 'language': self.language_data()}
+        return code, message, {**self.settings.read(), 'display': self.display_data()}
 
     def display_data(self) -> dict | None:
-        return self.status_of(self.device.display_status, 'layar LDPlayer')
-
-    def language_data(self) -> dict | None:
-        return self.status_of(self.device.language_status, 'bahasa CoC')
-
-    def status_of(self, read: Callable[[], dict], what: str) -> dict | None:
-        """The screen or language for the settings panel; None when it cannot be read (LDPlayer off, no
-        ldconsole, Android without per-app languages)."""
+        """The LDPlayer screen for the settings panel; None when it cannot be read (no ldconsole, other layout)."""
         try:
-            return read()
-        except Exception as exc:  # The rest of the settings still load; the panel shows it as unknown.
-            self.log(f'REMOTE: {what} tidak terbaca ({exc})')
+            return self.device.display_status()
+        except Exception as exc:  # The rest of the settings still load; the panel shows the screen as unknown.
+            self.log(f'REMOTE: layar LDPlayer tidak terbaca ({exc})')
             return None
 
 
@@ -690,17 +675,14 @@ def show_key(config_path: Path, renew: bool = False, home: Path | None = None) -
 
 
 def leave(supervisor: Supervisor) -> None:
-    """Done with the bot: stop it and give back the language and screen the user had before the dashboard switched
-    them. The language goes first, while LDPlayer still runs; putting the screen back restarts LDPlayer."""
+    """Done with the bot: stop it and give LDPlayer back the screen the user had before the dashboard switched it."""
     supervisor.log('REMOTE: keluar (Ctrl+C)')
     supervisor.stop()
-    for restore, what in ((supervisor.device.restore_language, 'bahasa CoC'),
-                          (supervisor.device.restore_display, 'layar LDPlayer')):
-        try:
-            if restore():
-                supervisor.log(f'REMOTE: {what} dikembalikan ke setelan semula')
-        except Exception as exc:  # Leaving must not fail; the saved setting stays for the next run.
-            supervisor.log(f'REMOTE: {what} belum dikembalikan ({exc}); pakai tombol di dashboard nanti')
+    try:
+        if supervisor.device.restore_display():
+            supervisor.log('REMOTE: layar LDPlayer dikembalikan ke setelan semula')
+    except Exception as exc:  # Leaving must not fail; the saved screen stays for the next run.
+        supervisor.log(f'REMOTE: layar LDPlayer belum dikembalikan ({exc}); pakai tombol di dashboard nanti')
 
 
 def supervise(job: list[str], config_path: Path, renew_key: bool = False) -> int:
