@@ -1574,6 +1574,40 @@
         "home",
         "builder"
       ]
+    },
+    "idle": {
+      "anchors": [
+        {
+          "roi": [
+            284,
+            276,
+            256,
+            32
+          ],
+          "file": "calibration/idle-title-407df76e19254b0490095d6bc5d899f7.png"
+        },
+        {
+          "roi": [
+            284,
+            326,
+            450,
+            28
+          ],
+          "file": "calibration/idle-text-8286d6ff039c4b398625cbffea854ad7.png"
+        }
+      ],
+      "overrides": [
+        "home",
+        "builder",
+        "build_list",
+        "wall_selected"
+      ],
+      "actions": {
+        "reload": [
+          381,
+          436
+        ]
+      }
     }
   },
   "digits": "calibration/digits",

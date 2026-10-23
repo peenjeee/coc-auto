@@ -321,6 +321,22 @@ class BotTests(unittest.TestCase):
             runner.wait({'home_army'}, {'home_menu'}, 1)
         self.assertEqual(device.inputs, [(20, 80)])
 
+    def test_an_idle_disconnect_is_reloaded(self):
+        idle = np.random.default_rng(41).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        anchors = []
+        for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'idle-{number}.png'), idle[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'idle-{number}.png'})
+        config = {**self.config, 'screens': {**self.config['screens'],
+                                             'idle': {'anchors': anchors, 'actions': {'reload': [40, 60]}}}}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, 'idle': idle}, 'idle')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'home'))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
+        self.assertEqual(device.inputs, [(40, 60)])
+
     def test_another_device_on_the_account_stops_the_run_without_reloading(self):
         taken = np.random.default_rng(37).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
