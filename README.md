@@ -348,7 +348,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot
 ```
 
-The suite (175 tests) uses synthetic screens and a fake device, plus two real builder-list panels in `fixtures/`. It covers screen detection, digit reading,
+The suite (176 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure
