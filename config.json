@@ -1524,6 +1524,34 @@
           46
         ]
       }
+    },
+    "search_failed": {
+      "anchors": [
+        {
+          "roi": [
+            345,
+            378,
+            592,
+            30
+          ],
+          "file": "calibration/search_failed-text-44bbad3de15845d3b642777685a35ebf.png"
+        },
+        {
+          "roi": [
+            20,
+            575,
+            130,
+            130
+          ],
+          "file": "calibration/search_failed-home-def4d22567c04923bf6fcd43a767a63a.png"
+        }
+      ],
+      "actions": {
+        "close": [
+          85,
+          640
+        ]
+      }
     }
   },
   "digits": "calibration/digits",

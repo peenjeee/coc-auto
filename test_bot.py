@@ -303,6 +303,23 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.wait({'home'}, {'home_result'}, 1), 'home')
         self.assertEqual(device.inputs, [(70, 40), (70, 80)])
 
+    def test_a_refused_search_goes_home_and_counts_as_a_timeout(self):
+        failed = np.random.default_rng(23).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        anchors = []
+        for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'failed-{number}.png'), failed[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'failed-{number}.png'})
+        config = {**self.config, 'screens': {**self.config['screens'],
+                                             'search_failed': {'anchors': anchors, 'actions': {'close': [20, 80]}}}}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, 'search_failed': failed}, 'search_failed')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'home'))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        with self.assertRaises(bot.WaitTimeout):
+            runner.wait({'home_army'}, {'home_menu'}, 1)
+        self.assertEqual(device.inputs, [(20, 80)])
+
     def test_league_window_is_closed_while_waiting_for_the_village(self):
         league = np.random.default_rng(17).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []

@@ -36,7 +36,7 @@ ACTIONS = {
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',),
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
-    'builder_wall_confirm': ('confirm', 'close'),
+    'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -90,7 +90,8 @@ RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
-OPTIONAL_SCREENS = ('builder_cart', *MENU_SCREENS)
+OPTIONAL_SCREENS = ('builder_cart', 'search_failed', *MENU_SCREENS)
+SEARCH_RETRY_SECONDS = 60
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 15, 5
 WHITE_LEVEL = 200
@@ -942,6 +943,11 @@ class Bot:
             if state == 'builder_cart' and state not in targets | allowed:
                 self.action(state, 'close')
                 continue
+            if state == 'search_failed' and state not in targets | allowed:
+                # The server refused the search ("coba lagi nanti"): go home, give it a minute, let recovery retry.
+                self.action(state, 'close')
+                time.sleep(SEARCH_RETRY_SECONDS if self.poll else 0)
+                raise WaitTimeout('Pencarian lawan ditolak server; coba lagi nanti')
             if state not in allowed | {'loading'}:
                 raise BotError(f'Layar tidak diharapkan saat menunggu: {state}')
             time.sleep(self.poll)
