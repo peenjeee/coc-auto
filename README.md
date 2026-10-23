@@ -7,7 +7,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 
 ![Demo: one Builder Base attack and one Home Village attack](docs/demo.gif)
 
-▶️ [Full-quality demo video (MP4)](docs/demo.mp4)
+▶️ [Full-quality demo video (MP4)](docs/demo.mp4) · 🖥️ [Web dashboard](#web-dashboard)
 
 > [!WARNING]
 > Automating Clash of Clans violates Supercell's Terms of Service. **Your account can be banned.**
@@ -253,6 +253,14 @@ dashboard (open the address it prints in a browser). Enter the key there to foll
 - **Local:** `http://localhost:8765`, served by the bot itself (works without internet).
 - **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The PC connects out to an online relay channel
   named after a hash of the key, so no router port has to be opened.
+
+![Web dashboard on a PC: device status, task options and the live log of a running bot](docs/dashboard-desktop.jpg)
+
+<p>
+  <img src="docs/dashboard-mobile.jpg" alt="Dashboard on a phone: status and task options" width="260">
+  <img src="docs/dashboard-settings.jpg" alt="Device settings: minimum opponent loot and the LDPlayer screen" width="260">
+  <img src="docs/dashboard-deploy.jpg" alt="Deploy pins over a real attack screen" width="260">
+</p>
 
 You can open the dashboard locally, or online when you are out or away from the PC. For online use, the PC that runs
 the bot must stay connected to the internet. Open [coc.0xpnj.dev](https://coc.0xpnj.dev) and enter the API key of the
