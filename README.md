@@ -28,8 +28,10 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Builder Base** | Reads the card bar too: drops the Battle Machine or Battle Copter and fires its ability, spreads one troop card per point around the base, handles stage 2, and claims the **Elixir Cart** before every attack. |
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
+| **Walls** | `--walls` spends stored gold and elixir on walls, cheapest level first, then farms both full and repeats until every wall is maxed. It never spends gems. |
+| **Web dashboard** | Live log and full control from a phone or the PC: start any command, stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. Installable as an app. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
-| **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. |
+| **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. A setup that cannot work (taps that cannot land, ADB debugging off, a loot minimum no opponent meets) stops the run with what to change. |
 
 ## Recommended armies
 
@@ -221,7 +223,7 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--config PATH` | `config.json` | Calibration file to use. |
+| `--config PATH` | `config.json` next to `bot.py` | Calibration file to use; `config.local.json` beside it is read on top. |
 | `--mode {home,builder,both}` | `both` | Villages used by `--cycles` runs. |
 | `--cycles N` | `1` | Rounds to attack (1–100). |
 | `--searches N` | `0` | Opponent searches per Home attack; `0` means unlimited. At the limit the base on screen is attacked whatever its loot, so the run never stops for want of a good base. |
@@ -398,7 +400,8 @@ How to change it:
 
 1. Card positions depend on army order, so with fixed `troops` re-check every `slot` after changing the army.
 2. The bot zooms out (`zoom_out`) before deploying, so drop points must be read from a **zoomed-out** battle screen, not a normal scout screenshot. Start an attack, zoom out like the bot does, then save a screenshot with `python calibrate.py --capture shot.png` and read pixel positions in any image viewer.
-3. Edit `config.json`, then check it without input: `python bot.py`.
+3. Edit your `config.local.json` (or `config.json`), then check it without input: `python bot.py`. Deploy points
+   can also be moved in the [web dashboard](#web-dashboard), over a real attack screen.
 4. Test one attack: `python bot.py --mode home --cycles 1 --live` (or `--mode builder`).
 
 <details>
@@ -411,6 +414,7 @@ How to change it:
 | `touch_device` | Raw touch input device, e.g. `/dev/input/event4`. |
 | `tesseract` | Tesseract executable; used for loot only when `digits` is not set. |
 | `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
+| `remote` | Web dashboard: online relay address and key, local `port` (8765), and the `dashboard` address printed in the terminal. |
 | `screens.<name>.anchors` | Two or more UI crops that must all match to identify a screen; optional `margin` for small UI shifts. |
 | `screens.<name>.alt_anchors` | Alternative anchor sets for screens with two layouts. |
 | `screens.<name>.overrides` | Screens this one wins over when both match (e.g. stage 2 over battle). |
@@ -455,6 +459,9 @@ How to change it:
 Every recovery counts towards `--max-recoveries` (20). A finished attack or an upgraded wall starts the count again,
 so the run stops only after that many recoveries with no progress in between.
 
+Single attacks (`--mode`/`--cycles`) also start LDPlayer and open CoC first when they are not up, but stop at the
+first error instead of recovering.
+
 ## Testing
 
 ```bash
@@ -487,10 +494,5 @@ calibration/           anchor, target and digit templates for config.json
 config.legacy.json     calibration for the previous game UI
 calibration-legacy/    templates for config.legacy.json
 config.example.json    minimal config skeleton
-docs/                  demo GIF and video
+docs/                  demo GIF and video, dashboard screenshots
 ```
-
-## Disclaimer
-
-This project is for educational purposes. It is not affiliated with, endorsed by, or sponsored by Supercell.
-Clash of Clans is a trademark of Supercell Oy. You are responsible for how you use it.
