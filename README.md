@@ -249,8 +249,8 @@ Every `bot.py` command prints this PC's **API key** (made once, kept in `~/.coc-
 dashboard (open the address it prints in a browser). Enter the key there to follow the terminal log live and control the bot:
 
 - **Local:** `http://localhost:8765`, served by the bot itself (works without internet).
-- **Online:** `https://coc.0xpnj.dev` (the `web/` folder, deployed on Netlify), for checking from a phone. The PC
-  connects out to a Supabase Realtime channel named after a hash of the key, so no router port has to be opened.
+- **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The PC connects out to a Supabase Realtime channel
+  named after a hash of the key, so no router port has to be opened.
 
 You can open the dashboard locally, or online when you are out or away from the PC. For online use, the PC that runs
 the bot must stay connected to the internet. Open [coc.0xpnj.dev](https://coc.0xpnj.dev) and enter the API key of the
@@ -300,20 +300,25 @@ screen" stops the bot, closes LDPlayer, writes only the resolution and DPI into 
 debugging) and starts LDPlayer again. Your own resolution and DPI are kept in `~/.coc-auto/display.json` and are put
 back when you leave the bot with **Ctrl+C**, or with "restore my screen". LDPlayer is restarted for a restore only
 if it is running.
+
 Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
 the running bot), and everything the PC sends online is signed with it too, so nobody else on the channel can pose
 as the device or as the dashboard. The key itself never leaves the browser or the PC, and the page loads no
 third-party code. Only the options the CLI offers are accepted. The local dashboard listens on 127.0.0.1 only and
 refuses other sites (Host, Origin and JSON checks). Use `--new-key` if the key was shared by mistake.
 
-Online setup (once, by the owner of the deployment):
+Online setup (already done for this repository):
 
-1. In the Supabase project, copy the **publishable key** (Project Settings → API Keys) into `remote.supabase_key` in
-   `config.json` and `SUPABASE_KEY` in `web/config.js`; set the project URL in both (`remote.supabase_url`,
-   `SUPABASE_URL`) and its host in `connect-src` of `netlify.toml`. Realtime must allow public channels (the
-   default).
-2. Deploy the `web/` folder on Netlify (`netlify.toml` sets the folder and security headers) and point the custom
-   domain at it. Set `remote.dashboard` to that address so the terminal shows it.
+- **Supabase** project `coc-auto` (Realtime with public broadcast channels). Its URL and **publishable key** are in
+  `remote` of `config.json` and in `web/config.js`. The publishable key is meant to be public: it only lets a
+  browser join a channel, while commands and device messages are signed with the device API key. On the free plan
+  Realtime allows 200 connections at once (one per PC running the bot, one per open dashboard) and 2 million
+  messages a month.
+- **Dashboard** `https://coc.0xpnj.dev` serves the `web/` folder with strict security headers (only its own
+  scripts, connections only to the Supabase project).
+
+For your own copy, create a Supabase project, put its URL and publishable key in those two places, host `web/` as a
+static site, and set `remote.dashboard` to its address so the terminal shows it.
 
 ## Calibration
 
@@ -476,7 +481,6 @@ relay.py               Supabase Realtime relay for the online dashboard
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging)
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
 web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own Realtime client, ID/EN text
-netlify.toml           Netlify publish folder and security headers
 calibrate.py           calibration CLI (screenshots only, never taps)
 test_bot.py            offline unit tests
 test_remote.py         dashboard link tests (key, signatures, options, child process, local server)

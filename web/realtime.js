@@ -27,7 +27,8 @@ export class RealtimeChannel {
     socket.onopen = () => {
       this.joinRef = this.nextRef();
       const config = { broadcast: { self: false, ack: false }, presence: { enabled: false }, private: false };
-      this.push('phx_join', { config }, this.topic, this.joinRef);
+      // The join's own ref is its join_ref: the reply carries that ref, and received() matches it.
+      this.push('phx_join', { config }, this.topic, this.joinRef, this.joinRef);
       this.beat = setInterval(() => this.push('heartbeat', {}, 'phoenix', null), HEARTBEAT_MS);
     };
     socket.onmessage = (message) => this.received(message.data);
@@ -72,9 +73,9 @@ export class RealtimeChannel {
     return this.push('broadcast', { type: 'broadcast', event, payload }, this.topic, this.joinRef);
   }
 
-  push(event, payload, topic, joinRef) {
+  push(event, payload, topic, joinRef, ref = this.nextRef()) {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
-    this.socket.send(JSON.stringify({ topic, event, payload, ref: this.nextRef(), join_ref: joinRef }));
+    this.socket.send(JSON.stringify({ topic, event, payload, ref, join_ref: joinRef }));
     return true;
   }
 
