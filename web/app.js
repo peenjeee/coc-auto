@@ -5,6 +5,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { applyLanguage, t } from './i18n.js';
 import { RealtimeChannel } from './realtime.js';
 import { DeployEditor } from './deploy.js';
+import { SettingsPanel } from './settings.js';
 
 const ACK_MS = 10000;
 const OFFLINE_AFTER_MS = 40000; // the device repeats its signed state every 15 s
@@ -26,6 +27,8 @@ let link = null;
 let online = false;
 let lastState = null;
 let editor = null;
+let settings = null;
+let settingsAsked = false;
 
 /** localStorage that never throws (private windows, blocked storage). */
 const stored = {
@@ -110,6 +113,11 @@ function setOnline(isOnline, reason) {
     notify(reason || t('offline_text'), 'error');
   } else if (isOnline && changed) {
     notify(t('connected'), 'ok');
+    // Show the device's minimums and LDPlayer setup once per connection, without a click.
+    if (!settingsAsked) {
+      settingsAsked = true;
+      setTimeout(() => send('get_settings', {}, { quiet: true }), 0);
+    }
   }
 }
 
@@ -129,10 +137,15 @@ function resultText(result) {
   return text === key ? String(result.message || '') : text;
 }
 
-function handleResult(result) {
-  notify(resultText(result), result.ok ? 'ok' : 'error');
+const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved'];
+
+function handleResult(result, quiet = false) {
+  if (!quiet || !result.ok) notify(resultText(result), result.ok ? 'ok' : 'error');
   showState(result.state);
-  if (result.ok && result.code === 'deploy_loaded' && result.data) editor.load(result.data);
+  if (!result.ok || !result.data) return;
+  if (result.code === 'deploy_loaded') editor.load(result.data);
+  else if (result.code === 'setup_detected') settings.detected(result.data);
+  else if (SETTINGS_ANSWERS.includes(result.code)) settings.load(result.data);
 }
 
 class LocalLink {
@@ -255,6 +268,7 @@ function readOptions() {
   if (task === 'farm') {
     options.builder = data.getAll('builder');
     options.home = data.getAll('home');
+    if (data.get('dark') && !options.builder.length && !options.home.length) options.dark = true;
   }
   if (task === 'walls' || task === 'farm') {
     options.first = data.get('first');
@@ -282,7 +296,7 @@ function previewArgs(options) {
     for (const village of ['builder', 'home']) {
       if (options[village].length) args.push(`--${village}`, options[village].join(','));
     }
-    if (!args.length) args = ['--until-full'];
+    if (!args.length) args = options.dark ? ['--until-full', '--dark'] : ['--until-full'];
   }
   if (options.first) args.push('--first', options.first);
   for (const [name, flag] of [['searches', '--searches'], ['hours', '--hours'], ['minutes', '--minutes'], ['max_upgrades', '--max-upgrades']]) {
@@ -293,6 +307,9 @@ function previewArgs(options) {
 }
 
 function refreshOptions() {
+  // "Include dark elixir" belongs to the plain fill-until-full; picked resources say it themselves.
+  const form = $('options');
+  form.elements.namedItem('dark').disabled = Boolean(form.querySelector('input[name="builder"]:checked, input[name="home"]:checked'));
   const options = readOptions();
   for (const element of document.querySelectorAll('[data-for]')) {
     element.hidden = !element.dataset.for.split(' ').includes(options.task);
@@ -322,10 +339,11 @@ function restoreOptions() {
 }
 
 function setBusy(busy) {
-  for (const button of document.querySelectorAll('#options button, #deploy-load, #deploy-save')) button.disabled = busy;
+  for (const button of document.querySelectorAll('#options button, #deploy-load, #deploy-save, .settings button')) button.disabled = busy;
 }
 
-async function send(action, args = {}) {
+/** Send a signed command; quiet ones (loading on connect) only speak up when they fail. */
+async function send(action, args = {}, { quiet = false } = {}) {
   if (!link) return;
   if (!online) {
     notify(t('cannot_run', { action, reason: t('offline_text') }), 'error');
@@ -334,9 +352,9 @@ async function send(action, args = {}) {
   const nonce = crypto.randomUUID();
   const body = JSON.stringify({ action, args, ts: Date.now() / 1000, nonce });
   setBusy(true);
-  notify(t('sending', { action }));
+  if (!quiet) notify(t('sending', { action }));
   try {
-    handleResult(await link.send(body, await sign(body), nonce));
+    handleResult(await link.send(body, await sign(body), nonce), quiet);
   } catch (error) {
     notify(t('send_failed', { error: error instanceof Error ? error.message : String(error) }), 'error');
   } finally {
@@ -358,6 +376,7 @@ async function connect(rawKey) {
   if (link) link.close();
   clearLines();
   online = false;
+  settingsAsked = false;
   try {
     link = LOCAL ? await LocalLink.open(channel) : await RelayLink.open(channel);
   } catch (error) {
@@ -379,10 +398,12 @@ function changeLanguage(language) {
   badge.textContent = t(online ? 'online' : 'offline');
   showState(lastState);
   editor.render();
+  settings.render();
 }
 
 function init() {
   editor = new DeployEditor((screen, deploy, points) => send('set_deploy', { screen, deploy, points }));
+  settings = new SettingsPanel(send);
   changeLanguage();
   restoreOptions();
   refreshOptions();

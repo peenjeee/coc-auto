@@ -12,6 +12,7 @@ import math
 import os
 from pathlib import Path
 import queue
+import re
 import secrets
 import signal
 import socket
@@ -22,6 +23,8 @@ import time
 from typing import Callable
 from urllib.parse import parse_qs, urlsplit
 
+import ldplayer
+
 HERE = Path(__file__).resolve().parent
 BOT_SCRIPT, WEB_DIR = HERE / 'bot.py', HERE / 'web'
 DEFAULT_PORT, DEFAULT_DASHBOARD = 8765, 'https://coc.0xpnj.dev'
@@ -30,7 +33,8 @@ STOP_SECONDS = 20
 STREAM_PING_SECONDS = 15
 MAX_COMMAND_BYTES = 64 * 1024
 STATIC_FILES = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js',
-                '/realtime.js': 'realtime.js', '/deploy.js': 'deploy.js', '/style.css': 'style.css',
+                '/realtime.js': 'realtime.js', '/deploy.js': 'deploy.js', '/settings.js': 'settings.js',
+                '/style.css': 'style.css',
                 '/config.js': 'config.js', '/favicon.svg': 'favicon.svg'}
 CONTENT_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
                  '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml'}
@@ -41,7 +45,11 @@ AGENT_SIGNATURE_PREFIX = 'agent:'
 KEY_PREFIX = 'coc_'
 KEY_FILE = Path('.coc-auto') / 'device.json'
 COMMAND_MAX_AGE_SECONDS = 120
-ACTIONS = ('start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy')
+# Settings action -> its answer code; every one answers with the settings as they are now (or what was found).
+SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
+                    'set_setup': 'setup_saved'}
+ACTIONS = ('start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
+           *SETTINGS_ACTIONS)
 VILLAGE_CHOICES = ('home', 'builder', 'both')
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
 # Option name, CLI flag, range; zero means "no limit" and is left out, except for recoveries.
@@ -49,7 +57,7 @@ LIMITS = (('searches', '--searches', 0, 1_000_000), ('hours', '--hours', 0, 1000
           ('minutes', '--minutes', 0, 60_000), ('max_upgrades', '--max-upgrades', 0, 100_000))
 TASK_OPTIONS = {
     'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'max_recoveries'},
-    'farm': {'home', 'builder', 'first', 'searches', 'hours', 'minutes', 'max_recoveries'},
+    'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries'},
     'attack': {'village', 'cycles', 'searches'},
     'dry': {'village'},
 }
@@ -57,6 +65,12 @@ TASK_OPTIONS = {
 DEPLOY_POINTS = {'home_scout': 'spells', 'builder_scout': 'points', 'builder_stage2': 'points'}
 MAX_DEPLOY_POINTS = {'spells': 30, 'points': 20}
 SNAPSHOT_SIZE, SNAPSHOT_QUALITY = (640, 360), 70
+MINIMUM_KEYS, MAX_MINIMUM = ('gold', 'elixir', 'dark'), 999_999_999
+SETUP_FIELDS = ('adb', 'ldconsole', 'serial', 'ld_index', 'touch_device')
+LD_TOOLS = {'adb': 'adb.exe', 'ldconsole': 'ldconsole.exe'}
+SERIAL = re.compile(r'emulator-\d{4,5}|127\.0\.0\.1:\d{2,5}')
+LOCAL_DRIVE = re.compile(r'[A-Za-z]:')
+MAX_LD_INDEX = 99
 
 
 class CommandRefused(Exception):
@@ -136,6 +150,13 @@ def whole(options: dict, name: str, low: int, high: int) -> int | None:
     return value
 
 
+def required(options: dict, name: str, low: int, high: int) -> int:
+    value = whole(options, name, low, high)
+    if value is None:
+        raise CommandRefused(f'Pilihan {name} harus angka {low}..{high}')
+    return value
+
+
 def choice(options: dict, name: str, allowed: tuple, default: str | None = None) -> str:
     value = options.get(name, default)
     if not isinstance(value, str) or value not in allowed:
@@ -161,6 +182,9 @@ def build_args(options: dict) -> list[str]:
     elif task == 'walls':
         args = ['--walls', choice(options, 'walls', VILLAGE_CHOICES)]
     else:
+        dark = options.get('dark', False)
+        if not isinstance(dark, bool):
+            raise CommandRefused('Pilihan dark harus ya/tidak')
         args = []
         for village in ('builder', 'home'):
             chosen = options.get(village) or []
@@ -169,7 +193,11 @@ def build_args(options: dict) -> list[str]:
                 raise CommandRefused(f'Resource {village} tidak dikenal')
             if chosen:
                 args += [f'--{village}', ','.join(key for key in RESOURCES[village] if key in chosen)]
-        args = args or ['--until-full']
+        if args and dark:
+            raise CommandRefused('dark elixir di sini hanya untuk "isi sampai penuh"; dengan pilihan resource, '
+                                 'centang dark di desa asal')
+        if not args:
+            args = ['--until-full', '--dark'] if dark else ['--until-full']
     if task != 'attack' and 'first' in options:
         args += ['--first', choice(options, 'first', ('builder', 'home'))]
     for name, flag, low, high in LIMITS:
@@ -271,23 +299,83 @@ class DeployPoints:
             raise CommandRefused(f'Jumlah titik harus 1..{MAX_DEPLOY_POINTS[kind]}')
         target['deploy'] = pin(deploy, width, bottom)
         target['auto'][kind] = [pin(point, width, bottom) for point in points]
-        try:
-            bot.validate_config(config, self.root, 'both')
-        except bot.BotError as exc:
-            raise CommandRefused(f'Titik deploy ditolak: {exc}') from exc
-        text = json.dumps(config, indent=2) + '\n'
-        backup, temporary = self.config_path.with_suffix('.json.bak'), self.config_path.with_suffix('.json.tmp')
-        backup.write_text(self.config_path.read_text(encoding='utf-8'), encoding='utf-8')
-        temporary.write_text(text, encoding='utf-8')
-        os.replace(temporary, self.config_path)
+        save_config(self.config_path, config, self.root, 'Titik deploy')
+
+
+def save_config(config_path: Path, config: dict, root: Path, what: str) -> None:
+    """Write config.json once it passes the checks bot.py makes before a run; the old file stays as .bak."""
+    import bot
+    try:
+        bot.validate_config(config, root, 'both')
+    except bot.BotError as exc:
+        raise CommandRefused(f'{what} ditolak: {exc}') from exc
+    text = json.dumps(config, indent=2) + '\n'
+    backup, temporary = config_path.with_suffix('.json.bak'), config_path.with_suffix('.json.tmp')
+    backup.write_text(config_path.read_text(encoding='utf-8'), encoding='utf-8')
+    temporary.write_text(text, encoding='utf-8')
+    os.replace(temporary, config_path)
+
+
+def ld_tool(value: object, name: str) -> str:
+    """A path to one of LDPlayer's own tools: the bot runs it, so it must be that file on a local drive (a network
+    share would let a signed command run a program from elsewhere)."""
+    path = Path(value) if isinstance(value, str) and value else None
+    if (path is None or not LOCAL_DRIVE.fullmatch(path.drive) or not path.is_absolute()
+            or path.name.lower() != name or not path.is_file()):
+        raise CommandRefused(f'{name} tidak ditemukan; pilih {name} di folder LDPlayer')
+    return str(path)
+
+
+class Settings:
+    """Loot minimums and the LDPlayer setup of config.json for the dashboard, written only after the checks
+    bot.py makes; detection only looks and fills nothing in by itself."""
+
+    def __init__(self, config_path: Path, root: Path | None = None,
+                 detector: Callable[[dict], dict] = ldplayer.detect) -> None:
+        self.config_path, self.root, self.detector = config_path, root or config_path.parent, detector
+
+    def config(self) -> dict:
+        return json.loads(self.config_path.read_text(encoding='utf-8'))
+
+    def read(self) -> dict:
+        config = self.config()
+        minimum = config.get('minimum') or {}
+        return {'minimum': {key: minimum.get(key, 0) for key in MINIMUM_KEYS},
+                'setup': {name: config.get(name) for name in SETUP_FIELDS}}
+
+    def detect(self) -> dict:
+        return self.detector(self.config())
+
+    def write_minimum(self, minimum: object) -> None:
+        if not isinstance(minimum, dict) or set(minimum) != set(MINIMUM_KEYS):
+            raise CommandRefused('Minimal loot perlu gold, elixir dan dark')
+        config = {**self.config(), 'minimum': {key: required(minimum, key, 0, MAX_MINIMUM) for key in MINIMUM_KEYS}}
+        save_config(self.config_path, config, self.root, 'Minimal loot')
+
+    def write_setup(self, setup: object) -> None:
+        import bot
+        if not isinstance(setup, dict) or set(setup) != set(SETUP_FIELDS):
+            raise CommandRefused('Pengaturan LDPlayer perlu ' + ', '.join(SETUP_FIELDS))
+        serial, touch = setup['serial'], setup['touch_device']
+        if not isinstance(serial, str) or not SERIAL.fullmatch(serial):
+            raise CommandRefused('serial harus seperti emulator-5554 atau 127.0.0.1:5555')
+        if not isinstance(touch, str) or not bot.TOUCH_DEVICE.fullmatch(touch):
+            raise CommandRefused('touch_device harus /dev/input/eventN')
+        config = {**self.config(), **{name: ld_tool(setup[name], file) for name, file in LD_TOOLS.items()},
+                  'serial': serial, 'ld_index': required(setup, 'ld_index', 0, MAX_LD_INDEX), 'touch_device': touch}
+        # Zooming out pinches on the same touchscreen the taps go to.
+        if config.get('zoom_out'):
+            config['zoom_out'] = {**config['zoom_out'], 'device': touch}
+        save_config(self.config_path, config, self.root, 'Pengaturan LDPlayer')
 
 
 class Supervisor:
     """Runs bot.py as a child process, keeps its log for the dashboard and carries out signed commands."""
 
-    def __init__(self, key: str, command: list[str], device, deploy: DeployPoints | None = None) -> None:
+    def __init__(self, key: str, command: list[str], device, deploy: DeployPoints | None = None,
+                 settings: Settings | None = None) -> None:
         self.key, self.channel = key, channel_name(key)
-        self.command_base, self.device, self.deploy = command, device, deploy
+        self.command_base, self.device, self.deploy, self.settings = command, device, deploy, settings
         self.lines: deque = deque(maxlen=HISTORY_LINES)
         self.subscribers: list[Callable[[str, object], None]] = []
         self.child: subprocess.Popen | None = None
@@ -418,6 +506,8 @@ class Supervisor:
             for shot in self.deploy.snapshots():
                 self.publish('snapshot', shot)
             return 'deploy_loaded', 'Titik deploy dimuat', data
+        if action in SETTINGS_ACTIONS:
+            return self.configure(action, options)
         # Closing the game or the emulator under a running bot would only start its recovery.
         self.stop()
         if action == 'close_coc':
@@ -428,6 +518,25 @@ class Supervisor:
             return 'ld_off', 'Bot dihentikan dan LDPlayer dimatikan', None
         self.device.launch_ld()
         return 'ld_restarted', 'LDPlayer dinyalakan ulang', None
+
+    def configure(self, action: str, options: dict) -> tuple[str, str, dict]:
+        """Settings changes take effect at the next Start; a bot already running keeps the config it read."""
+        if self.settings is None:
+            raise CommandRefused('pengaturan tidak tersedia di perangkat ini')
+        code = SETTINGS_ACTIONS[action]
+        if action == 'detect_setup':
+            found = self.settings.detect()
+            notes = '; '.join(found['problems']) or 'semua ditemukan, cek lalu Simpan'
+            return code, f'Deteksi LDPlayer: {notes}', found
+        if action == 'set_minimum':
+            self.settings.write_minimum(options.get('minimum'))
+            message = 'Minimal loot disimpan; berlaku saat Start berikutnya'
+        elif action == 'set_setup':
+            self.settings.write_setup(options.get('setup'))
+            message = 'Pengaturan LDPlayer disimpan; berlaku saat Start berikutnya'
+        else:
+            message = 'Pengaturan dimuat'
+        return code, message, self.settings.read()
 
 
 def event(kind: str, data: object) -> bytes:
@@ -555,7 +664,8 @@ def supervise(job: list[str], config_path: Path, renew_key: bool = False) -> int
     settings = remote_settings(config_path)
     key = device_key(renew=renew_key)
     supervisor = Supervisor(key, [sys.executable, str(BOT_SCRIPT), '--config', str(config_path)],
-                            DeviceActions(config_path), DeployPoints(config_path, config_path.parent / 'captures'))
+                            DeviceActions(config_path), DeployPoints(config_path, config_path.parent / 'captures'),
+                            Settings(config_path))
     # The key goes to this terminal only, never into the streamed log.
     print('=' * 60)
     print(f'API key perangkat : {key}' + ('  (BARU; key lama tidak berlaku lagi)' if renew_key else ''))

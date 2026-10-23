@@ -740,10 +740,15 @@ def calibrated(config: dict, village: str) -> set:
     return found
 
 
-def parse_goals(config: dict, builder: str | None, home: str | None, first: str) -> dict:
-    """Village -> resources to fill, in visiting order; no choice means both villages without dark elixir."""
+def parse_goals(config: dict, builder: str | None, home: str | None, first: str, dark: bool = False) -> dict:
+    """Village -> resources to fill, in visiting order; no choice means both villages, with dark elixir only
+    when asked for."""
     if builder is None and home is None:
         goals = {village: set(DEFAULT_GOALS[village]) & calibrated(config, village) for village in VILLAGES}
+        if dark:
+            if 'dark' not in calibrated(config, 'home'):
+                raise BotError('Belum dikalibrasi di home: dark')
+            goals['home'].add('dark')
     else:
         goals = {}
         for village, text in (('builder', builder), ('home', home)):
@@ -2476,6 +2481,8 @@ def main() -> int:
                         help='--until-full desa malam saja sampai penuh: gold,elixir,cart (pilih sebagian) atau all')
     parser.add_argument('--home', metavar='RESOURCES',
                         help='--until-full desa asal saja sampai penuh: gold,elixir,dark (pilih sebagian) atau all')
+    parser.add_argument('--dark', action='store_true',
+                        help='--until-full: isi juga dark elixir desa asal (tanpa ini hanya gold dan elixir)')
     parser.add_argument('--first', choices=('builder', 'home'), default='builder',
                         help='Desa yang dikerjakan dulu bila dua desa dipilih')
     parser.add_argument('--walls', choices=('home', 'builder', 'both'),
@@ -2517,6 +2524,8 @@ def main() -> int:
             raise BotError('--hours/--minutes hanya untuk --until-full/--builder/--home/--walls dengan --live')
         if args.max_upgrades and not args.walls:
             raise BotError('--max-upgrades hanya untuk --walls')
+        if args.dark and (not args.until_full or args.builder is not None or args.home is not None):
+            raise BotError('--dark hanya untuk --until-full tanpa --builder/--home (atau pakai --home gold,elixir,dark)')
         if not (args.worker or args.no_remote):
             import remote
             # The job runs as a child (--worker) under the dashboard link, which stays up after it ends.
@@ -2526,7 +2535,7 @@ def main() -> int:
         if args.walls and until_full:
             raise BotError('--walls tidak bisa digabung dengan --until-full/--builder/--home')
         walls = wall_order(args.walls, args.first) if args.walls else ()
-        goals = parse_goals(config, args.builder, args.home, args.first) if until_full else None
+        goals = parse_goals(config, args.builder, args.home, args.first, args.dark) if until_full else None
         villages = walls or tuple(goals or ())
         mode = (villages[0] if len(villages) == 1 else 'both') if villages else args.mode
         validate_config(config, args.config.parent, mode)

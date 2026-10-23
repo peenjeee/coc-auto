@@ -1382,6 +1382,14 @@ class BotTests(unittest.TestCase):
         self.assertEqual(goals['builder'], {'gold', 'elixir', 'cart'})
         self.assertEqual(goals['home'], {'gold', 'elixir'})
 
+    def test_goals_default_can_take_dark_elixir_too(self):
+        goals = bot.parse_goals(self.goal_config(), None, None, 'builder', dark=True)
+        self.assertEqual(goals, {'builder': {'gold', 'elixir', 'cart'}, 'home': {'gold', 'elixir', 'dark'}})
+        config = self.goal_config()
+        without_dark = {**config, 'storage': {**config['storage'], 'home': {'gold': config['cart_bar']}}}
+        with self.assertRaises(bot.BotError):
+            bot.parse_goals(without_dark, None, None, 'builder', dark=True)
+
     def test_goals_pick_resources_village_and_order(self):
         config = self.goal_config()
         self.assertEqual(bot.parse_goals(config, 'gold', None, 'builder'), {'builder': {'gold'}})

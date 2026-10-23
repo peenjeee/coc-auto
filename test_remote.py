@@ -194,6 +194,99 @@ class DeployPointsTests(unittest.TestCase):
         self.assertEqual(self.screen('home_scout')['auto']['spells'], [[400, 340], [300, 270], [300, 420]])
 
 
+class SettingsTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        folder = Path(self.temp.name)
+        self.config = folder / 'config.json'
+        self.config.write_text((REPO / 'config.json').read_text(encoding='utf-8'), encoding='utf-8')
+        self.ld = folder / 'LDPlayer9'
+        self.ld.mkdir()
+        for name in ('adb.exe', 'ldconsole.exe'):
+            (self.ld / name).write_bytes(b'')
+        self.asked = []
+        self.settings = remote.Settings(self.config, REPO, detector=lambda config: self.asked.append(config) or
+                                        {'adb': 'C:/LD/adb.exe', 'problems': []})
+
+    def stored(self):
+        return json.loads(self.config.read_text(encoding='utf-8'))
+
+    def setup(self, **changes):
+        return {'adb': str(self.ld / 'adb.exe'), 'ldconsole': str(self.ld / 'ldconsole.exe'), 'serial': 'emulator-5556',
+                'ld_index': 1, 'touch_device': '/dev/input/event5', **changes}
+
+    def test_minimums_and_the_ldplayer_setup_are_read(self):
+        data, config = self.settings.read(), self.stored()
+        self.assertEqual(data['minimum'], {key: config['minimum'].get(key, 0) for key in ('gold', 'elixir', 'dark')})
+        self.assertEqual(data['setup']['serial'], config['serial'])
+        self.assertEqual(data['setup']['touch_device'], config['touch_device'])
+
+    def test_minimums_are_saved_and_the_rest_of_the_config_is_kept(self):
+        before = self.stored()
+        self.settings.write_minimum({'gold': 300000, 'elixir': 250000, 'dark': 4000})
+        after = self.stored()
+        self.assertEqual(after['minimum'], {'gold': 300000, 'elixir': 250000, 'dark': 4000})
+        self.assertEqual({**after, 'minimum': before['minimum']}, before)
+        self.assertTrue(self.config.with_suffix('.json.bak').is_file())
+
+    def test_bad_minimums_are_refused(self):
+        original = self.config.read_text(encoding='utf-8')
+        for minimum in ('500000', {'gold': 5}, {'gold': -1, 'elixir': 0, 'dark': 0},
+                        {'gold': 1_000_000_000, 'elixir': 0, 'dark': 0}, {'gold': True, 'elixir': 0, 'dark': 0},
+                        {'gold': 1.5, 'elixir': 0, 'dark': 0}, {'gold': None, 'elixir': 0, 'dark': 0},
+                        {'gold': 0, 'elixir': 0, 'dark': 0, 'gems': 1}):
+            with self.subTest(minimum=minimum), self.assertRaises(remote.CommandRefused):
+                self.settings.write_minimum(minimum)
+        self.assertEqual(self.config.read_text(encoding='utf-8'), original)
+
+    def test_a_minimum_the_bot_cannot_read_is_refused(self):
+        config = self.stored()
+        del config['screens']['home_scout']['loot']['dark']
+        self.config.write_text(json.dumps(config), encoding='utf-8')
+        with self.assertRaises(remote.CommandRefused):
+            self.settings.write_minimum({'gold': 0, 'elixir': 0, 'dark': 5000})
+
+    def test_the_ldplayer_setup_is_saved_with_the_zoom_touchscreen(self):
+        self.settings.write_setup(self.setup())
+        after = self.stored()
+        self.assertEqual((after['adb'], after['ldconsole'], after['serial'], after['ld_index'], after['touch_device']),
+                         (str(self.ld / 'adb.exe'), str(self.ld / 'ldconsole.exe'), 'emulator-5556', 1,
+                          '/dev/input/event5'))
+        self.assertEqual(after['zoom_out']['device'], '/dev/input/event5')
+
+    def test_a_setup_that_is_not_ldplayer_is_refused(self):
+        original = self.config.read_text(encoding='utf-8')
+        for setup in (self.setup(adb=sys.executable), self.setup(adb='adb.exe'),
+                      self.setup(adb=r'\\attacker.example\share\adb.exe'), self.setup(adb='//attacker.example/s/adb.exe'),
+                      self.setup(ldconsole=str(self.ld / 'missing' / 'ldconsole.exe')),
+                      self.setup(serial='-s emulator-5554'), self.setup(serial='emulator-5554;calc'),
+                      self.setup(ld_index=100), self.setup(ld_index=True), self.setup(ld_index=None),
+                      self.setup(touch_device='/dev/input/mouse0'),
+                      self.setup(extra='x'), {'serial': 'emulator-5554'}, 'emulator-5554'):
+            with self.subTest(setup=setup), self.assertRaises(remote.CommandRefused):
+                self.settings.write_setup(setup)
+        self.assertEqual(self.config.read_text(encoding='utf-8'), original)
+
+    def test_detection_gets_the_current_config(self):
+        self.assertEqual(self.settings.detect(), {'adb': 'C:/LD/adb.exe', 'problems': []})
+        self.assertEqual(self.asked[0]['serial'], self.stored()['serial'])
+
+    def test_the_dashboard_reads_detects_and_saves_through_signed_commands(self):
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), settings=self.settings)
+        for action, args, code in (('get_settings', {}, 'settings_loaded'),
+                                   ('set_minimum', {'minimum': {'gold': 1, 'elixir': 2, 'dark': 0}}, 'minimum_saved'),
+                                   ('detect_setup', {}, 'setup_detected'),
+                                   ('set_setup', {'setup': self.setup()}, 'setup_saved')):
+            result = supervisor.command(*signed(action, args))
+            with self.subTest(action=action):
+                self.assertEqual((result['ok'], result['code']), (True, code), result)
+                self.assertIn('data', result)
+        self.assertEqual(self.stored()['minimum'], {'gold': 1, 'elixir': 2, 'dark': 0})
+        bare = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice())
+        self.assertEqual(bare.command(*signed('get_settings'))['code'], 'refused')
+
+
 class DashboardTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -354,6 +447,11 @@ class BuildArgsTests(unittest.TestCase):
 
     def test_farm_with_nothing_chosen_fills_both_villages(self):
         self.assertEqual(remote.build_args({'task': 'farm'}), ['--until-full', '--live'])
+        self.assertEqual(remote.build_args({'task': 'farm', 'dark': False}), ['--until-full', '--live'])
+
+    def test_farm_can_fill_dark_elixir_too(self):
+        self.assertEqual(remote.build_args({'task': 'farm', 'dark': True, 'hours': 2}),
+                         ['--until-full', '--dark', '--hours', '2', '--live'])
 
     def test_single_attacks_and_a_dry_run(self):
         self.assertEqual(remote.build_args({'task': 'attack', 'village': 'home', 'cycles': 3}),
@@ -368,7 +466,8 @@ class BuildArgsTests(unittest.TestCase):
         for options in ({'task': 'shell'}, {'task': 'walls', 'walls': 'moon'}, {'task': 'walls', 'hours': -1},
                         {'task': 'farm', 'home': ['gems']}, {'task': 'walls', 'walls': 'home', 'extra': '--x'},
                         {'task': 'attack', 'cycles': '3; rm'}, {'task': 'farm', 'max_upgrades': 3},
-                        {'task': 'walls', 'walls': 'home', 'hours': True}):
+                        {'task': 'walls', 'walls': 'home', 'hours': True}, {'task': 'farm', 'dark': 'yes'},
+                        {'task': 'farm', 'dark': True, 'home': ['gold']}, {'task': 'walls', 'walls': 'home', 'dark': True}):
             with self.subTest(options=options), self.assertRaises(remote.CommandRefused):
                 remote.build_args(options)
 

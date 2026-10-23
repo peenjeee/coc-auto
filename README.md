@@ -107,6 +107,11 @@ row below. Everything here is either an LDPlayer setting or a key in `config.jso
 | `minimum` | A loot filter that fits your Town Hall | `500000` gold and elixir suits high Town Halls. Lower it for a low Town Hall, or every opponent is skipped. `0` turns a resource off. |
 | `tesseract` | Only when `digits` is not set | Loot is read with the digit templates in `calibration/digits`. Tesseract is needed only if you remove `digits`. |
 
+The LDPlayer rows (`adb`, `ldconsole`, `ld_index`, `serial`, `touch_device`) can also be filled from the
+[web dashboard](#web-dashboard): **auto-detect** under device settings finds the LDPlayer folder, the running instance,
+its adb serial, the touchscreen node and the screen size, and lists anything that does not fit (for example a
+resolution other than 1280×720). Check the result and press save. `minimum` can be set there too.
+
 Then open the village and run the dry run, which sends no input:
 
 ```bash
@@ -137,7 +142,11 @@ python bot.py --until-full --live
 
 `--builder` and `--home` pick the village and the resources to fill. Each takes a comma-separated list or `all`,
 and either one alone farms only that village. Without both, `--until-full` fills Builder Base gold, elixir and the
-Elixir Cart, then Home Village gold and elixir.
+Elixir Cart, then Home Village gold and elixir. Add `--dark` to fill Home Village dark elixir as well:
+
+```bash
+python bot.py --until-full --dark --live
+```
 
 | Village | Resources | `all` means |
 | --- | --- | --- |
@@ -201,6 +210,7 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--cycles N` | `1` | Rounds to attack (1–100). |
 | `--searches N` | `0` | Opponent searches per Home attack; `0` means unlimited. At the limit the base on screen is attacked whatever its loot, so the run never stops for want of a good base. |
 | `--until-full` | off | Attack until gold and elixir are full in both villages. |
+| `--dark` | off | With `--until-full` (and no `--builder`/`--home`): fill Home Village dark elixir too. |
 | `--builder RESOURCES` | – | Fill these Builder Base resources (`gold`, `elixir`, `cart`, or `all`). Implies `--until-full`. |
 | `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
 | `--first {builder,home}` | `builder` | Which village to work on first when both are chosen. |
@@ -225,9 +235,17 @@ dashboard. Enter the key there to follow the terminal log live and control the b
 - **Online:** `https://coc.0xpnj.dev` (the `web/` folder, deployed on Netlify), for checking from a phone. The PC
   connects out to a Supabase Realtime channel named after a hash of the key, so no router port has to be opened.
 
+You can open the dashboard locally, or online when you are out or away from the PC. For online use, the PC that runs
+the bot must stay connected to the internet. Open [coc.0xpnj.dev](https://coc.0xpnj.dev) and enter the API key of the
+PC that runs the bot; the key is printed in the terminal when the script starts.
+
+> **ID:** Anda dapat membuka web lokal maupun online jika sedang di luar atau jauh dari perangkat. Pastikan perangkat
+> yang menjalankan bot terhubung ke internet. Pantau lewat [coc.0xpnj.dev](https://coc.0xpnj.dev) dengan memasukkan
+> API key dari perangkat yang menjalankan bot; key itu tampil di terminal saat script dijalankan.
+
 The dashboard (Indonesian or English, switch in the title bar) shows whether the PC is online, the bot's state and
-command, and the live log. Its form covers every command above (task, villages, resources, walls, `--first`,
-searches, time and upgrade limits, recoveries) and shows the equivalent `python bot.py ...` line; **Start** runs it
+command, and the live log. Its form covers every command above (task, villages, resources, dark elixir, walls,
+`--first`, searches, time and upgrade limits, recoveries) and shows the equivalent `python bot.py ...` line; **Start** runs it
 (a running task is stopped first). Other buttons: stop bot, repeat the last command, open CoC, close CoC, restart
 LDPlayer, turn LDPlayer off; the last three stop the bot first. When the PC is off, offline or the bot is not
 running, the dashboard says so instead of sending, and a command that gets no answer within 10 seconds is reported.
@@ -239,6 +257,14 @@ move them, add or remove numbered pins, and save: `D` is the deploy point (troop
 Machine/Copter), the numbered pins are the Home Village spell points (rounds of front, left, right) or the Builder
 Base points, one per troop card. Pins cannot go on the card bar. The device checks them like any calibration,
 writes `config.json` (the previous one stays as `config.json.bak`), and they apply at the next Start.
+
+**Device settings:** loaded when the dashboard connects. *Minimum opponent loot* sets the Home Village gold, elixir
+and dark elixir filter (`minimum`; `0` = no filter). *LDPlayer* holds `adb`, `ldconsole`, `serial`, `ld_index` and
+`touch_device`; **auto-detect** fills them from what it finds on the PC (it only reads: `ldconsole list2`,
+`adb devices`, `getevent -pl`, `wm size`) and lists problems, such as LDPlayer being off or a wrong resolution.
+Nothing changes until you press save. The device accepts only LDPlayer's own `adb.exe` and `ldconsole.exe` as
+paths, checks the rest like any calibration, keeps the previous `config.json` as `config.json.bak`, and the change
+applies at the next Start.
 
 Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
 the running bot), and everything the PC sends online is signed with it too, so nobody else on the channel can pose
@@ -397,12 +423,13 @@ so the run stops only after that many recoveries with no progress in between.
 ## Testing
 
 ```bash
-python -m unittest -v test_bot test_remote test_relay
+python -m unittest -v test_bot test_remote test_relay test_ldplayer
 ```
 
-The suites (234 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
-deploy plans, popups, recovery, the until-full loop, and the dashboard link (signed commands, the bot as a child
-process, the local server, and the relay against a fake Realtime server). They do not replace a live run on a real account.
+The suites (253 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
+deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
+process, the local server, and the relay against a fake Realtime server), and LDPlayer detection against fake tool
+output. They do not replace a live run on a real account.
 
 ## Project structure
 
@@ -410,12 +437,14 @@ process, the local server, and the relay against a fake Realtime server). They d
 bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
 remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
 relay.py               Supabase Realtime relay for the online dashboard
-web/                   dashboard page: app.js, deploy pin editor, own Realtime client, ID/EN text
+ldplayer.py            read-only LDPlayer detection for the dashboard's setup panel
+web/                   dashboard page: app.js, deploy pin editor, settings panel, own Realtime client, ID/EN text
 netlify.toml           Netlify publish folder and security headers
 calibrate.py           calibration CLI (screenshots only, never taps)
 test_bot.py            offline unit tests
 test_remote.py         dashboard link tests (key, signatures, options, child process, local server)
 test_relay.py          relay tests against a fake Realtime server
+test_ldplayer.py       LDPlayer detection tests against fake tool output
 config.json            calibration for the current game UI
 calibration/           anchor, target and digit templates for config.json
 config.legacy.json     calibration for the previous game UI
