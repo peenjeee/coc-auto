@@ -1207,6 +1207,28 @@ class BotTests(unittest.TestCase):
             runner.run_until_full_resilient(0, max_recoveries=3, job=runner.run_walls)
         self.assertEqual(len(attempts), 1)
 
+    def test_a_fresh_gem_count_is_not_read_again_before_the_next_tap(self):
+        spec, icons, _ = self.wall_spec()
+        frames = [('wall_selected', self.priced(spec, {'elixir'})),
+                  ('wall_confirm', self.confirm_frame(spec, icons['elixir'])),
+                  ('wall_selected', self.priced(spec, {'elixir'}))]
+        runner, taps = self.wall_runner(frames, [500])
+        runner.gems_fresh = True
+        self.assertTrue(runner.upgrade_wall(spec))
+        self.assertEqual(taps, [(60, 80), ('wall_confirm', 'confirm')])
+        self.assertTrue(runner.gems_fresh)
+
+    def test_the_wall_is_upgraded_once_its_button_layout_holds(self):
+        runner = bot.Bot(self.config, self.root, Device(self.frames), live=True, timeout=1, poll=0.01)
+        layouts = iter([True, False, False, False])
+        captures = []
+        runner.device.capture = lambda: captures.append(1) or np.zeros((2, 2, 3), np.uint8)
+        runner.detector.detect = lambda image: 'wall_selected'
+        runner.list_open = lambda image: next(layouts)
+        with patch('bot.WALL_LAYOUT_HOLD_SECONDS', 0):
+            runner.settle_selection()
+        self.assertEqual(len(captures), 3)
+
     def test_gold_below_the_search_reserve_is_never_spent_on_walls(self):
         spec, icons, _ = self.wall_spec()
         spec['gold_reserve'] = 200_000
@@ -1280,11 +1302,12 @@ class BotTests(unittest.TestCase):
         swipes = []
         device.swipe = lambda start, end: swipes.append((tuple(start), tuple(end)))
         runner = self.make_bot(device, True)
-        shots = iter([blank, blank, other, found])
+        device.capture = lambda: blank
+        shots = iter([blank, other, found])
         runner.wait_still = lambda limit: next(shots)
         self.assertEqual(runner.wall_row(spec), 33)
         self.assertEqual(swipes, [((130, 20), (130, 70)), ((130, 70), (130, 20))])
-        shots = iter([blank] * 4)
+        shots = iter([blank] * 3)
         runner.wait_still = lambda limit: next(shots)
         self.assertIsNone(runner.wall_row(spec))
 

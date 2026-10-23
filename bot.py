@@ -95,6 +95,7 @@ SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO = 2, 1.2
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 15, 5
+WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS = 4, 0.4
 WHITE_LEVEL = 200
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
@@ -948,6 +949,7 @@ class Bot:
         self.wall_order, self.walls_done = walls, set()
         self.gems_known: int | None = None
         self.wall_excluded: set = set()
+        self.gems_fresh = False
         self.emulator = emulator
         self.emulator_started: float | None = None
         self.detector = Detector(config, root)
@@ -1552,6 +1554,7 @@ class Bot:
         if self.gems_known is not None:
             self.compare_gems(now)
         self.gems_known = now
+        self.gems_fresh = True
 
     def check_gems(self, spec: dict) -> None:
         now = self.gem_count(spec)
@@ -1559,16 +1562,18 @@ class Bot:
         if now > self.gems_known:
             # Walls never add gems, so a higher count mid-session is a misread that could hide a drop.
             raise GemUnreadable(f'Gem terbaca naik {self.gems_known:,} -> {now:,}; dibaca ulang tanpa upgrade')
+        self.gems_fresh = True
 
     def wall_row(self, spec: dict) -> int | None:
         """y of the first visible 'Tembok' row; scroll the list to its top, then down to its end."""
         row = spec['row']
         template = cv2.imread(str(asset_path(self.root, row['file'])))
         down = spec['scroll']
-        for swipe in (down[::-1], down):
+        for first, swipe in ((True, down[::-1]), (False, down)):
             previous = None
-            for _ in range(WALL_SCROLL_LIMIT):
-                image = self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
+            for step in range(WALL_SCROLL_LIMIT):
+                # Look at the list as it is first; wait for it to stop only after a swipe.
+                image = self.device.capture() if first and step == 0                     else self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
                 rows = find_rows(image, template, row['region'], row['max_score'])
                 if rows:
                     return rows[0]
@@ -1592,7 +1597,7 @@ class Bot:
 
     def hud_gold(self, spec: dict) -> int:
         regions = spec['hud_gold']
-        return self.read_stable(
+        return self.read_until(
             lambda image: read_trailing_number(crop(image, regions['list' if self.list_open(image) else 'village']),
                                                self.templates(), FRACTION_MIN_SCORE),
             GEM_READ_SECONDS if self.poll else 0)
@@ -1630,7 +1635,9 @@ class Bot:
         state, image = self.observe()
         if state != 'wall_selected':
             raise BotError(f'Tembok tidak terpilih: layar {state}')
-        self.check_gems(spec)
+        # The count read after the last confirm still holds while nothing has been tapped since.
+        if not self.gems_fresh:
+            self.check_gems(spec)
         if self.affordable_button(image, spec) is None:
             return False
         reserve, gold = spec.get('gold_reserve'), None
@@ -1649,6 +1656,7 @@ class Bot:
                 raise TargetMissing('Tombol upgrade tembok tidak terjangkau lagi; tidak ada input dikirim')
             picked.append(choice[0])
             return choice[1]['tap']
+        self.gems_fresh = False
         try:
             self.guarded_tap({'wall_selected'}, locate)
         except TargetMissing:
@@ -1708,10 +1716,32 @@ class Bot:
             self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
         raise BotError('Menu tembok tidak bisa ditutup; tidak ada input lanjutan')
 
+    def settle_selection(self) -> None:
+        """Go on as soon as the picked wall's button layout holds; the list may slide shut right after a pick."""
+        deadline = time.monotonic() + (WALL_SELECT_SECONDS if self.poll else 0)
+        layout, since = None, time.monotonic()
+        while time.monotonic() < deadline:
+            image = self.device.capture()
+            try:
+                state = self.detector.detect(image)
+            except BotError:
+                state = None
+            now = (state, self.list_open(image))
+            if now != layout:
+                layout, since = now, time.monotonic()
+            elif state == 'wall_selected' and time.monotonic() - since >= WALL_LAYOUT_HOLD_SECONDS:
+                return
+
     def upgrade_walls(self, village: str) -> int | None:
         """Spend gold and elixir on walls one at a time; the number upgraded, or None once no wall is left."""
         spec = self.config['walls'][village]
-        self.navigate(village)
+        state = self.current_screen()
+        if state in MENU_SCREENS:
+            self.close_menus()
+            state = self.current_screen()
+        # The builder list needs no zoom; only the Builder Base zooms, for the Elixir Cart it claims first.
+        if village == 'builder' or state != village:
+            self.navigate(village)
         if village == 'builder':
             self.collect_cart()
         self.wait({village}, set(), 30)
@@ -1729,9 +1759,7 @@ class Bot:
                 return None
             self.guarded_tap({'build_list', 'wall_selected'}, [spec['row']['tap_x'], y])
             self.wait({'wall_selected'}, {'build_list', village}, WALL_TAP_SECONDS)
-            # After a pick the list may slide shut; let that finish before reading the buttons.
-            time.sleep(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
-            self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
+            self.settle_selection()
             if not self.upgrade_wall(spec):
                 LOG.info('Gold dan elixir %s tidak cukup lagi setelah %s upgrade tembok', village, upgraded)
                 self.close_menus()
