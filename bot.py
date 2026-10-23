@@ -100,7 +100,7 @@ MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_con
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', *MENU_SCREENS)
 KNOWN_SCREENS = SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
-HUD_ALIGN_PX, HUD_GAP_RATIO = 2, 1.2
+HUD_ALIGN_PX, HUD_GAP_RATIO, HUD_MIN_MEAN_VALUE = 2, 1.2, 235
 ANCHOR_MAX_SCORE, SEARCH_ANCHOR_MAX_SCORE = 0.02, 0.05
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 30, 5
@@ -922,10 +922,13 @@ def read_trailing_number(image: np.ndarray, templates: dict, min_score: float = 
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     pale = ((hsv[..., 2] >= OCR_MIN_VALUE) & (hsv[..., 1] <= max_saturation)).astype(np.uint8)
     count, labels, stats, _ = cv2.connectedComponentsWithStats(pale, connectivity=8)
-    if count <= 1:
+    # Pale walls seen through a bar pass the mask too, but stay dimmer than the solid digits.
+    brightness = np.bincount(labels.ravel(), weights=hsv[..., 2].ravel(), minlength=count) / stats[:, cv2.CC_STAT_AREA]
+    solid = [i for i in range(1, count) if brightness[i] >= HUD_MIN_MEAN_VALUE]
+    if not solid:
         raise BotError('Angka tidak terlihat; hentikan tanpa input')
-    tallest = stats[1:, cv2.CC_STAT_HEIGHT].max()
-    tall = [i for i in range(1, count) if stats[i, cv2.CC_STAT_HEIGHT] >= OCR_MIN_HEIGHT_RATIO * tallest]
+    tallest = max(stats[i, cv2.CC_STAT_HEIGHT] for i in solid)
+    tall = [i for i in solid if stats[i, cv2.CC_STAT_HEIGHT] >= OCR_MIN_HEIGHT_RATIO * tallest]
     order = sorted(tall, key=lambda i: stats[i, cv2.CC_STAT_LEFT], reverse=True)
     top, height = stats[order[0], cv2.CC_STAT_TOP], stats[order[0], cv2.CC_STAT_HEIGHT]
     run = []

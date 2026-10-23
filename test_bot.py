@@ -1569,6 +1569,13 @@ class BotTests(unittest.TestCase):
             with self.subTest(list=name):
                 self.assertEqual([bot.row_price(image, row['price'], y, templates) for y in ys], expected)
 
+    def test_the_gem_count_reads_over_pale_walls_behind_the_see_through_bar(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        templates = bot.load_digit_templates(root, config['digits'])
+        image = cv2.imread(str(root / 'fixtures' / 'gems-over-walls.png'))
+        self.assertEqual(bot.read_trailing_number(image, templates, bot.FRACTION_MIN_SCORE), 1096)
+
     def listed_walls(self, rows):
         """A runner over a fake list: frame k (filled with k) shows the (price, y) wall rows in rows[k]."""
         spec, _, _ = self.wall_spec()
