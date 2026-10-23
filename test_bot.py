@@ -1342,6 +1342,22 @@ class BotTests(unittest.TestCase):
         runner.home_attack(0)
         self.assertEqual(device.inputs.count((140, 60)), 1)
 
+    def test_out_of_gold_for_next_attacks_the_base_on_screen(self):
+        device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 3)
+        runner = self.make_bot(device, True)
+        closed = []
+        runner.action = lambda state, name: closed.append((state, name)) if state == 'gem_offer' else \
+            bot.Bot.action(runner, state, name)
+
+        def no_gold(image):
+            runner.action('gem_offer', 'close')
+            raise bot.OutOfGold('Gold habis')
+        runner.wait_new_scout = no_gold
+        runner.home_attack(0)
+        self.assertEqual(closed, [('gem_offer', 'close')])
+        self.assertEqual(device.inputs.count((140, 60)), 1)
+        self.assertIn((40, 40), device.inputs)
+
     def test_unlimited_searches_keep_skipping_until_loot_passes(self):
         lows = [{'gold': 1, 'elixir': 1}] * 25
         device = Device(self.frames, loot=lows + [{'gold': 100, 'elixir': 200}])

@@ -127,6 +127,10 @@ class TargetMissing(BotError):
     """Target icon not visible or unsafe to tap; the camera may need another pan."""
 
 
+class OutOfGold(BotError):
+    """Skipping to the next opponent costs gold and none is left; the game offered gems instead."""
+
+
 class GemSpent(Exception):
     """The gem count dropped during wall upgrades; never recovered, the run stops at once."""
 
@@ -1275,6 +1279,9 @@ class Bot:
                 state = 'loading'
             if state == 'loading':
                 stable = None
+            elif state == 'gem_offer':
+                self.action(state, 'close')
+                raise OutOfGold('Gold habis untuk lawan berikutnya; tawaran gem ditutup')
             elif state != 'home_scout':
                 raise BotError('Layar tidak diharapkan saat mencari lawan baru')
             else:
@@ -1298,6 +1305,7 @@ class Bot:
         self.tap_until('home_menu', 'find', {'home_army'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
         self.tap_until('home_army', 'attack', {'home_scout'}, 60)
         attempts = itertools.count() if searches == 0 else range(searches)
+        broke = False
         for attempt in attempts:
             state, image = self.observe()
             if state != 'home_scout':
@@ -1308,7 +1316,8 @@ class Bot:
             except BotError as exc:
                 LOG.warning('Loot lawan tidak terbaca (%s); lewati lawan ini', exc)
                 loot = None
-            if loot is not None and meets_minimum(loot, self.config.get('minimum', {})):
+            # Without gold for another search, the base on screen is attacked; its loot refills the gold.
+            if broke or (loot is not None and meets_minimum(loot, self.config.get('minimum', {}))):
                 self.deploy('home_scout', {'home_scout', 'home_battle'})
                 if self.wait({'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':
                     LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
@@ -1318,7 +1327,11 @@ class Bot:
                 return
             if searches == 0 or attempt + 1 < searches:
                 self.action('home_scout', 'next')
-                self.wait_new_scout(image)
+                try:
+                    self.wait_new_scout(image)
+                except OutOfGold as exc:
+                    LOG.warning('%s; serang lawan yang sedang tampil', exc)
+                    broke = True
         raise BotError('Batas pencarian tercapai; tidak ada serangan')
 
     def collect_cart(self) -> None:
