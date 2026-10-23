@@ -358,6 +358,34 @@ class BotTests(unittest.TestCase):
             runner.wait({'home_army'}, {'home_menu'}, 1)
         self.assertEqual(device.inputs, [(20, 80)])
 
+    def test_busy_builders_are_closed_with_x_and_stop_that_village(self):
+        busy = np.random.default_rng(43).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        anchors = []
+        for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'busy-{number}.png'), busy[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'busy-{number}.png'})
+        config = {**self.config, 'screens': {**self.config['screens'],
+                                             'builders_busy': {'anchors': anchors, 'actions': {'close': [150, 8]}}}}
+        bot.validate_config(config, self.root, 'both')
+        device = Device({**self.frames, 'builders_busy': busy}, 'builders_busy')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'builder'))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        with self.assertRaises(bot.NoFreeBuilder):
+            runner.wait({'wall_confirm'}, {'wall_selected'}, 1)
+        self.assertEqual(device.inputs, [(150, 8)])
+
+    def test_walls_skip_a_village_with_no_free_builder(self):
+        runner = self.make_bot(Device(self.frames), True)
+        runner.wall_order = ('builder', 'home')
+        calls = []
+        runner.run_until_full = lambda searches: calls.append('farm')
+        runner.upgrade_walls = lambda village: calls.append(village) or (
+            (_ for _ in ()).throw(bot.NoFreeBuilder('sibuk')) if village == 'builder' else None)
+        runner.run_walls(0)
+        self.assertEqual(calls, ['builder', 'home'])
+        self.assertEqual(runner.walls_skipped, {'builder'})
+
     def test_a_leftover_wall_menu_is_closed_while_waiting(self):
         runner = self.make_bot(Device(self.frames), True)
         screens = iter([('wall_selected', None), ('home', None)])

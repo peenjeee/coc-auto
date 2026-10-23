@@ -1700,6 +1700,40 @@
           436
         ]
       }
+    },
+    "builders_busy": {
+      "anchors": [
+        {
+          "roi": [
+            494,
+            186,
+            286,
+            36
+          ],
+          "file": "calibration/builders_busy-title-3d2f9939b05e4cdaaf5af1c8f46db6ea.png"
+        },
+        {
+          "roi": [
+            368,
+            308,
+            540,
+            28
+          ],
+          "file": "calibration/builders_busy-text-468cde8d5e3547cdae8d3518aa1747f8.png"
+        }
+      ],
+      "overrides": [
+        "home",
+        "builder",
+        "build_list",
+        "wall_selected"
+      ],
+      "actions": {
+        "close": [
+          900,
+          218
+        ]
+      }
     }
   },
   "digits": "calibration/digits",

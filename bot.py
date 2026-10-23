@@ -37,7 +37,7 @@ ACTIONS = {
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',),
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
     'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
-    'idle': ('reload',),
+    'idle': ('reload',), 'builders_busy': ('close',),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -94,7 +94,7 @@ BAR_CARD_WIDTH, BAR_CARD_COLOUR = (65, 98), 0.43
 SPELL_TAPS, SPELL_ROUND = 30, 3
 LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
-OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', *MENU_SCREENS)
+OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', *MENU_SCREENS)
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO = 2, 1.2
 ANCHOR_MAX_SCORE, SEARCH_ANCHOR_MAX_SCORE = 0.02, 0.05
@@ -135,6 +135,10 @@ class TargetMissing(BotError):
 
 class OutOfGold(BotError):
     """Skipping to the next opponent costs gold and none is left; the game offered gems instead."""
+
+
+class NoFreeBuilder(BotError):
+    """Builder Base walls need a free builder; the game offered to free one for gems, which is only ever closed."""
 
 
 class OtherDevice(Exception):
@@ -1094,7 +1098,7 @@ class Bot:
                  emulator: 'Emulator | None' = None, goals: dict | None = None, walls: tuple = ()) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.goals = goals if goals is not None else parse_goals(config, None, None, 'builder')
-        self.wall_order, self.walls_done = walls, set()
+        self.wall_order, self.walls_done, self.walls_skipped = walls, set(), set()
         self.gems_known: int | None = None
         self.wall_excluded: set = set()
         self.gems_fresh = False
@@ -1150,6 +1154,9 @@ class Bot:
                 # A wall picked before a reload or a lost tap is still open; close it, never confirm it.
                 self.close_menus()
                 continue
+            if state == 'builders_busy' and state not in targets | allowed:
+                self.action(state, 'close')
+                raise NoFreeBuilder('Semua tukang sibuk; tawaran gem ditutup tanpa membeli')
             if state == 'search_failed' and state not in targets | allowed:
                 # The server refused the search ("coba lagi nanti"): go home, give it a minute, let recovery retry.
                 self.action(state, 'close')
@@ -1978,7 +1985,13 @@ class Bot:
         for village in self.wall_order:
             farmed = False
             while village not in self.walls_done:
-                upgraded = self.upgrade_walls(village)
+                try:
+                    upgraded = self.upgrade_walls(village)
+                except NoFreeBuilder as exc:
+                    LOG.warning('Tembok %s dilewati: %s; jalankan lagi saat ada tukang bebas', village, exc)
+                    self.close_menus()
+                    self.walls_skipped.add(village)
+                    break
                 if upgraded is None:
                     self.walls_done.add(village)
                     break
@@ -1987,7 +2000,8 @@ class Bot:
                 self.goals = {village: {'gold', 'elixir'}}
                 self.run_until_full(searches)
                 farmed = True
-        LOG.info('Semua tembok sudah maksimal: %s', ', '.join(self.wall_order))
+        if self.walls_done:
+            LOG.info('Semua tembok sudah maksimal: %s', ', '.join(sorted(self.walls_done)))
         return len(self.walls_done)
 
     def recover(self) -> None:
