@@ -274,6 +274,7 @@ How to change it:
 | A wait times out, or an unrecognised screen passes, with the game still open (slow matchmaking, lag, an animation) | Lets a running battle end or closes the menu, then resumes. Counts as one recovery. |
 | The search is refused ("Tidak dapat menyerang desa! Coba lagi nanti.") | Taps "Ke Beranda", waits a minute, and tries again. Counts as one recovery. |
 | The game offers to buy missing resources with gems ("Perlu lebih banyak …") | Closes it with X, never the gem button. If it came from skipping an opponent with no gold left, attacks the opponent on screen; otherwise recovers. |
+| The account is opened on another device ("Perangkat lain tersambung ke desa ini") | Stops without reloading, so the other session stays; exit code 4. Run the bot again when you are done there. |
 | Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
 
 ## Testing
