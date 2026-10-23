@@ -1558,19 +1558,22 @@ class Bot:
     def close_menus(self) -> None:
         """Close the wall dialog and the builder list, top layer first; a wall selected without the list is
         dropped by opening the list and closing it."""
-        for _ in range(len(MENU_SCREENS) + 1):
+        for _ in range(2 * len(MENU_SCREENS)):
             try:
                 state, image = self.observe()
-            except BotError:
-                return
+            except UnknownScreen:
+                self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
+                continue
             if state not in MENU_SCREENS:
                 return
             if state == 'wall_selected' and not self.list_open(image):
                 self.action(state, 'build')
                 self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
                 continue
+            # Closing the list can leave the wall selected, so look again instead of waiting for a new screen.
             self.action(state, 'close')
-            self.wait(set(VILLAGES) | set(MENU_SCREENS) - {state}, {state}, WALL_TAP_SECONDS)
+            self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
+        raise BotError('Menu tembok tidak bisa ditutup; tidak ada input lanjutan')
 
     def upgrade_walls(self, village: str) -> int | None:
         """Spend gold and elixir on walls one at a time; the number upgraded, or None once no wall is left."""

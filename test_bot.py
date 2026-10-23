@@ -1077,6 +1077,21 @@ class BotTests(unittest.TestCase):
         self.assertFalse(runner.upgrade_wall(spec, 100))
         self.assertEqual(taps, [])
 
+    def test_menus_close_layer_by_layer_even_when_the_wall_stays_selected(self):
+        runner = self.make_bot(Device(self.frames), True)
+        listed, bare = np.ones((2, 2, 3), np.uint8), np.zeros((2, 2, 3), np.uint8)
+        shots = iter([('wall_confirm', listed), ('wall_selected', listed), ('wall_selected', bare),
+                      ('build_list', listed), ('home', bare)])
+        actions = []
+        runner.observe = lambda: next(shots)
+        runner.list_open = lambda image: bool(image.any())
+        runner.action = lambda state, name: actions.append((state, name))
+        runner.read_until = lambda reader, limit: None
+        runner.wait_still = lambda limit: None
+        runner.close_menus()
+        self.assertEqual(actions, [('wall_confirm', 'close'), ('wall_selected', 'close'),
+                                   ('wall_selected', 'build'), ('build_list', 'close')])
+
     def test_gem_count_is_read_again_while_the_bars_slide(self):
         spec, _, _ = self.wall_spec()
         runner = bot.Bot(self.config, self.root, Device(self.frames), live=True, timeout=1, poll=0.01)
