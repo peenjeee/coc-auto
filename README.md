@@ -323,7 +323,7 @@ How to change it:
 | `storage.<village>.<resource>` | Fallback fill check by bar colour (`row`, `left`, `right`, `hue`, `min_saturation`), used when a village has no `capacity`. |
 | `cart_text` | Crop of the Elixir Cart "current / max" text, read with `digits`. |
 | `cart_bar` | Elixir Cart fill bar read by colour, used when there is no `cart_text`. Either key makes `cart` a goal. |
-| `walls.<village>` | `--walls` calibration: builder list tap point, "Tembok" row template and its price band (`row.price` = `[x, dy, w, h]`, `dy` from the row title's centre), scroll swipe, gem count areas, upgrade button template and price offsets, the confirm dialog checks, and the Home Village `gold_reserve`. |
+| `walls.<village>` | `--walls` calibration: builder list tap point, "Tembok" row template and its price band (`row.price` = `[x, dy, w, h]`, `dy` from the row title's centre; `row.scales` `[1.0, 0.95]` also finds the row of the selected building, which the game draws smaller), scroll swipe, gem count areas, upgrade button template and price offsets, the confirm dialog checks, and the Home Village `gold_reserve`. |
 | `digits` | Folder of digit templates (`0.png` … `9.png`, plus variants like `9-ui2.png`). |
 | `zoom_out` | Pinch settings used before switching villages or attacking. |
 | `speed_button` | Template of the battle "1x" button, tapped once to switch to 4x. |
