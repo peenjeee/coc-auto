@@ -646,18 +646,66 @@ class BotTests(unittest.TestCase):
                                     setattr(device, 'state', 'home' if closes else name))
         return bot.Bot(config, self.root, device, live=True, timeout=1, poll=0), device
 
-    def test_an_update_offer_is_closed_without_updating(self):
-        runner, device = self.popup('update_offer', 43, {'close': [80, 5]})
-        self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
-        self.assertEqual(device.inputs, [(80, 5)])
+    def updating(self, store_taps_lost=0, store_button=True, live=True):
+        """A runner whose game asks for an update: its update button opens the Play Store dialog (the saved dump),
+        whose Update button installs version 2 unless the tap is lost; launching the game shows the village."""
+        runner, device = self.popup('update_offer', 43, {'update': [80, 5]})
+        runner.live = live
+        device.frames['store'] = np.random.default_rng(97).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        dump = (Path(__file__).parent / 'fixtures' / 'playstore-update-offer.xml').read_bytes()
+        device.version, device.launched, lost = '1 (1, 2026-10-01 10:00:00)', [], iter(range(store_taps_lost))
 
-    def test_an_update_offer_that_stays_stops_the_run_asking_for_an_update(self):
-        runner, device = self.popup('update_offer', 43, {'close': [80, 5]}, closes=False)
+        def tap(point):
+            device.inputs.append(tuple(point))
+            if device.state == 'update_offer':
+                device.state = 'store'
+            elif next(lost, None) is None:
+                device.version = '2 (2, 2026-10-24 05:00:00)'
+        device.tap = tap
+        device.game_version = lambda: device.version
+        device.ui_dump = lambda: dump if store_button and device.version.startswith('1 ') else b''
+        device.launch = lambda activity: (device.launched.append(activity), setattr(device, 'state', 'home'))
+        return runner, device
+
+    def test_an_update_offer_is_installed_from_the_play_store_and_the_game_opened_again(self):
+        runner, device = self.updating()
+        self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
+        self.assertEqual(device.inputs, [(80, 5), (829, 497)])
+        self.assertEqual(device.launched, [bot.GAME_ACTIVITY])
+
+    def test_a_lost_tap_on_the_store_update_button_is_tapped_again(self):
+        runner, device = self.updating(store_taps_lost=1)
+        self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
+        self.assertEqual(device.inputs, [(80, 5), (829, 497), (829, 497)])
+        self.assertEqual(device.version, '2 (2, 2026-10-24 05:00:00)')
+
+    def test_a_store_without_its_update_button_stops_the_run_with_nothing_tapped_there(self):
+        # Not signed in, or any other store screen: only the game's own button was tapped.
+        runner, device = self.updating(store_button=False)
+        with patch('bot.STORE_OPEN_SECONDS', 0), self.assertRaises(bot.UpdateRequired):
+            runner.run_until_full_resilient(0, max_recoveries=3)
+        self.assertEqual(device.inputs, [(80, 5)])
+        self.assertEqual(device.launched, [])
+
+    def test_an_install_that_never_finishes_stops_the_run(self):
+        runner, device = self.updating(store_taps_lost=99)
+        with patch('bot.UPDATE_INSTALL_SECONDS', 0), self.assertRaises(bot.UpdateRequired):
+            runner.wait({'home'}, set(), 1)
+        self.assertEqual(device.launched, [])
+
+    def test_a_dry_run_never_starts_an_update(self):
+        runner, device = self.updating(live=False)
         with self.assertRaises(bot.UpdateRequired):
             runner.wait({'home'}, set(), 1)
-        self.assertEqual(device.inputs, [(80, 5)] * bot.UPDATE_CLOSE_ATTEMPTS)
-        with self.assertRaises(bot.UpdateRequired):
-            runner.run_until_full_resilient(0, max_recoveries=3)
+        self.assertEqual(device.inputs, [])
+
+    def test_the_installed_game_version_is_read_from_the_package_manager(self):
+        adb = bot.ADB('adb', 'emulator-5554', [160, 90])
+        calls = []
+        adb.command = lambda *args: (calls.append(args), b'    versionCode=180647003 minSdk=24 targetSdk=36\n'
+                                     b'    versionName=18.647.2\n    lastUpdateTime=2026-10-24 02:39:47\n')[1]
+        self.assertEqual(adb.game_version(), '18.647.2 (180647003, 2026-10-24 02:39:47)')
+        self.assertEqual(calls, [('shell', 'dumpsys', 'package', 'com.supercell.clashofclans')])
 
     def test_a_lost_server_connection_is_retried(self):
         runner, device = self.popup('disconnected', 47, {'retry': [30, 70]})

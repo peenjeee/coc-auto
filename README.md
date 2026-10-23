@@ -435,7 +435,7 @@ use a saved screenshot). "Taps" are the points the tool asks for.
 | `python calibrate.py --screen league` | League popup | close |
 | `python calibrate.py --screen welcome` | Welcome back popup | ok |
 | `python calibrate.py --screen idle` | "Ada orang di sana?" (inactive) | reload |
-| `python calibrate.py --screen update_offer` | "Pembaruan Tersedia!" (update offer) | close (a point outside the box) |
+| `python calibrate.py --screen update_offer` | "Pembaruan Tersedia!" (update offer) | update (the game's update button) |
 | `python calibrate.py --screen disconnected` | "Sambungan terputus" / "Kesalahan sambungan" | retry |
 | `python calibrate.py --screen search_failed` | "Tidak dapat menyerang desa! Coba lagi nanti." | close |
 | `python calibrate.py --screen gem_offer` | "Perlu lebih banyak …" (resources for gems) | close (the X, never the gem button) |
@@ -566,7 +566,7 @@ How to change it:
 | The account is opened on another device ("Perangkat lain tersambung ke desa ini") | Stops without reloading, so the other session stays; exit code 4. Run the bot again when you are done there. |
 | The game disconnects for inactivity ("Ada orang di sana?") | Taps "Muat ulang game" and carries on. |
 | The server connection drops ("Sambungan terputus", or "Kesalahan sambungan" while loading) | Taps "Coba lagi", waiting 10 seconds between tries while the network is still down, and carries on. |
-| A game update is offered ("Pembaruan Tersedia!") | Taps outside the box to close it, never the update button, and carries on. If the offer is still there after 3 taps the update is required: stops with exit code 5 and asks you to update CoC from the Play Store first. |
+| A game update is offered ("Pembaruan Tersedia!") | Updates the game: taps the game's update button, then the Play Store's own Update/Install button (found by its text, only for Clash of Clans; nothing else in the store is tapped), waits up to 30 minutes for the new version to install, opens CoC again and carries on. If the store shows no Update button (not signed in, no space) or the install does not finish, stops with exit code 5 and asks you to update CoC from the Play Store. A dry-run never updates. |
 | All builders are busy when a Builder Base wall is picked ("Semua tukang sibuk!") | Closes the gem offer with X and skips that village's walls; run again once a builder is free. |
 | Searching runs out of gold 3 attacks in a row (no opponent meets the loot `minimum`) | Stops in the village with exit code 6 and asks to lower the minimum, instead of burning the gold it should fill. |
 | A setup the bot cannot work with: LDPlayer's ADB debugging off, a `serial` that is not the `ld_index` instance, a touch node that does not exist or whose range is not the screen size, a 32-bit LDPlayer | Stops at once with exit code 6 and says what to change; restarting would only repeat it. The touch node is checked once per live run, before the first tap. |
@@ -581,11 +581,12 @@ first error instead of recovering.
 ## Testing
 
 ```bash
-python -m unittest -v test_bot test_remote test_relay test_ldplayer test_device_control
+python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (287 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
-deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
+The suites (301 tests) use synthetic screens and a fake device, plus real screen crops and a saved Play Store screen in
+`fixtures/`. They cover screen detection, digit reading, deploy plans, popups, the game update, recovery, the
+until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
 
@@ -596,10 +597,12 @@ bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
 remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
 relay.py               online relay for the dashboard
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging)
+game_update.py         Play Store Update button and installed game version, for the automatic game update
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
 web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own relay client, ID/EN text, app manifest, service worker and icons
 calibrate.py           calibration CLI (screenshots only, never taps)
 test_bot.py            offline unit tests
+test_game_update.py    Play Store screen and game version reading tests
 test_remote.py         dashboard link tests (key, signatures, options, child process, local server)
 test_relay.py          relay tests against a fake relay server
 test_ldplayer.py       LDPlayer detection tests against fake tool output

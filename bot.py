@@ -25,6 +25,7 @@ if sys.version_info < (3, 10):
 import cv2
 import numpy as np
 
+import game_update
 import ldplayer
 
 RESOURCES = ('gold', 'elixir', 'dark')
@@ -44,7 +45,7 @@ ACTIONS = {
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',),
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
     'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
-    'idle': ('reload',), 'builders_busy': ('close',), 'update_offer': ('close',), 'disconnected': ('retry',),
+    'idle': ('reload',), 'builders_busy': ('close',), 'update_offer': ('update',), 'disconnected': ('retry',),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -85,14 +86,15 @@ UNKNOWN_RETRIES = 3
 FULL_RATIO, STORAGE_RUN_RATIO, STORAGE_MIN_VALUE = 0.95, 0.8, 150
 RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
 POPUP_ACTIONS = {'star_bonus': 'ok', 'builder_star_bonus': 'ok', 'reward_chest': 'open', 'reward_card': 'continue',
-                 'layout_blocked': 'ok', 'league': 'close', 'welcome': 'ok', 'idle': 'reload',
-                 # "Pembaruan Tersedia!": a tap outside the box closes it; the update button is never tapped.
-                 'update_offer': 'close', 'disconnected': 'retry'}
+                 'layout_blocked': 'ok', 'league': 'close', 'welcome': 'ok', 'idle': 'reload', 'disconnected': 'retry'}
 POPUPS = tuple(POPUP_ACTIONS)
 # A retry with the network still down brings the dialog straight back, so give it time between tries.
-POPUP_PAUSE_SECONDS = {'update_offer': 2, 'disconnected': 10}
-UPDATE_CLOSE_ATTEMPTS = 3
+POPUP_PAUSE_SECONDS = {'disconnected': 10}
 POPUP_CLEAR_ATTEMPTS = 3
+# "Pembaruan Tersedia!" is not closed but followed: the game's update button, the Play Store's Update button, the
+# install, then the game again.
+STORE_OPEN_SECONDS, STORE_POLL_SECONDS = 90, 5
+UPDATE_INSTALL_SECONDS, INSTALL_POLL_SECONDS, UPDATE_LOG_SECONDS = 1800, 15, 60
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
@@ -111,7 +113,8 @@ BAR_CAMP_HEADER, BAR_SETTLE_SECONDS = 0.5, 3
 SPELL_TAPS, SPELL_ROUND = 30, 3
 LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
-OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', *MENU_SCREENS)
+OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', 'update_offer',
+                    *MENU_SCREENS)
 KNOWN_SCREENS = SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO, HUD_MIN_MEAN_VALUE = 2, 1.2, 235
@@ -180,7 +183,8 @@ class GemSpent(Exception):
 
 
 class UpdateRequired(Exception):
-    """The update offer stayed after taps outside it: the game must be updated from the Play Store first."""
+    """The game asked for a new version and the bot could not install it (dry-run, a Play Store without its Update
+    button, an install that never finished): the game must be updated by hand first."""
 
 
 class LimitReached(Exception):
@@ -548,6 +552,14 @@ class ADB:
     def game_in_front(self) -> bool:
         focus = self.command('shell', 'dumpsys window | grep mCurrentFocus')
         return GAME_ACTIVITY.split('/')[0].encode() in focus
+
+    def ui_dump(self) -> bytes:
+        """The window on screen as uiautomator XML; the Play Store has no calibrated screens."""
+        return self.command('exec-out', 'uiautomator', 'dump', '/dev/tty')
+
+    def game_version(self) -> str | None:
+        output = self.command('shell', 'dumpsys', 'package', game_update.PACKAGE)
+        return game_update.installed_version(output.decode('utf-8', 'replace'))
 
     def launch(self, activity: str) -> None:
         """Start the game app; used only to recover from a crash or a closed game."""
@@ -1310,7 +1322,6 @@ class Bot:
         self.cart_misses, self.cart_lost = 0, False
         # Attacks finished plus walls upgraded; recoveries are counted again once it moves.
         self.progress = 0
-        self.update_taps = 0
         self.capacity: dict = {}
 
     def observe(self) -> tuple[str, np.ndarray]:
@@ -1318,10 +1329,6 @@ class Bot:
         state = self.detector.detect(image)
         if state == 'other_device':
             raise OtherDevice('Akun dibuka di perangkat lain; bot berhenti tanpa memuat ulang')
-        if state != 'update_offer':
-            self.update_taps = 0
-        elif self.update_taps >= UPDATE_CLOSE_ATTEMPTS:
-            raise UpdateRequired('CoC wajib di-update; update dulu lewat Play Store lalu jalankan bot lagi')
         return state, image
 
     def read_loot(self, image: np.ndarray, screen: dict) -> dict:
@@ -1345,6 +1352,11 @@ class Bot:
                 continue
             if state in targets:
                 return state
+            if state == 'update_offer':
+                self.update_game()
+                # The new version loads from the start, often longer than this wait had left.
+                deadline = max(deadline, time.monotonic() + (RECOVER_LOAD_SECONDS if self.poll else self.timeout))
+                continue
             if not sped_up:
                 sped_up = self.try_speed_up(image, state)
             if state in POPUPS:
@@ -1454,8 +1466,6 @@ class Bot:
         target = screen.get('targets', {}).get(name)
         if target is None:
             self.guarded_tap({state}, screen['actions'][name])
-            if state == 'update_offer':
-                self.update_taps += 1
             return
         def locate(image: np.ndarray) -> list:
             return self.locate_target(image, target)
@@ -2376,6 +2386,66 @@ class Bot:
         if self.walls_done:
             LOG.info('Semua tembok sudah maksimal: %s', ', '.join(sorted(self.walls_done)))
         return len(self.walls_done)
+
+    def update_game(self) -> None:
+        """The game asks for a new version: tap its update button, then the Play Store's Update button, wait until
+        the new version is installed and open the game again. In the store only its own Update/Install button is
+        ever tapped; a store that does not show one (not signed in, no space) stops the run with what to do."""
+        if not self.live:
+            raise UpdateRequired('CoC minta update; jalankan bot live agar update otomatis atau update lewat Play Store')
+        before = self.device.game_version()
+        if before is None:
+            raise UpdateRequired('Versi CoC tidak terbaca; update CoC lewat Play Store lalu jalankan bot lagi')
+        LOG.warning('CoC minta update (versi %s); membuka Play Store', before)
+        self.press_store_update()
+        LOG.info('Update CoC terpasang: %s; membuka game lagi', self.wait_installed(before))
+        self.device.launch(GAME_ACTIVITY)
+
+    def press_store_update(self) -> None:
+        """Tap the game's update button until the Play Store shows its Update button, then tap that one."""
+        deadline = time.monotonic() + STORE_OPEN_SECONDS
+        while True:
+            if self.current_screen() == 'update_offer':
+                try:
+                    self.action('update_offer', 'update')
+                except BotError:
+                    pass  # The store opened between the look and the tap.
+            time.sleep(STORE_POLL_SECONDS if self.poll else 0)
+            button = self.store_button()
+            if button:
+                self.device.tap(button)
+                LOG.info('Tombol Update di Play Store ditekan; mengunduh update CoC')
+                return
+            if time.monotonic() >= deadline:
+                raise UpdateRequired('Play Store tidak menampilkan tombol Update untuk CoC (belum login atau memori '
+                                     'penuh?); update CoC lewat Play Store lalu jalankan bot lagi')
+
+    def wait_installed(self, before: str) -> str:
+        """Wait for the new version to be installed and return it; tap the store's Update button again while it is
+        still shown, as after a lost tap."""
+        start = logged = time.monotonic()
+        retaps = 0
+        while time.monotonic() < start + UPDATE_INSTALL_SECONDS:
+            time.sleep(INSTALL_POLL_SECONDS if self.poll else 0)
+            version = self.device.game_version()
+            if version and version != before:
+                return version
+            button = self.store_button()
+            if button and retaps < TAP_RETRIES:
+                LOG.warning('Tombol Update Play Store masih tampil; tekan lagi')
+                self.device.tap(button)
+                retaps += 1
+            if time.monotonic() - logged >= UPDATE_LOG_SECONDS:
+                logged = time.monotonic()
+                LOG.info('Menunggu update CoC selesai (%s menit)', round((logged - start) / 60))
+        raise UpdateRequired(f'Update CoC belum selesai setelah {UPDATE_INSTALL_SECONDS // 60} menit; periksa Play '
+                             'Store lalu jalankan bot lagi')
+
+    def store_button(self) -> list | None:
+        try:
+            return game_update.update_button(self.device.ui_dump())
+        except DeviceError:
+            return None  # uiautomator gives up while the screen keeps moving, e.g. the download progress.
 
     def recover(self) -> None:
         """Wait for ADB, start the game if it is not in front, and wait for a village screen."""
