@@ -214,6 +214,7 @@ button.ghost { background: transparent; color: var(--text-dim); }
 .display b { color: var(--text); }
 #display-note.ok { color: var(--green); }
 #display-note.problem { color: var(--amber); }
+.language-note { border-top: 1px dashed var(--line); padding-top: 8px; color: var(--amber); }
 .notes { margin: 0; padding: 0; list-style: none; font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
 .notes li { word-break: break-all; }
 .notes .info { color: var(--text-dim); }
