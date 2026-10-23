@@ -520,11 +520,69 @@ class BotTests(unittest.TestCase):
         self.assertEqual(calls, ['builder', 'home'])
         self.assertEqual(runner.walls_skipped, {'builder'})
 
+    def test_a_building_the_zoom_selected_is_dropped_by_opening_and_closing_the_list(self):
+        runner = self.make_bot(Device(self.frames), True)
+        cv2.imwrite(str(self.root / 'info.png'), np.full((4, 4, 3), 200, np.uint8))
+        runner.config = {**runner.config,
+                         'zoom_out': {'device': '/dev/input/event4', 'pinches': 1, 'center': [80, 45],
+                                      'gap': [100, 20], 'selection': {'file': 'info.png', 'max_score': 0.05}},
+                         'walls': {'home': {'build': [150, 80]}}}
+        taps, pinches = [], []
+        runner.pinch_once = lambda zoom: pinches.append(1)
+        runner.wait = lambda targets, allowed, timeout=None: sorted(targets)[0]
+        runner.guarded_tap = lambda states, location, terminal=None: taps.append(tuple(location))
+        runner.read_until = lambda reader, limit: None
+        runner.action = lambda state, name: taps.append((state, name))
+        # Selected after the pinch (pinching again would select it again), gone once the list was shut.
+        seen = iter([([40, 40], 1.0), bot.TargetMissing('gone')])
+
+        def find(image, template, score):
+            result = next(seen)
+            if isinstance(result, Exception):
+                raise result
+            return result
+        with patch('bot.find_target', find):
+            runner.zoom_out('home')
+        self.assertEqual(pinches, [1])
+        self.assertEqual(taps, [(150, 80), ('build_list', 'close')])
+
+    def test_a_tap_on_a_screen_that_changed_is_a_stall_and_sends_nothing(self):
+        device = Device(self.frames, 'home')
+        runner = self.make_bot(device, True)
+        with self.assertRaises(bot.UnexpectedScreen):
+            runner.guarded_tap({'home_menu'}, [1, 1])
+        self.assertEqual(device.inputs, [])
+
+    def test_a_menu_that_changes_under_a_tap_is_looked_at_again(self):
+        runner = self.make_bot(Device(self.frames), True)
+        listed = np.ones((2, 2, 3), np.uint8)
+        shots = iter([('build_list', listed), ('build_list', listed), ('home', listed)])
+        runner.observe = lambda: next(shots)
+        runner.list_open = lambda image: True
+        runner.wait_still = lambda limit: None
+        calls = []
+
+        def action(state, name):
+            calls.append((state, name))
+            if len(calls) == 1:
+                # The list slid shut between the look and the tap.
+                raise bot.UnexpectedScreen('Aksi dibatalkan: layar berubah menjadi wall_selected')
+        runner.action = action
+        runner.close_menus()
+        self.assertEqual(calls, [('build_list', 'close'), ('build_list', 'close')])
+
     def test_a_screen_out_of_turn_is_a_stall_for_recovery(self):
         # A Builder Base battle that started before its scout screen was seen: settle it, do not stop the run.
         runner = self.make_bot(Device(self.frames, 'builder_battle'), True)
         with self.assertRaises(bot.WaitTimeout):
             runner.wait({'builder_scout'}, {'builder_menu'}, 1)
+        # A repeated menu tap does not keep waiting on it either.
+        device = Device(self.frames, 'builder_menu')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'builder_battle'))
+        runner = self.make_bot(device, True)
+        with self.assertRaises(bot.UnexpectedScreen):
+            runner.tap_until('builder_menu', 'find', {'builder_scout'}, 60)
+        self.assertEqual(len(device.inputs), 1)
 
     def test_settle_closes_stacked_attack_menus(self):
         config = {**self.config, 'screens': {

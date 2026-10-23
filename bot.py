@@ -1327,6 +1327,8 @@ class Bot:
             left = deadline - time.monotonic()
             try:
                 return self.wait(targets, {state}, min(TAP_RETRY_SECONDS, max(left, 0)))
+            except UnexpectedScreen:
+                raise
             except WaitTimeout:
                 if time.monotonic() >= deadline:
                     raise
@@ -1366,7 +1368,7 @@ class Bot:
         if terminal and state in terminal:
             return state
         if state not in states:
-            raise BotError(f'Aksi dibatalkan: layar berubah menjadi {state}')
+            raise UnexpectedScreen(f'Aksi dibatalkan: layar berubah menjadi {state}')
         resolved = location(image) if callable(location) else location
         if self.live:
             self.device.tap_many([resolved])
@@ -1461,14 +1463,29 @@ class Bot:
             return
         template = cv2.imread(str(asset_path(self.root, selection['file'])))
         for attempt in range(ZOOM_CLEAR_ATTEMPTS + 1):
-            _, image = self.observe()
+            state, image = self.observe()
             try:
                 find_target(image, template, selection['max_score'])
             except TargetMissing:
                 return
             if attempt == ZOOM_CLEAR_ATTEMPTS:
-                raise BotError('Bangunan tetap terpilih setelah zoom; tidak ada input lanjutan')
+                raise UnexpectedScreen('Bangunan tetap terpilih setelah zoom; tidak ada input lanjutan')
+            self.drop_selection(state, zoom)
+
+    def drop_selection(self, state: str, zoom: dict) -> None:
+        """On a village already zoomed out the pinch ends as a tap on the building under it, and pinching
+        again selects it again; opening and closing the builder list drops the selection."""
+        if state in MENU_SCREENS:
+            self.close_menus()
+            return
+        spec = self.config.get('walls', {}).get(state)
+        if not spec:
             self.pinch_once(zoom)
+            return
+        self.guarded_tap({state}, spec['build'])
+        self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
+        self.action('build_list', 'close')
+        self.wait({state}, {'build_list'}, WALL_TAP_SECONDS)
 
     def pinch_once(self, zoom: dict) -> None:
         start_gap, end_gap = zoom['gap']
@@ -2125,7 +2142,7 @@ class Bot:
 
     def listed(self, image: np.ndarray) -> np.ndarray:
         if not self.list_open(image):
-            raise BotError('Daftar Bangun belum terbuka')
+            raise UnexpectedScreen('Daftar Bangun belum terbuka')
         return image
 
     def open_build_list(self, village: str, spec: dict) -> np.ndarray:
@@ -2149,14 +2166,18 @@ class Bot:
                 continue
             if state not in MENU_SCREENS:
                 return
-            if state == 'wall_selected' and not self.list_open(image):
-                self.action(state, 'build')
-                self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
-                continue
-            # Closing the list can leave the wall selected, so look again instead of waiting for a new screen.
-            self.action(state, 'close')
+            try:
+                if state == 'wall_selected' and not self.list_open(image):
+                    self.action(state, 'build')
+                    self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
+                    continue
+                # Closing the list can leave the wall selected, so look again instead of waiting for a new screen.
+                self.action(state, 'close')
+            except UnexpectedScreen:
+                # The list was still sliding when it was looked at; look again.
+                pass
             self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
-        raise BotError('Menu tembok tidak bisa ditutup; tidak ada input lanjutan')
+        raise UnexpectedScreen('Menu tembok tidak bisa ditutup; tidak ada input lanjutan')
 
     def settle_selection(self) -> None:
         """Go on as soon as the picked wall's button layout holds; the list may slide shut right after a pick."""
