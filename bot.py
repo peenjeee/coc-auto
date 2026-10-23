@@ -96,6 +96,7 @@ SPELL_TAPS, SPELL_ROUND = 30, 3
 LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', *MENU_SCREENS)
+KNOWN_SCREENS = SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO = 2, 1.2
 ANCHOR_MAX_SCORE, SEARCH_ANCHOR_MAX_SCORE = 0.02, 0.05
@@ -225,7 +226,7 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
         if name not in screens:
             raise BotError(f'Kalibrasi layar belum tersedia: {name}')
     for name, screen in screens.items():
-        if name not in SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS or not isinstance(screen, dict):
+        if name not in KNOWN_SCREENS or not isinstance(screen, dict):
             raise BotError('Nama/format layar tidak valid')
         anchors = screen.get('anchors', [])
         if len(anchors) < 2:

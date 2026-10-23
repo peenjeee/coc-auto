@@ -743,6 +743,44 @@ class BotTests(unittest.TestCase):
                 self.assertEqual(calibrate.main(), 1)
             self.assertEqual(json.loads(path.read_text()), config)
 
+    def recalibrate(self, config, screen, *flags):
+        """Run calibrate.py on a saved shot with the ROI and point pickers answered; returns the saved config."""
+        import calibrate
+        path, shot = self.root / 'config.json', self.root / 'shot.png'
+        path.write_text(json.dumps(config), encoding='utf-8')
+        cv2.imwrite(str(shot), self.frames['home'])
+        rois = iter([[5, 5, 15, 12], [130, 5, 15, 12]])
+        argv = ['calibrate.py', '--config', str(path), '--image', str(shot), '--screen', screen, *flags]
+        with patch('sys.argv', argv), patch('calibrate.choose_roi', lambda image, label: next(rois)), \
+                patch('calibrate.choose_point', lambda image, label: [10, 20]):
+            self.assertEqual(calibrate.main(), 0)
+        return json.loads(path.read_text(encoding='utf-8'))
+
+    def test_calibration_replace_keeps_everything_but_the_anchors_and_tap_points(self):
+        config = copy.deepcopy(self.config)
+        builder = config['screens']['builder']
+        builder.update(targets={'switch': {'file': 'boat.png', 'max_score': 0.1}}, overrides=['builder_battle'],
+                       alt_anchors=[builder['anchors']], actions={'attack': [1, 1], 'cart': [2, 2]})
+        scout = config['screens']['home_scout']
+        scout.update(auto={'bar': [0, 60, 160, 30], 'hold': 5, 'spells': [[40, 40]]},
+                     sweep={'slots': [[20, 80]], 'deploy': [40, 40]})
+        saved = self.recalibrate(config, 'builder', '--replace')['screens']['builder']
+        self.assertEqual(saved['actions'], {'attack': [10, 20], 'cart': [10, 20]})
+        self.assertEqual({key: saved[key] for key in ('targets', 'overrides', 'alt_anchors')},
+                         {key: builder[key] for key in ('targets', 'overrides', 'alt_anchors')})
+        self.assertNotEqual(saved['anchors'], builder['anchors'])
+        saved = self.recalibrate(config, 'home_scout', '--replace')['screens']['home_scout']
+        for key in ('auto', 'sweep', 'deploy', 'troops', 'loot'):
+            self.assertEqual(saved[key], scout[key], key)
+        self.assertEqual([anchor['roi'] for anchor in saved['anchors']], [[5, 5, 15, 12], [130, 5, 15, 12]])
+
+    def test_calibration_accepts_popups_and_wall_menus(self):
+        for screen in ('gem_offer', 'star_bonus', 'wall_confirm', 'other_device'):
+            with self.subTest(screen=screen):
+                saved = self.recalibrate(self.config, screen)['screens'][screen]
+                self.assertEqual(set(saved['actions']), set(bot.ACTIONS.get(screen, ())))
+                self.assertEqual(len(saved['anchors']), 2)
+
     def test_png_capture_and_no_overwrite(self):
         import calibrate
         path = self.root / 'capture.png'

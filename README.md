@@ -219,11 +219,15 @@ After a game update, or on a different setup, recalibrate the affected screens:
 python calibrate.py --init --serial emulator-5554 --gold 500000 --elixir 500000
 python calibrate.py --capture shot.png                  # save a screenshot (no input)
 python calibrate.py --screen home --image shot.png      # pick anchors and tap points on a screenshot
-python calibrate.py --screen home_scout --counts 1 1    # deploy screens need slot counts
+python calibrate.py --screen home_scout --counts 1 1    # a new deploy screen needs slot counts
+python calibrate.py --screen gem_offer --image shot.png --replace  # recalibrate an existing screen
 python calibrate.py --learn-digits shot.png:GOLD:ELIXIR # build digit templates from labelled scouts
 ```
 
-Calibration only works on screenshots and never taps the game. Existing profiles need `--replace`.
+Calibration only works on screenshots and never taps the game. `--screen` takes every screen the bot knows, popups
+and wall menus included. An existing screen needs `--replace`, which picks new anchors and tap points and keeps
+everything else it has (`targets`, `auto`, `sweep`, `overrides`, `alt_anchors`, `deploy`, `troops`, `loot`); tap
+points that a target already finds are not asked again.
 
 ### Changing the army and deploy plan
 
@@ -344,7 +348,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot
 ```
 
-The suite (166 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (168 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

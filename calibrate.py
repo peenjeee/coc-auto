@@ -11,7 +11,7 @@ import uuid
 import cv2
 import numpy as np
 
-from bot import (ADB, ACTIONS, BotError, DEPLOY_SCREENS, RESOURCES, SCREEN_NAMES,
+from bot import (ADB, ACTIONS, BotError, DEPLOY_SCREENS, KNOWN_SCREENS, RESOURCES,
                  asset_path, crop, executable, glyphs, integer, load_config, rectangle)
 
 LOG = logging.getLogger(__name__)
@@ -69,7 +69,11 @@ def write_png(path: Path, image: np.ndarray) -> None:
         stream.write(encoded.tobytes())
 
 
-def calibrate_screen(image: np.ndarray, name: str, root: Path, counts: list[int]) -> dict:
+def calibrate_screen(image: np.ndarray, name: str, root: Path, counts: list[int],
+                     existing: dict | None = None) -> dict:
+    """Pick anchors and tap points. A screen calibrated before keeps everything else it has (targets, auto, sweep,
+    overrides, alt_anchors, deploy, troops, loot); tap points that a target already finds are not asked again."""
+    existing = existing or {}
     anchors = []
     for index in range(2):
         roi = choose_roi(image, f'{name}: anchor {index+1}, UI statis unik; bukan angka/timer/base')
@@ -81,11 +85,12 @@ def calibrate_screen(image: np.ndarray, name: str, root: Path, counts: list[int]
         path.parent.mkdir(parents=True, exist_ok=True)
         write_png(path, template)
         anchors.append({'roi': roi, 'file': filename})
-    actions = {key: choose_point(image, f'{name}: {key}') for key in ACTIONS.get(name, ())}
-    screen = {'anchors': anchors, 'actions': actions}
-    if name == 'home_scout':
+    targets = existing.get('targets', {})
+    actions = {key: choose_point(image, f'{name}: {key}') for key in ACTIONS.get(name, ()) if key not in targets}
+    screen = {**existing, 'anchors': anchors, 'actions': {**existing.get('actions', {}), **actions}}
+    if name == 'home_scout' and 'loot' not in existing:
         screen['loot'] = {key: choose_roi(image, f'Angka {key} saja; tanpa ikon/label') for key in RESOURCES}
-    if name in DEPLOY_SCREENS:
+    if name in DEPLOY_SCREENS and 'troops' not in existing:
         if not counts:
             raise BotError('Layar deploy memerlukan --counts, contoh --counts 40 40')
         screen['deploy'] = choose_point(image, 'Satu titik deploy di luar garis merah')
@@ -124,10 +129,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--elixir', type=int, default=0)
     parser.add_argument('--dark', type=int, default=0)
     parser.add_argument('--capture', type=Path, help='Simpan PNG baru, tanpa overwrite')
-    parser.add_argument('--screen', choices=SCREEN_NAMES + ('loading',))
+    parser.add_argument('--screen', choices=KNOWN_SCREENS)
     parser.add_argument('--image', type=Path, help='Kalibrasi dari screenshot lokal, tanpa ADB')
     parser.add_argument('--counts', type=int, nargs='+', default=[])
-    parser.add_argument('--replace', action='store_true', help='Izinkan mengganti profil layar yang dipilih')
+    parser.add_argument('--replace', action='store_true',
+                        help='Kalibrasi ulang anchor dan titik tap layar yang sudah ada; kunci lain tetap')
     parser.add_argument('--learn-digits', nargs='+', metavar='PNG:EMAS:ELIXIR',
                         help='Bangun template angka loot dari screenshot scout berlabel')
     parser.add_argument('--digits-dir', default='calibration/digits', help='Folder template angka baru')
@@ -165,10 +171,11 @@ def main() -> int:
             return 0
         if not args.screen and not args.capture:
             raise BotError('Pilih --screen atau --capture')
-        if args.screen in config.get('screens', {}) and not args.replace:
+        existing = config.get('screens', {}).get(args.screen)
+        if existing is not None and not args.replace:
             raise BotError('Profil sudah ada; gunakan --replace untuk menggantinya')
         counts = [integer(c, 1, 300, 'count') for c in args.counts]
-        if args.screen in DEPLOY_SCREENS and not counts:
+        if args.screen in DEPLOY_SCREENS and not counts and 'troops' not in (existing or {}):
             raise BotError('--counts diperlukan untuk layar deploy')
         if args.image:
             image = cv2.imread(str(args.image))
@@ -181,7 +188,7 @@ def main() -> int:
             write_png(args.capture, image)
             LOG.info('Screenshot tersimpan lokal: %s', args.capture)
         if args.screen:
-            screen = calibrate_screen(image, args.screen, args.config.parent, counts)
+            screen = calibrate_screen(image, args.screen, args.config.parent, counts, existing)
             updated = {**config, 'screens': {**config.get('screens', {}), args.screen: screen}}
             save_config(args.config, updated)
             LOG.info('Kalibrasi disimpan: %s', args.screen)
