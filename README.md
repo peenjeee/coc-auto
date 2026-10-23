@@ -260,6 +260,10 @@ PC that runs the bot; the key is printed in the terminal when the script starts.
 > yang menjalankan bot terhubung ke internet. Pantau lewat [coc.0xpnj.dev](https://coc.0xpnj.dev) dengan memasukkan
 > API key dari perangkat yang menjalankan bot; key itu tampil di terminal saat script dijalankan.
 
+The online dashboard installs as an app (PWA): press **install app** in its header or use the browser menu
+(Install / Add to Home screen) in Chrome or Edge, and on an iPhone use Share → Add to Home Screen in Safari. It opens
+in its own window with the bot's icon; without a connection it still opens, and shows the PC as offline.
+
 To run everything from the web without starting a task first:
 
 ```bash
@@ -480,7 +484,7 @@ remote.py              dashboard link: API key, signed commands, bot as a child 
 relay.py               Supabase Realtime relay for the online dashboard
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging)
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
-web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own Realtime client, ID/EN text
+web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own Realtime client, ID/EN text, app manifest, service worker and icons
 calibrate.py           calibration CLI (screenshots only, never taps)
 test_bot.py            offline unit tests
 test_remote.py         dashboard link tests (key, signatures, options, child process, local server)

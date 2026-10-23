@@ -369,6 +369,16 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(self.request('GET', '/', host='evil.example')[0], 403)
         self.assertEqual(self.request('GET', '/../remote.py')[0], 404)
 
+    def test_the_installable_app_files_are_served_with_their_types(self):
+        web = Path(self.temp.name) / 'web'
+        (web / 'icons').mkdir()
+        (web / 'manifest.webmanifest').write_text('{}', encoding='utf-8')
+        (web / 'icons' / 'icon-192.png').write_bytes(b'png')
+        for path, kind in (('/manifest.webmanifest', 'application/manifest+json'), ('/icons/icon-192.png', 'image/png')):
+            with self.subTest(path=path):
+                self.assertEqual(self.request('GET', path)[0], 200)
+                self.assertEqual(self.last_headers.get('Content-Type'), kind)
+
     def test_the_sample_deploy_maps_are_served_as_images(self):
         maps = Path(self.temp.name) / 'web' / 'maps'
         maps.mkdir()

@@ -406,7 +406,30 @@ function changeLanguage(language) {
   settings.render();
 }
 
+/** Installable app: the browser offers it once the page qualifies; the button appears only then. */
+function setUpInstall() {
+  let offer = null;
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    offer = event;
+    $('install').hidden = false;
+  });
+  window.addEventListener('appinstalled', () => { $('install').hidden = true; });
+  $('install').addEventListener('click', async () => {
+    if (!offer) return;
+    offer.prompt();
+    await offer.userChoice;
+    offer = null;
+    $('install').hidden = true;
+  });
+  // Online only: the local dashboard is served by the bot itself and must always be the live one.
+  if ('serviceWorker' in navigator && !LOCAL) {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* the dashboard still works, only not offline */ });
+  }
+}
+
 function init() {
+  setUpInstall();
   editor = new DeployEditor((screen, deploy, points) => send('set_deploy', { screen, deploy, points }));
   settings = new SettingsPanel(send);
   changeLanguage();

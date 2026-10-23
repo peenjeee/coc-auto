@@ -54,6 +54,7 @@ body {
   transition: border-color var(--fast), color var(--fast), box-shadow var(--fast);
 }
 .repo:hover, .repo:focus-visible { outline: none; border-color: var(--green); color: var(--green); box-shadow: var(--glow); }
+.site-actions { display: flex; gap: 8px; flex: none; }
 .site-foot { justify-content: center; padding: 16px 0 4px; font-size: 12px; }
 .site-foot a { color: var(--text-dim); text-decoration: none; }
 .site-foot a:hover, .site-foot a:focus-visible { color: var(--green); outline: none; text-shadow: var(--glow); }
@@ -288,6 +289,6 @@ button.ghost { background: transparent; color: var(--text-dim); }
 }
 
 @media (max-width: 480px) {
-  .repo span { display: none; }
+  a.repo span { display: none; }
   .group label { grid-template-columns: 1fr; gap: 4px; }
 }

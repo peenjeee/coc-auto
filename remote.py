@@ -36,9 +36,14 @@ MAX_COMMAND_BYTES = 64 * 1024
 STATIC_FILES = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js',
                 '/realtime.js': 'realtime.js', '/deploy.js': 'deploy.js', '/settings.js': 'settings.js',
                 '/style.css': 'style.css',
-                '/config.js': 'config.js', '/favicon.svg': 'favicon.svg'}
+                '/config.js': 'config.js', '/favicon.svg': 'favicon.svg',
+                '/manifest.webmanifest': 'manifest.webmanifest', '/sw.js': 'sw.js',
+                '/icons/icon-192.png': 'icons/icon-192.png', '/icons/icon-512.png': 'icons/icon-512.png',
+                '/icons/icon-maskable-512.png': 'icons/icon-maskable-512.png',
+                '/icons/apple-touch-icon.png': 'icons/apple-touch-icon.png'}
 CONTENT_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-                 '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg'}
+                 '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
+                 '.png': 'image/png', '.webmanifest': 'application/manifest+json'}
 LOCAL_HOSTS = ('localhost', '127.0.0.1')
 # Device-to-dashboard messages are signed under their own prefix, so they never pass as a command.
 AGENT_SIGNATURE_PREFIX = 'agent:'
