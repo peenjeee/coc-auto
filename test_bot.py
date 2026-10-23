@@ -319,9 +319,10 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs, [(70, 70)])
 
     def army_bar(self, kinds):
-        """A 1000x200 frame whose bar (y 100-200) holds one painted card per kind, 97 px apart."""
+        """A 1000x200 frame whose bar (y 100-200) holds one painted card per kind, 97 px apart. 'camp' is a Builder
+        Base troop card (magenta header top right), 'machine' a Builder Base hero card (shorter, no header)."""
         colours = {'troop': (182, 127, 64), 'siege': (220, 200, 60), 'hero': (211, 44, 60),
-                   'warden': (211, 44, 60), 'spell': (184, 68, 88)}
+                   'warden': (211, 44, 60), 'spell': (184, 68, 88), 'camp': (80, 180, 60), 'machine': (200, 110, 70)}
         image = np.full((200, 1000, 3), 40, dtype=np.uint8)
         for index, kind in enumerate(kinds):
             left = 10 + index * 97
@@ -331,6 +332,10 @@ class BotTests(unittest.TestCase):
                 image[103:118, left + 52:left + 84] = 255
             if kind == 'warden':
                 image[172:196, left + 50:left + 84] = (60, 200, 60)
+            if kind == 'camp':
+                image[100:120, left + 32:left + 88] = (230, 70, 210)
+            if kind == 'machine':
+                image[100:118, left:left + 88] = 40
         return image
 
     def test_the_deploy_plan_follows_the_cards_in_the_bar(self):
@@ -354,6 +359,42 @@ class BotTests(unittest.TestCase):
         image = self.army_bar(['troop', 'spell'])
         plan = bot.auto_plan(image, {'bar': [0, 100, 1000, 100], 'hold': 10, 'spells': [[50, 50]]})
         self.assertEqual([('hold' in step, 'points' in step) for step in plan], [(True, False), (False, True)])
+
+    def test_the_builder_base_plan_drops_the_machine_then_taps_each_camp_at_the_next_spread_point(self):
+        image = self.army_bar(['machine', 'camp', 'camp', 'camp', 'camp'])
+        auto = {'bar': [0, 100, 1000, 100], 'points': [[10, 10], [20, 20], [30, 30]]}
+        cards = bot.bar_cards(image, auto['bar'])
+        self.assertEqual([bot.card_kind(image, auto['bar'], card, camps=True) for card in cards],
+                         ['hero', 'counted', 'counted', 'counted', 'counted'])
+        centre = [54 + 97 * i for i in range(5)]
+        plan = bot.auto_plan(image, auto)
+        self.assertEqual([(step['slot'][0], step.get('points'), step.get('tap_only', False)) for step in plan], [
+            (centre[0], None, False), (centre[0], None, True), (centre[1], [[10, 10]], False),
+            (centre[2], [[20, 20]], False), (centre[3], [[30, 30]], False), (centre[4], [[10, 10]], False)])
+        self.assertTrue(all(step['count'] == 1 and 'hold' not in step for step in plan))
+
+    def test_the_bar_is_read_once_two_frames_show_the_same_cards(self):
+        auto = {'bar': [0, 100, 1000, 100], 'points': [[10, 10]]}
+        sliding, settled = self.army_bar(['machine', 'camp']), self.army_bar(['machine', 'camp', 'camp'])
+        device = Device(self.frames)
+        shots = iter([sliding, settled, settled])
+        device.capture = lambda: next(shots).copy()
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0.001)
+        runner.detector.detect = lambda image: 'builder_stage2'
+        self.assertEqual(runner.bar_plan(auto, {'builder_stage2'}), bot.auto_plan(settled, auto))
+
+    def test_builder_auto_needs_spread_points_instead_of_spells(self):
+        config = copy.deepcopy(self.config)
+        config['screens']['builder_scout']['auto'] = {'bar': [0, 60, 160, 30], 'points': [[40, 40], [50, 30]]}
+        bot.validate_config(config, self.root, 'builder')
+        for points in ([], [[160, 5]], 'none'):
+            broken = copy.deepcopy(config)
+            if points == 'none':
+                del broken['screens']['builder_scout']['auto']['points']
+            else:
+                broken['screens']['builder_scout']['auto']['points'] = points
+            with self.subTest(points=points), self.assertRaises(bot.BotError):
+                bot.validate_config(broken, self.root, 'builder')
 
     def test_reward_chest_and_card_are_tapped_through_to_village(self):
         rng = np.random.default_rng(13)

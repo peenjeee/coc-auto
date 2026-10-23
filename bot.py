@@ -91,6 +91,7 @@ RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
 BAR_CARD_STD, BAR_LABEL_WHITE, BAR_WARDEN_GREEN = 18, 100, 200
 BAR_CARD_WIDTH, BAR_CARD_COLOUR = (65, 98), 0.43
+BAR_CAMP_HEADER, BAR_SETTLE_SECONDS = 0.5, 3
 SPELL_TAPS, SPELL_ROUND = 30, 3
 LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
@@ -303,15 +304,7 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
             point(screen.get('deploy'), resolution, 'deploy')
             auto = screen.get('auto')
             if auto is not None:
-                rectangle(auto.get('bar'), resolution)
-                spells = auto.get('spells')
-                if not isinstance(spells, list) or not spells:
-                    raise BotError(f'{name}: auto spells perlu titik')
-                for location in spells:
-                    point(location, resolution, 'auto spell')
-                hold = auto.get('hold')
-                if not isinstance(hold, (int, float)) or not 0 < hold <= MAX_HOLD_SECONDS:
-                    raise BotError(f'{name}: auto hold tidak valid')
+                validate_auto(name, auto, resolution)
             troops = screen.get('troops', [])
             sweep = screen.get('sweep')
             if sweep:
@@ -396,6 +389,26 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
             score = selection.get('max_score')
             if template is None or not isinstance(score, float) or not 0 < score <= TARGET_MAX_SCORE:
                 raise BotError('zoom_out.selection tidak valid')
+
+
+def validate_auto(name: str, auto: dict, resolution: list) -> None:
+    """Home Village: troop 'hold' seconds and 'spells' points. Builder Base: spread 'points', one per troop card."""
+    rectangle(auto.get('bar'), resolution)
+    if 'points' in auto:
+        points = auto['points']
+        if not isinstance(points, list) or not points or len(points) > 20:
+            raise BotError(f'{name}: auto points perlu titik')
+        for location in points:
+            point(location, resolution, 'auto point')
+        return
+    spells = auto.get('spells')
+    if not isinstance(spells, list) or not spells:
+        raise BotError(f'{name}: auto spells perlu titik')
+    for location in spells:
+        point(location, resolution, 'auto spell')
+    hold = auto.get('hold')
+    if not isinstance(hold, (int, float)) or not 0 < hold <= MAX_HOLD_SECONDS:
+        raise BotError(f'{name}: auto hold tidak valid')
 
 
 def load_digit_templates(root: Path, folder: str) -> dict:
@@ -957,11 +970,16 @@ def card_coloured(image: np.ndarray, region: list, card: tuple) -> bool:
     return float(((hsv[..., 1] > 100) & (hsv[..., 2] > 80)).mean()) >= BAR_CARD_COLOUR
 
 
-def card_kind(image: np.ndarray, region: list, card: tuple) -> str:
+def card_kind(image: np.ndarray, region: list, card: tuple, camps: bool = False) -> str:
     """'counted' for troops and spells (an 'xN' label top right), 'siege' for the cyan siege card, 'warden' for the
-    hero with the green ground/air toggle, 'hero' for the rest."""
+    hero with the green ground/air toggle, 'hero' for the rest. Builder Base troop cards (camps) have no 'xN' label
+    but a magenta header top right, which its hero cards lack."""
     left, right = card
     _, y, _, h = region
+    if camps:
+        header = cv2.cvtColor(image[y + 2:y + 18, right - 40:right - 4], cv2.COLOR_BGR2HSV)
+        magenta = (header[..., 0] >= 135) & (header[..., 0] <= 165) & (header[..., 1] > 100) & (header[..., 2] > 120)
+        return 'counted' if float(magenta.mean()) >= BAR_CAMP_HEADER else 'hero'
     label = image[y + 2:y + 20, right - 40:right - 2]
     if int(np.all(label > 215, axis=2).sum()) >= BAR_LABEL_WHITE:
         return 'counted'
@@ -987,10 +1005,31 @@ def card_is_spell(image: np.ndarray, region: list, card: tuple) -> bool:
     return purple >= blue
 
 
+def camp_plan(image: np.ndarray, auto: dict) -> list:
+    """Builder Base deploy order for the cards on screen, left to right: a hero (Battle Machine, Battle Copter)
+    dropped at the deploy point then its ability, and each troop card tapped once at the next spread point. One tap
+    deploys the whole camp and its card stays coloured to show the camp's health, so a card is never held or tapped
+    until grey; the Builder Base has no spells."""
+    region, points = auto['bar'], auto['points']
+    middle = region[1] + region[3] // 2
+    plan, troops = [], 0
+    for card in bar_cards(image, region):
+        slot = [(card[0] + card[1]) // 2, middle]
+        if card_kind(image, region, card, camps=True) == 'counted':
+            plan.append({'slot': slot, 'count': 1, 'points': [points[troops % len(points)]]})
+            troops += 1
+        else:
+            plan += [{'slot': slot, 'count': 1}, {'slot': slot, 'count': 1, 'tap_only': True}]
+    return plan
+
+
 def auto_plan(image: np.ndarray, auto: dict) -> list:
     """Deploy order for the cards on screen: every troop held at the deploy point until empty, the siege machine,
     the Grand Warden then the other heroes each followed by its ability, and the spells over the given points,
-    listed as rounds of front, left and right, each round further in."""
+    listed as rounds of front, left and right, each round further in. With spread 'points' it is the Builder Base
+    order instead."""
+    if 'points' in auto:
+        return camp_plan(image, auto)
     region = auto['bar']
     middle = region[1] + region[3] // 2
     cards = [(card, card_kind(image, region, card)) for card in bar_cards(image, region)]
@@ -1342,16 +1381,16 @@ class Bot:
         state = self.checked_state(allowed, terminal)[0]
         if state in terminal:
             return state
-        if 'auto' in screen:
-            # Read the card bar before any card is used; the plan follows the army that is trained.
-            plan = auto_plan(self.checked_state(allowed, terminal)[1], screen['auto'])
-            LOG.info('Rencana deploy dari bar: %s kartu', len({tuple(troop['slot']) for troop in plan}))
-        else:
-            plan = screen['troops']
         if self.battle_zoom():
             state = self.checked_state(allowed, terminal)[0]
             if state in terminal:
                 return state
+        if 'auto' in screen:
+            # Read the card bar before any card is used; the plan follows the army that is trained.
+            plan = self.bar_plan(screen['auto'], allowed)
+            LOG.info('Rencana deploy dari bar: %s kartu', len({tuple(troop['slot']) for troop in plan}))
+        else:
+            plan = screen['troops']
         for troop in plan:
             if troop.get('wait') and self.live:
                 time.sleep(troop['wait'])
@@ -1373,6 +1412,15 @@ class Bot:
             if state in terminal:
                 return state
         return None
+
+    def bar_plan(self, auto: dict, allowed: set) -> list:
+        """Deploy plan from the card bar once two frames in a row show the same cards; at the start of Builder Base
+        stage 2 the last cards are still sliding into the bar."""
+        def read(image: np.ndarray) -> list:
+            if self.detector.detect(image) not in allowed:
+                raise BotError('Bar kartu dibaca di luar layar deploy')
+            return auto_plan(image, auto)
+        return self.read_stable(read, BAR_SETTLE_SECONDS if self.poll else 0)
 
     def hold_until_empty(self, troop: dict, location: list, allowed: set, terminal: set,
                          until_empty: bool) -> str:

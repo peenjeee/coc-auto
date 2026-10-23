@@ -25,7 +25,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Self-recovery** | Restarts a stopped LDPlayer (`ldconsole`), waits for ADB after a disconnect, and reopens CoC after a crash. |
 | **Home Village** | Searches opponents with a minimum gold / elixir / dark-elixir filter (unlimited searches by default). |
 | **Deploy plan** | Reads the card bar on the scout screen, so it follows whatever army is trained: holds each troop card at the deploy point until it is empty, drops the siege machine, then the Grand Warden (found by its green ground/air toggle) and the other heroes, each followed by its ability, and throws the spells in rounds of front, left and right, each round further into the base so no two spells share a spot. |
-| **Builder Base** | Spreads troops around the base, handles stage 2, and claims the **Elixir Cart** before every attack. |
+| **Builder Base** | Reads the card bar too: drops the Battle Machine or Battle Copter and fires its ability, spreads one troop card per point around the base, handles stage 2, and claims the **Elixir Cart** before every attack. |
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Unknown screens stop the bot. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
@@ -232,17 +232,28 @@ The army and how it is deployed live in `config.json`; no code changes are neede
 | Village | Key |
 | --- | --- |
 | Home Village | `screens.home_scout.auto` (reads the card bar; takes precedence over `troops`), plus `screens.home_scout.sweep` |
-| Builder Base, stage 1 | `screens.builder_scout.troops` |
-| Builder Base, stage 2 | `screens.builder_stage2.troops` |
+| Builder Base, stage 1 | `screens.builder_scout.auto` (reads the card bar; takes precedence over `troops`) |
+| Builder Base, stage 2 | `screens.builder_stage2.auto` (reads the card bar; takes precedence over `troops`) |
 
-A deploy screen with an `auto` entry builds its plan from the cards in the bar on every attack, so a new Home Village
-army needs no slot changes; its `troops` list is then ignored. `auto` has three fields:
+A deploy screen with an `auto` entry builds its plan from the cards in the bar on every attack, once two frames in a
+row show the same cards, so a new army needs no slot changes; its `troops` list is then ignored. In the Home Village
+`auto` has three fields:
 
 | Field | Meaning |
 | --- | --- |
 | `bar` | `[x, y, width, height]` of the card bar. |
 | `hold` | Seconds each troop card is held at the screen's `deploy` point; it stops early once the card is grey. |
 | `spells` | Spell drop points, listed as rounds of front, left and right, each round further into the base. |
+
+In the Builder Base `auto` has `bar` and `points` instead. Troop cards carry a magenta header and hero cards (Battle
+Machine, Battle Copter) do not. Each hero is dropped at the screen's `deploy` point and then tapped again for its
+ability. One tap deploys a whole troop camp, so each troop card is tapped once, at the next point of `points` in
+turn; cards greyed out in stage 1 are skipped. There are no spells.
+
+| Field | Meaning |
+| --- | --- |
+| `bar` | `[x, y, width, height]` of the card bar, header included (the troop headers sit higher than in the Home Village). |
+| `points` | Spread drop points around the base, used one per troop card. |
 
 Without `auto`, `troops` is an ordered list. Each item is one card in the troop bar, used in list order:
 
@@ -293,7 +304,7 @@ How to change it:
 | `screens.<name>.actions` | Fixed tap points (attack, find, next, return, …). Menus may add an optional `close`. |
 | `screens.<name>.targets` | Tap points found by image search (boat, Elixir Cart) with `pan`, `scales`, `avoid`, `alt_files`. |
 | `screens.<deploy>.troops` | Ordered cards: `slot`, `count`, `hold`, `until_empty`, `points`, `tap_only`, `wait`. |
-| `screens.home_scout.auto` | Build the deploy order from the card bar instead of `troops`: `bar` region, troop `hold` seconds, and `spells` points listed as rounds of front, left, right. |
+| `screens.<deploy>.auto` | Build the deploy order from the card bar instead of `troops`. Home Village: `bar` region, troop `hold` seconds, and `spells` points listed as rounds of front, left, right. Builder Base: `bar` region and spread `points`, one per troop card. |
 | `capacity.<village>.<resource>` | Storage bar crop, tooltip tap point, `max` crop, and `label` ("Maks:") template. Optional `maximum` forces a fixed value. Needs `digits`. |
 | `storage.<village>.<resource>` | Fallback fill check by bar colour (`row`, `left`, `right`, `hue`, `min_saturation`), used when a village has no `capacity`. |
 | `cart_text` | Crop of the Elixir Cart "current / max" text, read with `digits`. |
@@ -333,7 +344,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot
 ```
 
-The suite (163 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (166 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure
