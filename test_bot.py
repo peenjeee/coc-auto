@@ -471,6 +471,20 @@ class BotTests(unittest.TestCase):
         self.assertEqual(calls, ['builder', 'home'])
         self.assertEqual(runner.walls_skipped, {'builder'})
 
+    def test_settle_closes_stacked_attack_menus(self):
+        config = {**self.config, 'screens': {
+            **self.config['screens'],
+            'home_menu': {**self.config['screens']['home_menu'], 'actions': {'find': [80, 50], 'close': [6, 6]}},
+            'home_army': {**self.config['screens']['home_army'], 'actions': {'attack': [120, 80], 'close': [5, 5]}}}}
+        device = Device(self.frames, 'home_army')
+        closes = {('home_army', (5, 5)): 'home_menu', ('home_menu', (6, 6)): 'home'}
+        device.tap = lambda point: (device.inputs.append(tuple(point)),
+                                    setattr(device, 'state', closes[device.state, tuple(point)]))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=0.02, poll=0)
+        runner.settle()
+        self.assertEqual(device.inputs, [(5, 5), (6, 6)])
+        self.assertEqual(device.state, 'home')
+
     def test_a_leftover_wall_menu_is_closed_while_waiting(self):
         runner = self.make_bot(Device(self.frames), True)
         screens = iter([('wall_selected', None), ('home', None)])

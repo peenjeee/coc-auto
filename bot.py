@@ -102,6 +102,7 @@ HUD_ALIGN_PX, HUD_GAP_RATIO = 2, 1.2
 ANCHOR_MAX_SCORE, SEARCH_ANCHOR_MAX_SCORE = 0.02, 0.05
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 30, 5
+SETTLE_MENU_LAYERS = 4
 WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS = 4, 0.4
 WHITE_LEVEL = 200
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
@@ -2201,14 +2202,18 @@ class Bot:
 
     def settle(self) -> None:
         """After an interrupted run, close an open attack menu or let a battle end and leave its result screen."""
-        state = self.current_screen()
-        if state in MENU_SCREENS:
-            self.close_menus()
-            return
-        if state and 'close' in self.config['screens'][state].get('actions', {}):
+        for _ in range(SETTLE_MENU_LAYERS):
+            state = self.current_screen()
+            if state in MENU_SCREENS:
+                self.close_menus()
+                return
+            if state in VILLAGES:
+                return
+            if not state or 'close' not in self.config['screens'][state].get('actions', {}):
+                break
+            # Attack menus stack (the army screen sits over the attack menu), so close one layer at a time.
             self.action(state, 'close')
-            self.wait(set(VILLAGES), {state}, 30)
-            return
+            self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
         busy =set(BATTLE_STATES) | {'home_scout', 'builder_scout', 'builder_stage2', *RESULT_SCREENS}
         state = self.wait(set(VILLAGES) | set(RESULT_SCREENS), busy, BATTLE_END_SECONDS if self.poll else self.timeout)
         if state in RESULT_SCREENS:
