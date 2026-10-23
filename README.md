@@ -12,7 +12,8 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 > [!WARNING]
 > Automating Clash of Clans violates Supercell's Terms of Service. **Your account can be banned.**
 > There is no anti-ban or detection evasion. Use it only on an account you are willing to lose.
-> The bot never buys anything, never spends gems, never upgrades, and never logs in for you.
+> The bot never buys anything, never spends gems, never upgrades anything but walls (and only with `--walls`),
+> and never logs in for you.
 
 ---
 
@@ -88,10 +89,34 @@ C:\LDPlayer\LDPlayer14\adb.exe devices
 > If the bot stops with *"Layar tidak dikenal"* (unknown screen) or taps the wrong place,
 > recalibrate it for your own setup — see [Calibration](#calibration).
 
+## First-time setup for another PC or account
+
+The bundled `config.json` was made on one PC for one account. Before the first live run on yours, check each
+row below. Everything here is either an LDPlayer setting or a key in `config.json`.
+
+| What | Must be | Why / how to check |
+| --- | --- | --- |
+| LDPlayer resolution | **1280×720, DPI 240** (Settings → Advanced → Resolution) | Screens are matched pixel for pixel. DPI changes the UI scale, so at another DPI no template matches even at 1280×720. |
+| Game language | **Bahasa Indonesia** | Many anchors are Indonesian text ("Pertempuran", "Tembok", "Maks:"). With another language every text anchor has to be recalibrated. |
+| `adb`, `ldconsole` | Paths in your LDPlayer install folder | e.g. `C:\LDPlayer\LDPlayer14\adb.exe` and `C:\LDPlayer\LDPlayer14\ldconsole.exe`; the folder name depends on the LDPlayer version. |
+| `ld_index`, `serial` | Your instance | `ld_index` is the instance number in LDMultiPlayer (0 for the first). `serial` is `emulator-<5554 + 2 × index>`: `emulator-5554` for index 0, `emulator-5556` for index 1. Check with `adb devices`. |
+| `touch_device`, `zoom_out.device` | The touchscreen node | Run `adb -s <serial> shell getevent -pl` and use the `/dev/input/eventN` whose block lists `ABS_MT_POSITION_X`. Set both keys to it; holds, pinches and fast taps go there. |
+| `minimum` | A loot filter that fits your Town Hall | `500000` gold and elixir suits high Town Halls. Lower it for a low Town Hall, or every opponent is skipped. `0` turns a resource off. |
+| `tesseract` | Only when `digits` is not set | Loot is read with the digit templates in `calibration/digits`. Tesseract is needed only if you remove `digits`. |
+
+Then open the village and run the dry run, which sends no input:
+
+```bash
+python bot.py
+```
+
+It should log `Dry-run: layar=home` (or `builder`). *"Layar tidak dikenal"* means the screen does not match; recheck
+resolution, DPI and language before recalibrating anything.
+
 ## Quick start
 
 The repository ships with the calibration that was used to build and test the bot (`config.json` + `calibration/`).
-If your setup matches (1280×720, Indonesian UI, a similar army), you can start right away:
+If your setup matches (see [First-time setup](#first-time-setup-for-another-pc-or-account)), you can start right away:
 
 ```bash
 python bot.py --until-full --live
@@ -143,9 +168,10 @@ python bot.py --walls home --live
 python bot.py --walls both --first home --live
 ```
 
-`--walls` takes `home`, `builder` or `both`. For each village in turn it opens the builder list, finds a "Tembok"
-row, and upgrades one wall at a time with whichever of gold or elixir is still affordable. It always takes the lowest wall level first: the list is sorted by price, so it scrolls to the end and picks the first wall row coming back up, and moves on to the next level only when that one is used up. When neither is, it
-farms until gold and elixir are both full and spends them again. It stops once no "Tembok" row is left, which means
+`--walls` takes `home`, `builder` or `both`. For each village in turn it first spends the gold and elixir already
+in storage: it opens the builder list, finds a "Tembok" row, and upgrades one wall at a time with whichever of gold or
+elixir is still affordable. It always takes the lowest wall level first: the list is sorted by price, so it scrolls to the end and picks the first wall row coming back up, and moves on to the next level only when that one is used up. When neither resource is affordable any more, it
+farms until gold and elixir are both full, spends them again, and repeats. It stops once no "Tembok" row is left, which means
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
 Elixir Cart first; its walls cost gold only until they reach higher levels, and only the upgrade buttons a wall actually shows are used. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
 
@@ -168,7 +194,7 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--builder RESOURCES` | – | Fill these Builder Base resources (`gold`, `elixir`, `cart`, or `all`). Implies `--until-full`. |
 | `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
 | `--first {builder,home}` | `builder` | Which village to work on first when both are chosen. |
-| `--walls {home,builder,both}` | – | Farm, then spend gold and elixir on walls until every wall is maxed. Never uses gems. |
+| `--walls {home,builder,both}` | – | Spend the stored gold and elixir on walls, then farm both full and repeat until every wall is maxed. Never uses gems. |
 | `--max-recoveries N` | `20` | How many times `--until-full` may restart LDPlayer / CoC. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 
@@ -200,11 +226,20 @@ The army and how it is deployed live in `config.json`; no code changes are neede
 
 | Village | Key |
 | --- | --- |
-| Home Village | `screens.home_scout.troops` (plus `screens.home_scout.sweep`) |
+| Home Village | `screens.home_scout.auto` (reads the card bar; takes precedence over `troops`), plus `screens.home_scout.sweep` |
 | Builder Base, stage 1 | `screens.builder_scout.troops` |
 | Builder Base, stage 2 | `screens.builder_stage2.troops` |
 
-`troops` is an ordered list. Each item is one card in the troop bar, used in list order:
+A deploy screen with an `auto` entry builds its plan from the cards in the bar on every attack, so a new Home Village
+army needs no slot changes; its `troops` list is then ignored. `auto` has three fields:
+
+| Field | Meaning |
+| --- | --- |
+| `bar` | `[x, y, width, height]` of the card bar. |
+| `hold` | Seconds each troop card is held at the screen's `deploy` point; it stops early once the card is grey. |
+| `spells` | Spell drop points, listed as rounds of front, left and right, each round further into the base. |
+
+Without `auto`, `troops` is an ordered list. Each item is one card in the troop bar, used in list order:
 
 | Field | Meaning |
 | --- | --- |
@@ -217,7 +252,7 @@ The army and how it is deployed live in `config.json`; no code changes are neede
 | `tap_only` | Only tap the card itself, e.g. a second tap on a hero to fire its ability. |
 | `wait` | Seconds to wait before this card. |
 
-Example from the bundled Home Village plan:
+Example of a fixed `troops` plan:
 
 ```json
 {"slot": [130, 650], "count": 1, "hold": 6, "until_empty": true},
@@ -232,7 +267,7 @@ After the list, the Home Village `sweep` taps every card in `sweep.slots` that s
 
 How to change it:
 
-1. Card positions depend on army order, so re-check every `slot` after changing the army.
+1. Card positions depend on army order, so with fixed `troops` re-check every `slot` after changing the army.
 2. The bot zooms out (`zoom_out`) before deploying, so drop points must be read from a **zoomed-out** battle screen, not a normal scout screenshot. Start an attack, zoom out like the bot does, then save a screenshot with `python calibrate.py --capture shot.png` and read pixel positions in any image viewer.
 3. Edit `config.json`, then check it without input: `python bot.py`.
 4. Test one attack: `python bot.py --mode home --cycles 1 --live` (or `--mode builder`).
@@ -245,6 +280,7 @@ How to change it:
 | `adb`, `serial`, `resolution` | ADB executable, device serial, and screen size. |
 | `ldconsole`, `ld_index` | LDPlayer console and instance index, used to start a stopped emulator. |
 | `touch_device` | Raw touch input device, e.g. `/dev/input/event4`. |
+| `tesseract` | Tesseract executable; used for loot only when `digits` is not set. |
 | `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
 | `screens.<name>.anchors` | Two UI crops that identify a screen; optional `margin` for small UI shifts. |
 | `screens.<name>.alt_anchors` | Alternative anchor sets for screens with two layouts. |
@@ -253,8 +289,11 @@ How to change it:
 | `screens.<name>.targets` | Tap points found by image search (boat, Elixir Cart) with `pan`, `scales`, `avoid`, `alt_files`. |
 | `screens.<deploy>.troops` | Ordered cards: `slot`, `count`, `hold`, `until_empty`, `points`, `tap_only`, `wait`. |
 | `screens.home_scout.auto` | Build the deploy order from the card bar instead of `troops`: `bar` region, troop `hold` seconds, and `spells` points listed as rounds of front, left, right. |
-| `capacity.<village>.<resource>` | Storage bar crop, tooltip tap point, `max` crop, and `label` ("Maks:") template. Optional `maximum` forces a fixed value. |
-| `cart_text` | Crop of the Elixir Cart "current / max" text. |
+| `capacity.<village>.<resource>` | Storage bar crop, tooltip tap point, `max` crop, and `label` ("Maks:") template. Optional `maximum` forces a fixed value. Needs `digits`. |
+| `storage.<village>.<resource>` | Fallback fill check by bar colour (`row`, `left`, `right`, `hue`, `min_saturation`), used when a village has no `capacity`. |
+| `cart_text` | Crop of the Elixir Cart "current / max" text, read with `digits`. |
+| `cart_bar` | Elixir Cart fill bar read by colour, used when there is no `cart_text`. Either key makes `cart` a goal. |
+| `walls.<village>` | `--walls` calibration: builder list tap point, "Tembok" row template, scroll swipe, gem count areas, upgrade button template and price offsets, the confirm dialog checks, and the Home Village `gold_reserve`. |
 | `digits` | Folder of digit templates (`0.png` … `9.png`, plus variants like `9-ui2.png`). |
 | `zoom_out` | Pinch settings used before switching villages or attacking. |
 | `speed_button` | Template of the battle "1x" button, tapped once to switch to 4x. |
@@ -263,7 +302,7 @@ How to change it:
 
 ## Recovery behaviour
 
-| Situation | What `--until-full` does |
+| Situation | What `--until-full` and `--walls` do |
 | --- | --- |
 | LDPlayer is not running | Starts it with `ldconsole launch`, waits for ADB and Android boot. |
 | CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. |

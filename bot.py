@@ -2194,8 +2194,8 @@ def main() -> int:
     parser.add_argument('--first', choices=('builder', 'home'), default='builder',
                         help='Desa yang dikerjakan dulu bila dua desa dipilih')
     parser.add_argument('--walls', choices=('home', 'builder', 'both'),
-                        help='Farming sampai gold+elixir penuh, habiskan untuk upgrade tembok, ulangi sampai '
-                             'semua tembok maksimal; tidak pernah memakai gem')
+                        help='Habiskan gold+elixir yang ada untuk upgrade tembok, farming sampai penuh, ulangi '
+                             'sampai semua tembok maksimal; tidak pernah memakai gem')
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
                         help='--until-full: berapa kali boleh membuka ulang CoC setelah crash/DC')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
