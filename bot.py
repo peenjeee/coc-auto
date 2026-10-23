@@ -2198,6 +2198,7 @@ class Bot:
     def upgrade_walls(self, village: str) -> int | None:
         """Spend gold and elixir on walls one at a time; the number upgraded, or None once no wall is left."""
         spec = self.config['walls'][village]
+        self.check_limits()
         state = self.current_screen()
         if state in MENU_SCREENS:
             self.close_menus()

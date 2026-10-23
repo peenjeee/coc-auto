@@ -484,6 +484,18 @@ class BotTests(unittest.TestCase):
         self.assertEqual(len(upgrades), 2)
         self.assertEqual(closed, [1])
 
+    def test_a_limit_reached_before_a_wall_session_does_no_more_work(self):
+        spec, _, _ = self.wall_spec()
+        runner = self.make_bot(Device(self.frames), True)
+        runner.config = {**runner.config, 'walls': {'builder': spec}}
+        runner.stop_at = 0
+        moves = []
+        runner.navigate = runner.collect_cart = lambda *args: moves.append(args)
+        runner.close_menus = lambda: None
+        with self.assertRaises(bot.LimitReached):
+            runner.upgrade_walls('builder')
+        self.assertEqual(moves, [])
+
     def test_a_reached_limit_is_a_normal_finish(self):
         with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--max-upgrades', '3']), \
                 patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
