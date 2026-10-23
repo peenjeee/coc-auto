@@ -77,8 +77,9 @@ flowchart LR
 
 The account:
 
-- **Town Hall 7+** for `--walls home` and for dark elixir (`--dark`, `--home dark`): the Home Village gem and storage
-  readings are calibrated with the dark elixir bar on screen.
+- A **Dark Elixir Storage** (Town Hall 7+) only for dark elixir (`--dark`, `--home dark`). `--walls home` works with
+  or without one: without a dark elixir bar the gem bar moves up into its row, and the bot finds it by its green gem
+  icon before every wall session (no gem icon, no upgrade).
 - **Builder Base unlocked** for the default `--until-full` and for `--builder`/`--walls builder`; without it use
   `--home`.
 - A loot `minimum` and `walls.home.gold_reserve` that fit the Town Hall (see
@@ -579,7 +580,7 @@ first error instead of recovering.
 python -m unittest -v test_bot test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (284 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
+The suites (287 tests) use synthetic screens and a fake device, plus real screen crops in `fixtures/`. They cover screen detection, digit reading,
 deploy plans, popups, recovery, the until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.

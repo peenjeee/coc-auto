@@ -120,6 +120,9 @@ DIGIT_ASPECT, WIDE_RATIO, BRIDGE_RATIO = 0.95, 1.4, 0.15
 ANCHOR_MAX_SCORE, SEARCH_ANCHOR_MAX_SCORE = 0.02, 0.05
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 30, 5
+# The top-right resource bars sit one row apart, and the gem bar ends in a green gem icon: [dx, dy, width, extra
+# height] of that icon from the gem count's region.
+HUD_ROW_HEIGHT, GEM_ICON_BOX, GEM_ICON_MIN_GREEN = 50, (128, -6, 38, 12), 0.25
 SETTLE_MENU_LAYERS = 4
 WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS, WALL_PRICE_SECONDS = 4, 0.4, 2
 WHITE_LEVEL = 200
@@ -792,6 +795,23 @@ def parse_goals(config: dict, builder: str | None, home: str | None, first: str,
     return {village: goals[village] for village in sorted(goals, key=lambda village: village != first)}
 
 
+def gem_rows_up(image: np.ndarray, region: list) -> int | None:
+    """How many rows above `region` the gem bar sits: 0 where it was calibrated, 1 on a village without a dark
+    elixir storage yet (built from Town Hall 7), where the gem bar takes the dark elixir row. Found by the green gem
+    icon at the end of the bar; the dark elixir and shield icons have no green. None when no gem icon shows."""
+    x, y, _, h = region
+    dx, dy, width, extra = GEM_ICON_BOX
+    for rows_up in (0, 1):
+        top = y - rows_up * HUD_ROW_HEIGHT + dy
+        box = image[max(0, top):max(0, top + h + extra), x + dx:x + dx + width]
+        if box.size:
+            hsv = cv2.cvtColor(box, cv2.COLOR_BGR2HSV)
+            green = (hsv[..., 0] >= 35) & (hsv[..., 0] <= 85) & (hsv[..., 1] > 120) & (hsv[..., 2] > 120)
+            if float(green.mean()) >= GEM_ICON_MIN_GREEN:
+                return rows_up
+    return None
+
+
 def price_resource(band: np.ndarray, minimum: int) -> str | None:
     """Gold prices end in a yellow coin, elixir prices in a purple drop."""
     hsv = cv2.cvtColor(band, cv2.COLOR_BGR2HSV)
@@ -1273,6 +1293,7 @@ class Bot:
         self.stop_at = time.monotonic() + minutes * 60 if minutes else None
         self.upgrade_limit, self.upgrades_done = max_upgrades or None, 0
         self.gems_known: int | None = None
+        self.gem_shift = 0
         self.wall_excluded: set = set()
         self.gems_fresh = False
         self.wall_list_top = False
@@ -1972,9 +1993,19 @@ class Bot:
     def list_open(self, image: np.ndarray) -> bool:
         return self.detector.matches(image, self.detector.templates['build_list'])
 
+    def find_gem_row(self, spec: dict) -> None:
+        """On the village screen before a wall session: which row the gem bar is in on this account. The builder
+        list then moves the bars left but keeps their rows."""
+        _, image = self.observe()
+        rows_up = gem_rows_up(image, spec['gems']['village'])
+        if rows_up is None:
+            raise GemUnreadable('Ikon gem tidak terlihat di bar sumber daya; tidak ada upgrade')
+        self.gem_shift = rows_up * HUD_ROW_HEIGHT
+
     def gem_region(self, image: np.ndarray, spec: dict) -> list:
         """The open builder list pushes the resource bars left, so the gem count moves with it."""
-        return spec['gems']['list' if self.list_open(image) else 'village']
+        x, y, w, h = spec['gems']['list' if self.list_open(image) else 'village']
+        return [x, y - self.gem_shift, w, h]
 
     def read_gems(self, image: np.ndarray, spec: dict) -> int:
         return read_trailing_number(crop(image, self.gem_region(image, spec)), self.templates(), FRACTION_MIN_SCORE)
@@ -2297,6 +2328,7 @@ class Bot:
         if village == 'builder':
             self.collect_cart()
         self.wait({village}, set(), 30)
+        self.find_gem_row(spec)
         self.open_build_list(village, spec)
         self.start_gem_watch(spec)
         self.wall_excluded, self.wall_price = set(), None

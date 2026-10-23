@@ -473,7 +473,7 @@ class BotTests(unittest.TestCase):
         runner.current_screen = lambda: 'home'
         runner.wait = lambda targets, allowed, timeout=None: sorted(targets)[0]
         runner.open_build_list = lambda village, spec: None
-        runner.start_gem_watch = lambda spec: None
+        runner.find_gem_row = runner.start_gem_watch = lambda spec: None
         runner.wall_row = lambda spec: 40
         runner.guarded_tap = lambda states, location, terminal=None: 'ok'
         runner.settle_selection = lambda: None
@@ -1586,6 +1586,45 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.gem_region(None, spec), spec['gems']['list'])
         runner.list_open = lambda image: False
         self.assertEqual(runner.gem_region(None, spec), spec['gems']['village'])
+
+    def hud(self, gem_row_top):
+        """A 1280x720 frame whose only green is the gem icon at the end of the bar whose count starts at y."""
+        image = np.zeros((720, 1280, 3), np.uint8)
+        if gem_row_top is not None:
+            image[gem_row_top:gem_row_top + 26, 1232:1262] = (60, 200, 40)  # BGR green, like the gem icon
+        return image
+
+    def test_the_gem_bar_is_found_with_or_without_a_dark_elixir_storage(self):
+        region = [1100, 174, 118, 26]  # calibrated below the dark elixir bar
+        self.assertEqual(bot.gem_rows_up(self.hud(174), region), 0)
+        # No dark elixir storage yet: the gem bar takes the dark elixir row, one row higher.
+        self.assertEqual(bot.gem_rows_up(self.hud(124), region), 1)
+        self.assertIsNone(bot.gem_rows_up(self.hud(None), region))
+        self.assertEqual(bot.gem_rows_up(self.hud(124), [1100, 124, 118, 26]), 0)  # Builder Base row
+
+    def test_a_wall_session_reads_gems_in_the_row_the_village_shows_them(self):
+        spec, _, _ = self.wall_spec()
+        spec = {**spec, 'gems': {'village': [1100, 174, 118, 26], 'list': [766, 174, 114, 26]}}
+        runner = self.make_bot(Device(self.frames), True)
+        x, y, w, h = spec['gems']['village']
+        runner.observe = lambda: ('home', self.hud(y - bot.HUD_ROW_HEIGHT))
+        runner.find_gem_row(spec)
+        runner.list_open = lambda image: False
+        self.assertEqual(runner.gem_region(None, spec), [x, y - bot.HUD_ROW_HEIGHT, w, h])
+        runner.list_open = lambda image: True
+        lx, ly, lw, lh = spec['gems']['list']
+        self.assertEqual(runner.gem_region(None, spec), [lx, ly - bot.HUD_ROW_HEIGHT, lw, lh])
+        runner.observe = lambda: ('home', self.hud(y))
+        runner.find_gem_row(spec)
+        self.assertEqual(runner.gem_region(None, spec), spec['gems']['list'])
+
+    def test_no_gem_icon_means_no_upgrade(self):
+        spec, _, _ = self.wall_spec()
+        spec = {**spec, 'gems': {'village': [1100, 174, 118, 26], 'list': [766, 174, 114, 26]}}
+        runner = self.make_bot(Device(self.frames), True)
+        runner.observe = lambda: ('home', self.hud(None))
+        with self.assertRaises(bot.GemUnreadable):
+            runner.find_gem_row(spec)
 
     def test_wall_rows_are_found_top_first(self):
         spec, _, row = self.wall_spec()
