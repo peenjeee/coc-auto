@@ -2202,6 +2202,10 @@ def main() -> int:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     try:
+        # Check every number before anything touches the emulator.
+        integer(args.cycles, 1, 100, 'cycles')
+        integer(args.searches, 0, 1_000_000, 'searches')
+        integer(args.max_recoveries, 0, 1000, 'max_recoveries')
         config = load_config(args.config)
         until_full = args.until_full or args.builder is not None or args.home is not None
         if args.walls and until_full:

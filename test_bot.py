@@ -358,6 +358,14 @@ class BotTests(unittest.TestCase):
             runner.wait({'home_army'}, {'home_menu'}, 1)
         self.assertEqual(device.inputs, [(20, 80)])
 
+    def test_bad_numbers_are_refused_before_the_emulator_is_touched(self):
+        for flags in (['--searches', '-1'], ['--max-recoveries', '5000'], ['--cycles', '0']):
+            with patch('sys.argv', ['bot.py', '--until-full', '--live', *flags]), \
+                    patch('bot.load_config') as load, patch('bot.ADB') as adb:
+                self.assertEqual(bot.main(), 1)
+            load.assert_not_called()
+            adb.assert_not_called()
+
     def test_busy_builders_are_closed_with_x_and_stop_that_village(self):
         busy = np.random.default_rng(43).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
