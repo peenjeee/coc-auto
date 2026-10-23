@@ -344,7 +344,7 @@ How to change it:
 | The game offers to buy missing resources with gems ("Perlu lebih banyak …") | Closes it with X, never the gem button. If it came from skipping an opponent with no gold left, attacks the opponent on screen; otherwise recovers. |
 | The account is opened on another device ("Perangkat lain tersambung ke desa ini") | Stops without reloading, so the other session stays; exit code 4. Run the bot again when you are done there. |
 | The game disconnects for inactivity ("Ada orang di sana?") | Taps "Muat ulang game" and carries on. |
-| The server connection drops ("Sambungan terputus") | Taps "Coba lagi", waiting 10 seconds between tries while the network is still down, and carries on. |
+| The server connection drops ("Sambungan terputus", or "Kesalahan sambungan" while loading) | Taps "Coba lagi", waiting 10 seconds between tries while the network is still down, and carries on. |
 | A game update is offered ("Pembaruan Tersedia!") | Taps outside the box to close it, never the update button, and carries on. If the offer is still there after 3 taps the update is required: stops with exit code 5 and asks you to update CoC from the Play Store first. |
 | All builders are busy when a Builder Base wall is picked ("Semua tukang sibuk!") | Closes the gem offer with X and skips that village's walls; run again once a builder is free. |
 | Any other unexpected screen | Stops without sending input, so nothing is tapped blindly. |
@@ -358,7 +358,7 @@ so the run stops only after that many recoveries with no progress in between.
 python -m unittest -v test_bot
 ```
 
-The suite (183 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
+The suite (185 tests) uses synthetic screens and a fake device, plus real screen crops in `fixtures/`. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

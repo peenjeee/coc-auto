@@ -1501,6 +1501,27 @@ class BotTests(unittest.TestCase):
         self.assertEqual(bot.find_rows(image, row, spec['row']['region'], 0.05), [15, 53])
         self.assertEqual(bot.find_rows(np.zeros_like(image), row, spec['row']['region'], 0.05), [])
 
+    def test_a_price_still_fading_in_is_looked_at_again_before_giving_up(self):
+        spec, icons, _ = self.wall_spec()
+        white = self.priced(spec, {'elixir'})
+        frames = [('wall_selected', self.priced(spec, set())),
+                  ('wall_confirm', self.confirm_frame(spec, icons['elixir'])), ('wall_selected', white)]
+        runner, taps = self.wall_runner(frames, [500, 500], tap_frames=[white])
+        runner.device.capture = lambda: white
+        self.assertTrue(runner.upgrade_wall(spec))
+        self.assertEqual(taps, [(66, 74), ('wall_confirm', 'confirm')])
+
+    def test_the_hud_gold_is_taken_only_once_two_frames_agree(self):
+        spec, _, _ = self.wall_spec()
+        spec['hud_gold'] = {'list': [0, 0, 10, 10], 'village': [0, 0, 10, 10]}
+        runner = bot.Bot(self.config, self.root, Device(self.frames), live=True, timeout=1, poll=0.001)
+        runner.list_open = lambda image: False
+        runner.templates = lambda: {}
+        # The bars slide while the builder list closes; the first frame reads another number.
+        reads = iter([471_121, 2_006_334, 2_006_334])
+        with patch('bot.read_trailing_number', lambda image, templates, score: next(reads)):
+            self.assertEqual(runner.hud_gold(spec), 2_006_334)
+
     def test_wall_is_not_touched_when_no_price_is_affordable(self):
         spec, _, _ = self.wall_spec()
         runner, taps = self.wall_runner([('wall_selected', self.priced(spec, set()))], [500])
@@ -1645,10 +1666,13 @@ class BotTests(unittest.TestCase):
         row = config['walls']['home']['row']
         template = cv2.imread(str(root / row['file']))
         templates = bot.load_digit_templates(root, config['digits'])
-        for name, expected in (('affordable', [3_000_000, 2_000_000, 1_500_000]), ('short', [3_000_000])):
+        # "merged": neighbouring zeros touch; its last row is the selected building's, drawn smaller.
+        for name, expected in (('affordable', [3_000_000, 2_000_000, 1_500_000]), ('short', [3_000_000]),
+                               ('merged-short', [3_000_000]),
+                               ('merged-affordable', [2_000_000, 1_500_000, 1_000_000])):
             image = np.zeros((720, 1280, 3), dtype=np.uint8)
             image[50:670, 940:1280] = cv2.imread(str(root / 'fixtures' / f'wall-list-{name}.png'))
-            ys = bot.find_rows(image, template, row['region'], row['max_score'])
+            ys = bot.find_rows(image, template, row['region'], row['max_score'], row['scales'])
             with self.subTest(list=name):
                 self.assertEqual([bot.row_price(image, row['price'], y, templates) for y in ys], expected)
 

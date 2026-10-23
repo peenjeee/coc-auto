@@ -106,11 +106,13 @@ OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device'
 KNOWN_SCREENS = SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO, HUD_MIN_MEAN_VALUE = 2, 1.2, 235
+# A digit is about as wide as tall; a blob much wider is touching digits, cut where the bridge is thinnest.
+DIGIT_ASPECT, WIDE_RATIO, BRIDGE_RATIO = 0.95, 1.4, 0.15
 ANCHOR_MAX_SCORE, SEARCH_ANCHOR_MAX_SCORE = 0.02, 0.05
 WALL_RESOURCES = ('gold', 'elixir')
 WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 30, 5
 SETTLE_MENU_LAYERS = 4
-WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS = 4, 0.4
+WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS, WALL_PRICE_SECONDS = 4, 0.4, 2
 WHITE_LEVEL = 200
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 CART_MISS_LIMIT = 5
@@ -761,15 +763,22 @@ def white_pixels(image: np.ndarray, region: list) -> int:
     return int(np.all(crop(image, region) > WHITE_LEVEL, axis=2).sum())
 
 
-def find_rows(image: np.ndarray, template: np.ndarray, region: list, max_score: float) -> list:
-    """Centre y of every row in the region that shows the template text, top row first."""
+def find_rows(image: np.ndarray, template: np.ndarray, region: list, max_score: float,
+              scales: tuple = (1.0,)) -> list:
+    """Centre y of every row in the region that shows the template text, top row first. The row of the
+    building in focus is drawn a little smaller, so it is matched at its own scale."""
     x, y, w, h = region
-    scores = cv2.matchTemplate(image[y:y + h, x:x + w], template, cv2.TM_SQDIFF_NORMED)
-    tops = []
-    for top in sorted({int(row) for row in np.where(scores <= max_score)[0]}):
-        if not tops or top - tops[-1] > template.shape[0]:
-            tops.append(top)
-    return [y + top + template.shape[0] // 2 for top in tops]
+    centres = []
+    for scale in scales:
+        scaled = template if scale == 1.0 else cv2.resize(template, None, fx=scale, fy=scale,
+                                                          interpolation=cv2.INTER_AREA)
+        scores = cv2.matchTemplate(image[y:y + h, x:x + w], scaled, cv2.TM_SQDIFF_NORMED)
+        centres += [y + int(top) + scaled.shape[0] // 2 for top in np.where(scores <= max_score)[0]]
+    rows = []
+    for centre in sorted(set(centres)):
+        if not rows or centre - rows[-1] > template.shape[0]:
+            rows.append(centre)
+    return rows
 
 
 def row_price(image: np.ndarray, band: list, y: int, templates: dict) -> float:
@@ -808,6 +817,10 @@ def validate_walls(config: dict, root: Path, villages: tuple) -> None:
             raise BotError('walls row price perlu [x, dy, w, h]')
         rectangle([price[0], 0, price[2], price[3]], resolution)
         integer(price[1], -200, 200, 'walls row price dy')
+        scales = row.get('scales', [1.0])
+        if not isinstance(scales, list) or not scales or not all(
+                isinstance(scale, float) and 0.5 <= scale <= 1.5 for scale in scales):
+            raise BotError('walls row scales perlu daftar angka 0.5..1.5')
         scroll = spec.get('scroll')
         if not isinstance(scroll, list) or len(scroll) != 2:
             raise BotError('walls scroll perlu titik awal dan akhir')
@@ -909,15 +922,43 @@ def digit_mask(image: np.ndarray) -> np.ndarray:
     return np.where(np.isin(labels, aligned), 0, 255).astype(np.uint8)
 
 
-def glyph_canvas(labels: np.ndarray, stats: np.ndarray, index: int) -> np.ndarray:
-    """One component scaled to the fixed glyph height, aspect kept, centred."""
-    x, y, w, h = stats[index, :4]
-    glyph = (labels[y:y + h, x:x + w] == index).astype(np.float32)
+def mask_canvas(glyph: np.ndarray) -> np.ndarray:
+    """A glyph mask scaled to the fixed glyph height, aspect kept, centred."""
+    h, w = glyph.shape
     width = max(1, min(DIGIT_WIDTH, round(w * DIGIT_HEIGHT / h)))
     canvas = np.zeros((DIGIT_HEIGHT, DIGIT_WIDTH), np.float32)
     left = (DIGIT_WIDTH - width) // 2
     canvas[:, left:left + width] = cv2.resize(glyph, (width, DIGIT_HEIGHT), interpolation=cv2.INTER_AREA)
     return canvas
+
+
+def glyph_canvas(labels: np.ndarray, stats: np.ndarray, index: int) -> np.ndarray:
+    """One component scaled to the fixed glyph height, aspect kept, centred."""
+    x, y, w, h = stats[index, :4]
+    return mask_canvas((labels[y:y + h, x:x + w] == index).astype(np.float32))
+
+
+def split_glyphs(glyph: np.ndarray, count: int) -> list:
+    """Touching digits cut into count glyphs at the thinnest columns, left to right, each without the bridge."""
+    ink, width = glyph.sum(axis=0), glyph.shape[1]
+    edges, cut = [0], 0
+    for part in range(1, count):
+        centre, reach = round(part * width / count), max(1, width // (2 * count))
+        low, high = max(cut + 1, centre - reach), min(width - 1, centre + reach)
+        if low > high:
+            raise BotError('Angka menempel tidak bisa dipisah; tidak ada input')
+        cut = low + int(np.argmin(ink[low:high + 1]))
+        edges.append(cut)
+    edges.append(width)
+    pieces = []
+    for left, right in zip(edges, edges[1:]):
+        piece = glyph[:, left:right]
+        rows = np.flatnonzero(piece.any(axis=1))
+        columns = np.flatnonzero(piece.sum(axis=0) > BRIDGE_RATIO * piece.shape[0])
+        if not len(rows) or not len(columns):
+            raise BotError('Angka menempel tidak bisa dipisah; tidak ada input')
+        pieces.append(piece[rows[0]:rows[-1] + 1, columns[0]:columns[-1] + 1])
+    return pieces
 
 
 def glyphs(image: np.ndarray) -> list:
@@ -944,17 +985,22 @@ def read_trailing_number(image: np.ndarray, templates: dict, min_score: float = 
     tall = [i for i in solid if stats[i, cv2.CC_STAT_HEIGHT] >= OCR_MIN_HEIGHT_RATIO * tallest]
     order = sorted(tall, key=lambda i: stats[i, cv2.CC_STAT_LEFT], reverse=True)
     top, height = stats[order[0], cv2.CC_STAT_TOP], stats[order[0], cv2.CC_STAT_HEIGHT]
-    run = []
+    canvases, last_left = [], None
     for index in order:
         x, y, w, h = stats[index, :4]
-        if abs(y - top) > HUD_ALIGN_PX or abs(h - height) > HUD_ALIGN_PX or w > h:
+        if abs(y - top) > HUD_ALIGN_PX or abs(h - height) > HUD_ALIGN_PX:
             continue
         # A thousands gap is narrower than a digit is tall; anything further left belongs to something else.
-        if run and stats[run[-1], cv2.CC_STAT_LEFT] - (x + w) > HUD_GAP_RATIO * height:
+        if last_left is not None and last_left - (x + w) > HUD_GAP_RATIO * height:
             break
-        run.append(index)
-    digits = [classify(glyph_canvas(labels, stats, index), templates, min_score) for index in reversed(run)]
-    if not 1 <= len(digits) <= 10 or None in digits:
+        glyph = (labels[y:y + h, x:x + w] == index).astype(np.float32)
+        # Neighbouring digits can touch ("00"); skipping that blob would drop digits, so cut it apart.
+        pieces = split_glyphs(glyph, max(2, round(w / (h * DIGIT_ASPECT)))) if w > WIDE_RATIO * h else [glyph]
+        canvases.extend(mask_canvas(piece) for piece in reversed(pieces))
+        last_left = x
+    digits = [classify(canvas, templates, min_score) for canvas in reversed(canvases)]
+    # A leading zero means digits on the left were lost.
+    if not 1 <= len(digits) <= 10 or None in digits or (len(digits) > 1 and digits[0] == '0'):
         raise BotError('Angka meragukan; hentikan tanpa input')
     return int(''.join(digits))
 
@@ -1858,11 +1904,14 @@ class Bot:
         self.gems_fresh = True
 
     def wall_rows(self, image: np.ndarray, spec: dict) -> list:
-        """(price, y) of every 'Tembok' row in view, top first."""
+        """(price, y) of every 'Tembok' row in view, top first. A price running past the bottom of the list is
+        half hidden by the tabs, so it counts as unread; that row shows whole after the next swipe."""
         row, templates = spec['row'], self.templates()
         template = cv2.imread(str(asset_path(self.root, row['file'])))
-        return [(row_price(image, row['price'], y, templates), y)
-                for y in find_rows(image, template, row['region'], row['max_score'])]
+        _, dy, _, h = row['price']
+        _, top, _, height = row['region']
+        return [(row_price(image, row['price'], y, templates) if y + dy + h <= top + height else math.inf, y)
+                for y in find_rows(image, template, row['region'], row['max_score'], row.get('scales', (1.0,)))]
 
     def priced_row(self, image: np.ndarray, spec: dict, price: float) -> int | None:
         found = [y for shown, y in self.wall_rows(image, spec) if shown == price]
@@ -1969,9 +2018,26 @@ class Bot:
                     return resource, tap
         return None
 
+    def affordable_soon(self, spec: dict) -> bool:
+        """A price still fading in reads red at first, so look again briefly before giving up on the wall."""
+        def white(frame: np.ndarray) -> tuple:
+            choice = self.affordable_button(frame, spec)
+            if choice is None:
+                raise BotError('Harga tembok belum putih')
+            return choice
+        try:
+            self.read_until(white, WALL_PRICE_SECONDS if self.poll else 0)
+            return True
+        except BotError:
+            buttons = self.wall_buttons(self.device.capture(), spec)
+            LOG.info('Tombol upgrade tembok: %s', ', '.join(
+                f'{resource} {"putih" if affordable else "merah"}' for resource, _, affordable in buttons) or 'tidak ada')
+            return False
+
     def hud_gold(self, spec: dict) -> int:
+        """Gold once two fresh frames agree; the bars slide while the builder list opens or closes."""
         regions = spec['hud_gold']
-        return self.read_until(
+        return self.read_stable(
             lambda image: read_trailing_number(crop(image, regions['list' if self.list_open(image) else 'village']),
                                                self.templates(), FRACTION_MIN_SCORE),
             GEM_READ_SECONDS if self.poll else 0)
@@ -2005,7 +2071,7 @@ class Bot:
         # The count read after the last confirm still holds while nothing has been tapped since.
         if not self.gems_fresh:
             self.check_gems(spec)
-        if self.affordable_button(image, spec) is None:
+        if self.affordable_button(image, spec) is None and not self.affordable_soon(spec):
             return False
         reserve, gold = spec.get('gold_reserve'), None
         if reserve and 'gold' not in self.wall_excluded:

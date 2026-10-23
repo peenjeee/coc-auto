@@ -1906,7 +1906,29 @@
           336,
           436
         ]
-      }
+      },
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              284,
+              276,
+              304,
+              32
+            ],
+            "file": "calibration/connection_error-title-c381584ee94f44ed8b045f5786b5165c.png"
+          },
+          {
+            "roi": [
+              284,
+              326,
+              450,
+              28
+            ],
+            "file": "calibration/connection_error-text-56968fea68184783a9624963c9cf6370.png"
+          }
+        ]
+      ]
     }
   },
   "digits": "calibration/digits",
@@ -2174,6 +2196,10 @@
           8,
           132,
           20
+        ],
+        "scales": [
+          1.0,
+          0.95
         ]
       },
       "scroll": [
@@ -2283,6 +2309,10 @@
           8,
           132,
           20
+        ],
+        "scales": [
+          1.0,
+          0.95
         ]
       },
       "scroll": [
