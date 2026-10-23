@@ -251,7 +251,9 @@ class DeployPoints:
         import cv2
         shots = []
         for name in DEPLOY_POINTS:
-            image = cv2.imread(str(self.captures / f'deploy-{name}.jpg'))
+            path = self.captures / f'deploy-{name}.jpg'
+            # A screen the bot has not attacked on yet has no frame; the dashboard shows its bundled map.
+            image = cv2.imread(str(path)) if path.is_file() else None
             if image is None:
                 continue
             small = cv2.resize(image, SNAPSHOT_SIZE, interpolation=cv2.INTER_AREA)
