@@ -282,6 +282,43 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
         self.assertEqual(device.inputs, [(70, 70)])
 
+    def army_bar(self, kinds):
+        """A 1000x200 frame whose bar (y 100-200) holds one painted card per kind, 97 px apart."""
+        colours = {'troop': (182, 127, 64), 'siege': (220, 200, 60), 'hero': (211, 44, 60),
+                   'warden': (211, 44, 60), 'spell': (184, 68, 88)}
+        image = np.full((200, 1000, 3), 40, dtype=np.uint8)
+        for index, kind in enumerate(kinds):
+            left = 10 + index * 97
+            image[100:200, left:left + 88] = colours[kind]
+            image[170:200, left:left + 88] = 0
+            if kind in ('troop', 'spell'):
+                image[103:118, left + 52:left + 84] = 255
+            if kind == 'warden':
+                image[172:196, left + 50:left + 84] = (60, 200, 60)
+        return image
+
+    def test_the_deploy_plan_follows_the_cards_in_the_bar(self):
+        image = self.army_bar(['troop', 'troop', 'siege', 'hero', 'warden', 'hero', 'spell', 'spell'])
+        auto = {'bar': [0, 100, 1000, 100], 'hold': 10,
+                'spells': [[50, 50], [30, 30], [30, 70], [70, 50], [60, 30], [60, 70]]}
+        kinds = [bot.card_kind(image, auto['bar'], card) for card in bot.bar_cards(image, auto['bar'])]
+        self.assertEqual(kinds, ['counted', 'counted', 'siege', 'hero', 'warden', 'hero', 'counted', 'counted'])
+        plan = bot.auto_plan(image, auto)
+        centre = [54 + 97 * i for i in range(8)]
+        self.assertEqual([(step['slot'][0], step.get('hold'), step.get('tap_only', False)) for step in plan], [
+            (centre[0], 10, False), (centre[1], 10, False), (centre[2], None, False),
+            (centre[4], None, False), (centre[4], None, True), (centre[3], None, False), (centre[3], None, True),
+            (centre[5], None, False), (centre[5], None, True),
+            (centre[6], None, False), (centre[7], None, False)])
+        rounds = auto['spells']
+        self.assertEqual([step['points'] for step in plan[-2:]], [rounds, rounds[3:] + rounds[:3]])
+        self.assertTrue(all(step['slot'][1] == 150 for step in plan))
+
+    def test_an_army_without_siege_or_heroes_tells_troops_from_spells_by_colour(self):
+        image = self.army_bar(['troop', 'spell'])
+        plan = bot.auto_plan(image, {'bar': [0, 100, 1000, 100], 'hold': 10, 'spells': [[50, 50]]})
+        self.assertEqual([('hold' in step, 'points' in step) for step in plan], [(True, False), (False, True)])
+
     def test_reward_chest_and_card_are_tapped_through_to_village(self):
         rng = np.random.default_rng(13)
         frames = {name: rng.integers(0, 256, (90, 160, 3), dtype=np.uint8) for name in ('reward_chest', 'reward_card')}

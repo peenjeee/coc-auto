@@ -23,7 +23,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **One command** | `python bot.py --until-full --live` starts LDPlayer if it is off, opens CoC, and farms. |
 | **Self-recovery** | Restarts a stopped LDPlayer (`ldconsole`), waits for ADB after a disconnect, and reopens CoC after a crash. |
 | **Home Village** | Searches opponents with a minimum gold / elixir / dark-elixir filter (unlimited searches by default). |
-| **Deploy plan** | Holds each troop card at the deploy point until it is empty, drops the siege machine, then the Grand Warden and the other heroes, each followed by its ability, and throws the spells in a triangle: one ahead of the deploy point and one to each side. |
+| **Deploy plan** | Reads the card bar on the scout screen, so it follows whatever army is trained: holds each troop card at the deploy point until it is empty, drops the siege machine, then the Grand Warden (found by its green ground/air toggle) and the other heroes, each followed by its ability, and throws the spells in a triangle: one ahead of the deploy point and one to each side. |
 | **Builder Base** | Spreads troops around the base, handles stage 2, and claims the **Elixir Cart** before every attack. |
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Unknown screens stop the bot. |
@@ -252,6 +252,7 @@ How to change it:
 | `screens.<name>.actions` | Fixed tap points (attack, find, next, return, …). Menus may add an optional `close`. |
 | `screens.<name>.targets` | Tap points found by image search (boat, Elixir Cart) with `pan`, `scales`, `avoid`, `alt_files`. |
 | `screens.<deploy>.troops` | Ordered cards: `slot`, `count`, `hold`, `until_empty`, `points`, `tap_only`, `wait`. |
+| `screens.home_scout.auto` | Build the deploy order from the card bar instead of `troops`: `bar` region, troop `hold` seconds, and spell `points`. |
 | `capacity.<village>.<resource>` | Storage bar crop, tooltip tap point, `max` crop, and `label` ("Maks:") template. Optional `maximum` forces a fixed value. |
 | `cart_text` | Crop of the Elixir Cart "current / max" text. |
 | `digits` | Folder of digit templates (`0.png` … `9.png`, plus variants like `9-ui2.png`). |
@@ -284,7 +285,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (154 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (156 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

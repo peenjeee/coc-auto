@@ -89,6 +89,9 @@ FIND_COOLDOWN_SECONDS, FIND_RETRIES = 180, 18
 EMULATOR_SETTLE_SECONDS = 20
 RESULT_SCREENS = ('home_result', 'builder_result')
 SWEEP_TAPS = 12
+BAR_CARD_STD, BAR_LABEL_WHITE, BAR_WARDEN_GREEN = 18, 100, 200
+BAR_CARD_WIDTH, BAR_CARD_COLOUR = (65, 98), 0.43
+SPELL_TAPS, SPELL_ROUND = 30, 3
 LAUNCH_ATTEMPTS = 4
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', *MENU_SCREENS)
@@ -293,6 +296,17 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
             point(screen.get('actions', {}).get(action), resolution, action)
         if name in DEPLOY_SCREENS:
             point(screen.get('deploy'), resolution, 'deploy')
+            auto = screen.get('auto')
+            if auto is not None:
+                rectangle(auto.get('bar'), resolution)
+                spells = auto.get('spells')
+                if not isinstance(spells, list) or not spells:
+                    raise BotError(f'{name}: auto spells perlu titik')
+                for location in spells:
+                    point(location, resolution, 'auto spell')
+                hold = auto.get('hold')
+                if not isinstance(hold, (int, float)) or not 0 < hold <= MAX_HOLD_SECONDS:
+                    raise BotError(f'{name}: auto hold tidak valid')
             troops = screen.get('troops', [])
             sweep = screen.get('sweep')
             if sweep:
@@ -913,6 +927,93 @@ def event_bytes(events: list) -> bytes:
     return b''.join(struct.pack('<qqHHi', 0, 0, kind, code, value) for kind, code, value in events)
 
 
+def bar_cards(image: np.ndarray, region: list) -> list:
+    """(left, right) of every card in the bar. The bar behind the cards is a flat dark strip, so a card is a run of
+    columns with contrast; this follows whatever army is trained instead of fixed slots."""
+    x, y, w, h = region
+    gray = cv2.cvtColor(image[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY).astype(np.float32)
+    busy = gray.std(axis=0) > BAR_CARD_STD
+    cards, start = [], None
+    for column, on in enumerate([*busy, False]):
+        if on and start is None:
+            start = column
+        elif not on and start is not None:
+            card = (x + start, x + column)
+            if BAR_CARD_WIDTH[0] <= column - start <= BAR_CARD_WIDTH[1] and card_coloured(image, region, card):
+                cards.append(card)
+            start = None
+    return cards
+
+
+def card_coloured(image: np.ndarray, region: list, card: tuple) -> bool:
+    """Empty slots are grey dashed outlines; a real card is mostly saturated colour."""
+    _, y, _, h = region
+    hsv = cv2.cvtColor(image[y:y + h, card[0]:card[1]], cv2.COLOR_BGR2HSV)
+    return float(((hsv[..., 1] > 100) & (hsv[..., 2] > 80)).mean()) >= BAR_CARD_COLOUR
+
+
+def card_kind(image: np.ndarray, region: list, card: tuple) -> str:
+    """'counted' for troops and spells (an 'xN' label top right), 'siege' for the cyan siege card, 'warden' for the
+    hero with the green ground/air toggle, 'hero' for the rest."""
+    left, right = card
+    _, y, _, h = region
+    label = image[y + 2:y + 20, right - 40:right - 2]
+    if int(np.all(label > 215, axis=2).sum()) >= BAR_LABEL_WHITE:
+        return 'counted'
+    hsv = cv2.cvtColor(image[y:y + h, left:right], cv2.COLOR_BGR2HSV)
+    hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    bright = (saturation > 100) & (value > 120)
+    cyan = int((bright & (hue >= 80) & (hue <= 95)).sum())
+    others = int((bright & (hue >= 95) & (hue <= 140)).sum())
+    if cyan > others:
+        return 'siege'
+    bottom = hsv[h * 3 // 5:]
+    green = int(((bottom[..., 0] >= 40) & (bottom[..., 0] <= 80) & (bottom[..., 1] > 120) & (bottom[..., 2] > 120)).sum())
+    return 'warden' if green >= BAR_WARDEN_GREEN else 'hero'
+
+
+def card_is_spell(image: np.ndarray, region: list, card: tuple) -> bool:
+    """Only for armies with no siege or hero card to split troops from spells: troop cards are blue, spells purple."""
+    _, y, _, h = region
+    hsv = cv2.cvtColor(image[y:y + h, card[0]:card[1]], cv2.COLOR_BGR2HSV)
+    bright = (hsv[..., 1] > 100) & (hsv[..., 2] > 120)
+    blue = int((bright & (hsv[..., 0] >= 95) & (hsv[..., 0] <= 112)).sum())
+    purple = int((bright & (hsv[..., 0] >= 118) & (hsv[..., 0] <= 140)).sum())
+    return purple >= blue
+
+
+def auto_plan(image: np.ndarray, auto: dict) -> list:
+    """Deploy order for the cards on screen: every troop held at the deploy point until empty, the siege machine,
+    the Grand Warden then the other heroes each followed by its ability, and the spells over the given points,
+    listed as rounds of front, left and right, each round further in."""
+    region = auto['bar']
+    middle = region[1] + region[3] // 2
+    cards = [(card, card_kind(image, region, card)) for card in bar_cards(image, region)]
+    split = next((index for index, (_, kind) in enumerate(cards) if kind != 'counted'), None)
+    troops, siege, heroes, spells = [], [], [], []
+    for index, (card, kind) in enumerate(cards):
+        slot = [(card[0] + card[1]) // 2, middle]
+        if kind == 'counted':
+            spell = index > split if split is not None else card_is_spell(image, region, card)
+            (spells if spell else troops).append(slot)
+        elif kind == 'siege':
+            siege.append(slot)
+        elif kind == 'warden':
+            heroes.insert(0, slot)
+        else:
+            heroes.append(slot)
+    plan = [{'slot': slot, 'count': 1, 'hold': auto['hold'], 'until_empty': True} for slot in troops]
+    plan += [{'slot': slot, 'count': 1} for slot in siege]
+    for slot in heroes:
+        plan += [{'slot': slot, 'count': 1}, {'slot': slot, 'count': 1, 'tap_only': True}]
+    points = auto['spells']
+    # Each spell card starts one round (front, left, right) after the previous one, so no two land on one spot.
+    for index, slot in enumerate(spells):
+        start = index * SPELL_ROUND % len(points)
+        plan.append({'slot': slot, 'count': SPELL_TAPS, 'until_empty': True, 'points': points[start:] + points[:start]})
+    return plan
+
+
 def card_empty(image: np.ndarray, slot: list) -> bool:
     """A used-up troop/spell card is rendered fully grey (saturation ~0)."""
     x, y = slot
@@ -1230,11 +1331,17 @@ class Bot:
         state = self.checked_state(allowed, terminal)[0]
         if state in terminal:
             return state
+        if 'auto' in screen:
+            # Read the card bar before any card is used; the plan follows the army that is trained.
+            plan = auto_plan(self.checked_state(allowed, terminal)[1], screen['auto'])
+            LOG.info('Rencana deploy dari bar: %s kartu', len({tuple(troop['slot']) for troop in plan}))
+        else:
+            plan = screen['troops']
         if self.battle_zoom():
             state = self.checked_state(allowed, terminal)[0]
             if state in terminal:
                 return state
-        for troop in screen['troops']:
+        for troop in plan:
             if troop.get('wait') and self.live:
                 time.sleep(troop['wait'])
                 state = self.checked_state(allowed, terminal)[0]
