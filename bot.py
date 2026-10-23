@@ -96,7 +96,7 @@ SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO = 2, 1.2
 ANCHOR_MAX_SCORE, SEARCH_ANCHOR_MAX_SCORE = 0.02, 0.05
 WALL_RESOURCES = ('gold', 'elixir')
-WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 15, 5
+WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS = 15, 2, 30, 5
 WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS = 4, 0.4
 WHITE_LEVEL = 200
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
@@ -997,6 +997,7 @@ class Bot:
         self.gems_known: int | None = None
         self.wall_excluded: set = set()
         self.gems_fresh = False
+        self.wall_view_known = False
         self.emulator = emulator
         self.emulator_started: float | None = None
         self.detector = Detector(config, root)
@@ -1619,25 +1620,42 @@ class Bot:
         self.gems_fresh = True
 
     def wall_row(self, spec: dict) -> int | None:
-        """y of the first visible 'Tembok' row; scroll the list to its top, then down to its end."""
+        """y of the lowest-level 'Tembok' row. The list is sorted by price and lower walls cost less, so scroll
+        to its end and come back up: the first wall row to come into view is the lowest level. While the list
+        stays put, the lowest wall row in view is still the lowest one, so later picks need no scrolling."""
         row = spec['row']
         template = cv2.imread(str(asset_path(self.root, row['file'])))
+        if self.wall_view_known:
+            rows = find_rows(self.device.capture(), template, row['region'], row['max_score'])
+            if rows:
+                return rows[-1]
         down = spec['scroll']
-        for first, swipe in ((True, down[::-1]), (False, down)):
-            previous = None
-            for step in range(WALL_SCROLL_LIMIT):
-                # Look at the list as it is first; wait for it to stop only after a swipe.
-                image = self.device.capture() if first and step == 0                     else self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
-                rows = find_rows(image, template, row['region'], row['max_score'])
-                if rows:
-                    return rows[0]
-                listed = crop(image, row['region'])
-                if previous is not None and float(cv2.absdiff(previous, listed).mean()) < STILL_DIFF:
-                    break
-                previous = listed
-                if self.live:
-                    self.device.swipe(*swipe)
+        image = self.scroll_list(spec, down, None)
+        self.wall_view_known = False
+        while image is not None:
+            rows = find_rows(image, template, row['region'], row['max_score'])
+            if rows:
+                self.wall_view_known = True
+                return rows[-1]
+            image = self.scroll_list(spec, down[::-1], image, once=True)
         return None
+
+    def scroll_list(self, spec: dict, swipe: list, image: np.ndarray | None, once: bool = False) -> np.ndarray | None:
+        """Swipe the builder list until it stops moving (its end) and return that frame; with once, swipe one
+        step and return the new frame, or None when the list did not move."""
+        region = spec['row']['region']
+        settle = WALL_LIST_SETTLE_SECONDS if self.poll else 0
+        frame = image if image is not None else self.wait_still(settle)
+        for _ in range(WALL_SCROLL_LIMIT):
+            if self.live:
+                self.device.swipe(*swipe)
+            moved = self.wait_still(settle)
+            if float(cv2.absdiff(crop(frame, region), crop(moved, region)).mean()) < STILL_DIFF:
+                return None if once else moved
+            if once:
+                return moved
+            frame = moved
+        return frame
 
     def wall_buttons(self, image: np.ndarray, spec: dict) -> list:
         """(resource, tap, affordable) for every upgrade button on screen. The picked wall decides where its
@@ -1773,6 +1791,8 @@ class Bot:
         image = self.device.capture()
         if self.list_open(image):
             return image
+        # A reopened list starts at its top, so the lowest wall row has to be found again.
+        self.wall_view_known = False
         self.guarded_tap({village, 'wall_selected'}, spec['build'])
         return self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
 

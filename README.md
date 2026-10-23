@@ -144,7 +144,7 @@ python bot.py --walls both --first home --live
 ```
 
 `--walls` takes `home`, `builder` or `both`. For each village in turn it opens the builder list, finds a "Tembok"
-row, and upgrades one wall at a time with whichever of gold or elixir is still affordable. When neither is, it
+row, and upgrades one wall at a time with whichever of gold or elixir is still affordable. It always takes the lowest wall level first: the list is sorted by price, so it scrolls to the end and picks the first wall row coming back up, and moves on to the next level only when that one is used up. When neither is, it
 farms until gold and elixir are both full and spends them again. It stops once no "Tembok" row is left, which means
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
 Elixir Cart first; its walls cost gold only until they reach higher levels, and only the upgrade buttons a wall actually shows are used. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
@@ -284,7 +284,7 @@ How to change it:
 python -m unittest -v test_bot
 ```
 
-The suite (152 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
+The suite (154 tests) uses synthetic screens and a fake device. It covers screen detection, digit reading,
 deploy plans, popups, recovery, and the until-full loop. It does not replace a live run on a real account.
 
 ## Project structure

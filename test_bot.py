@@ -1328,25 +1328,50 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.GemSpent):
             runner.start_gem_watch(spec)
 
-    def test_wall_row_scrolls_to_the_top_then_down_until_a_row_shows(self):
+    def test_the_lowest_wall_row_is_found_coming_up_from_the_end_of_the_list(self):
         spec, _, row = self.wall_spec()
         blank = np.zeros((90, 160, 3), dtype=np.uint8)
         other = blank.copy()
         other[40:60, 100:160] = 90
-        found = blank.copy()
-        found[30:36, 110:130] = row
+        walls = blank.copy()
+        walls[12:18, 110:130] = row
+        walls[50:56, 110:130] = row
         device = Device(self.frames)
         swipes = []
         device.swipe = lambda start, end: swipes.append((tuple(start), tuple(end)))
         runner = self.make_bot(device, True)
-        device.capture = lambda: blank
-        shots = iter([blank, other, found])
+        shots = iter([blank, other, other, walls])
         runner.wait_still = lambda limit: next(shots)
-        self.assertEqual(runner.wall_row(spec), 33)
-        self.assertEqual(swipes, [((130, 20), (130, 70)), ((130, 70), (130, 20))])
+        self.assertEqual(runner.wall_row(spec), 53)
+        down, up = ((130, 70), (130, 20)), ((130, 20), (130, 70))
+        self.assertEqual(swipes, [down, down, up])
+        self.assertTrue(runner.wall_view_known)
+
+    def test_the_next_pick_takes_the_lowest_row_in_view_without_scrolling(self):
+        spec, _, row = self.wall_spec()
+        walls = np.zeros((90, 160, 3), dtype=np.uint8)
+        walls[12:18, 110:130] = row
+        walls[50:56, 110:130] = row
+        device = Device(self.frames)
+        swipes = []
+        device.swipe = lambda start, end: swipes.append((tuple(start), tuple(end)))
+        device.capture = lambda: walls
+        runner = self.make_bot(device, True)
+        runner.wall_view_known = True
+        self.assertEqual(runner.wall_row(spec), 53)
+        self.assertEqual(swipes, [])
+
+    def test_no_wall_row_anywhere_in_the_list_means_every_wall_is_maxed(self):
+        spec, _, _ = self.wall_spec()
+        blank = np.zeros((90, 160, 3), dtype=np.uint8)
+        device = Device(self.frames)
+        swipes = []
+        device.swipe = lambda start, end: swipes.append((tuple(start), tuple(end)))
+        runner = self.make_bot(device, True)
         shots = iter([blank] * 3)
         runner.wait_still = lambda limit: next(shots)
         self.assertIsNone(runner.wall_row(spec))
+        self.assertFalse(runner.wall_view_known)
 
     def test_walls_farm_then_upgrade_until_maxed_in_the_chosen_order(self):
         runner = self.make_bot(Device(self.frames), True)
