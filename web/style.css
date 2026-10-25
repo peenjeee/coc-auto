@@ -265,7 +265,8 @@ button.ghost { background: transparent; color: var(--text-dim); }
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.6);
   touch-action: none;
 }
-.pin:active { cursor: grabbing; }
+/* button:active nudges buttons with its own transform; a held pin keeps its centring, or it jumps on release. */
+.pin:active { cursor: grabbing; transform: translate(-50%, -50%); }
 .pin.deploy { background: var(--amber); }
 .pin.spells { background: var(--cyan); }
 .pin.points { background: var(--green); }

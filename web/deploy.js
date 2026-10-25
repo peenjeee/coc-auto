@@ -123,11 +123,18 @@ export class DeployEditor {
     pressed.preventDefault();
     element.setPointerCapture(pressed.pointerId);
     const { width, height, bottom } = this.bounds();
-    const field = $('field').getBoundingClientRect();
+    // The pin keeps its distance from where it was grabbed instead of jumping its centre under the pointer, so it
+    // is saved where it is seen.
+    const pin = element.getBoundingClientRect();
+    const grabX = pressed.clientX - (pin.left + pin.width / 2);
+    const grabY = pressed.clientY - (pin.top + pin.height / 2);
     const move = (moved) => {
+      const field = $('field').getBoundingClientRect();
+      const x = ((moved.clientX - grabX - field.left) / field.width) * width;
+      const y = ((moved.clientY - grabY - field.top) / field.height) * height;
       // Kept on the battlefield, never on the card bar.
-      point[0] = Math.min(width - 1, Math.max(0, Math.round(((moved.clientX - field.left) / field.width) * width)));
-      point[1] = Math.min(bottom - 1, Math.max(0, Math.round(((moved.clientY - field.top) / field.height) * height)));
+      point[0] = Math.min(width - 1, Math.max(0, Math.round(x)));
+      point[1] = Math.min(bottom - 1, Math.max(0, Math.round(y)));
       element.style.left = `${(point[0] / width) * 100}%`;
       element.style.top = `${(point[1] / height) * 100}%`;
       element.title = `${element.textContent}: ${point[0]}, ${point[1]}`;
