@@ -106,7 +106,8 @@ class Relay:
         self.ref = 0
         self.join_ref = self.next_ref()
         config = {'broadcast': {'ack': False, 'self': False}, 'presence': {'enabled': False}, 'private': False}
-        await self.push(socket, self.topic, 'phx_join', {'config': config}, self.join_ref)
+        # The join's own ref is its join_ref; broadcasts that carry another one are dropped.
+        await self.push(socket, self.topic, 'phx_join', {'config': config}, self.join_ref, self.join_ref)
         await self.joined(socket)
         self.report(True)
         with self.lock:

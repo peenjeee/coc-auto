@@ -83,6 +83,13 @@ class RelayTests(unittest.TestCase):
         self.assertEqual((state['state'], state['host']), ('idle', self.supervisor.host))
         self.assertLess(abs(state['ts'] - time.time()), 5)
 
+    def test_broadcasts_carry_the_ref_of_the_join(self):
+        # Realtime drops broadcasts whose join_ref is not the one the channel was joined with.
+        join = next(m for m in self.server.received if m['event'] == 'phx_join')
+        broadcast = next(m for m in self.server.received if m['event'] == 'broadcast')
+        self.assertEqual(join['join_ref'], join['ref'])
+        self.assertEqual(broadcast['join_ref'], join['ref'])
+
     def test_frames_go_out_uncompressed(self):
         # Realtime acknowledges compressed broadcasts but never passes them on, so the dashboard heard nothing.
         self.assertIsNone(self.server.extensions)
