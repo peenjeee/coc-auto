@@ -2307,6 +2307,19 @@ class BotTests(unittest.TestCase):
             runner.recover()
         self.assertEqual(emulator.events, ['quit'])
 
+    def test_recover_starts_an_emulator_that_finishes_shutting_down_while_it_waits(self):
+        # Quit by the last recovery: still shutting down at the first looks, stopped a moment later.
+        device, emulator = self.restartable()
+        device.up, device.front = False, False
+        states = iter([True, True])
+        emulator.running = lambda: next(states, False)
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=emulator)
+        runner.settle = lambda: None
+        with patch('bot.RECOVER_ADB_SECONDS', 0.5):
+            runner.recover()
+        self.assertEqual(emulator.events, ['launch'])
+        self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
+
     def test_resilient_run_started_on_an_attack_menu_closes_it_first(self):
         self.config['screens']['builder_menu']['actions']['close'] = [150, 20]
         device = Device(self.frames, initial='builder_menu')

@@ -2449,15 +2449,17 @@ class Bot:
 
     def recover(self) -> None:
         """Wait for ADB, start the game if it is not in front, and wait for a village screen."""
-        if self.emulator and not self.device.connected() and not self.emulator.running():
-            LOG.warning('LDPlayer belum berjalan; menyalakan emulator')
-            # A VM that was just quit is still shutting down; launching at once leaves it unbooted.
-            time.sleep(EMULATOR_SETTLE_SECONDS if self.poll else 0)
-            self.emulator.launch()
-            self.emulator_started = time.monotonic()
         deadline = time.monotonic() + RECOVER_ADB_SECONDS
         while not (self.device.connected() and self.device.booted()):
-            if time.monotonic() >= deadline:
+            # Looked at on every poll: an LDPlayer the last recovery quit can still read as running at first.
+            if self.emulator and not self.device.connected() and not self.emulator.running():
+                LOG.warning('LDPlayer belum berjalan; menyalakan emulator')
+                # A VM that was just quit is still shutting down; launching at once leaves it unbooted.
+                time.sleep(EMULATOR_SETTLE_SECONDS if self.poll else 0)
+                self.emulator.launch()
+                self.emulator_started = time.monotonic()
+                deadline = time.monotonic() + RECOVER_ADB_SECONDS
+            elif time.monotonic() >= deadline:
                 if self.emulator:
                     # LDPlayer can keep its window while the VM never boots; quit so the next try starts fresh.
                     LOG.warning('ADB tidak kembali; mematikan LDPlayer agar dinyalakan ulang')
