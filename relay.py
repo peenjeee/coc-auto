@@ -78,7 +78,9 @@ class Relay:
         wait = RECONNECT_FIRST_SECONDS
         while not self.stopping.is_set():
             try:
-                async with connect(self.address, open_timeout=JOIN_SECONDS, ping_interval=None) as socket:
+                # Uncompressed: Realtime acknowledges permessage-deflate broadcasts but never passes them on.
+                async with connect(self.address, open_timeout=JOIN_SECONDS, ping_interval=None,
+                                   compression=None) as socket:
                     await self.session(socket)
                 wait = RECONNECT_FIRST_SECONDS
             except (OSError, asyncio.TimeoutError, WebSocketException, RelayError, ValueError) as exc:

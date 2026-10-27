@@ -28,6 +28,7 @@ class FakeRealtime:
     async def handle(self, socket):
         self.sockets.append(socket)
         self.path = socket.request.path
+        self.extensions = socket.request.headers.get('Sec-WebSocket-Extensions')
         async for raw in socket:
             message = json.loads(raw)
             self.received.append(message)
@@ -81,6 +82,10 @@ class RelayTests(unittest.TestCase):
         state = self.server.sent('state')[0]
         self.assertEqual((state['state'], state['host']), ('idle', self.supervisor.host))
         self.assertLess(abs(state['ts'] - time.time()), 5)
+
+    def test_frames_go_out_uncompressed(self):
+        # Realtime acknowledges compressed broadcasts but never passes them on, so the dashboard heard nothing.
+        self.assertIsNone(self.server.extensions)
 
     def test_the_state_is_repeated_so_a_silent_device_reads_as_offline(self):
         self.relay.state_seconds = 0.2
