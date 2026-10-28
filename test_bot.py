@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import struct
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -2570,6 +2571,27 @@ class BotTests(unittest.TestCase):
         runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
         runner.recover()
         self.assertEqual(len(device.launches), 2)
+
+    def test_recover_reopens_a_game_that_closes_again_while_loading(self):
+        # Android can kill CoC seconds after it was opened; waiting out the whole timeout on the launcher looked hung.
+        device = Device(self.frames)
+        device.front = False
+        device.launches = []
+        device.connected = lambda: True
+        device.game_in_front = lambda: device.front
+        device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
+        def capture():
+            if len(device.launches) < 2:
+                device.front = False
+                return np.zeros((90, 160, 3), dtype=np.uint8)
+            return self.frames['home'].copy()
+        device.capture = capture
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=30, poll=0)
+        started = time.monotonic()
+        with patch.object(bot, 'GAME_CHECK_SECONDS', 0.05):
+            runner.recover()
+        self.assertEqual(len(device.launches), 2)
+        self.assertLess(time.monotonic() - started, 5)
 
     def test_emulator_console_commands(self):
         emulator = bot.Emulator('ldconsole.exe', 0)

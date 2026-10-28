@@ -112,6 +112,8 @@ BAR_CARD_WIDTH, BAR_CARD_COLOUR = (65, 98), 0.43
 BAR_CAMP_HEADER, BAR_SETTLE_SECONDS = 0.5, 3
 SPELL_TAPS, SPELL_ROUND = 30, 3
 LAUNCH_ATTEMPTS = 4
+# How long a wait sees only unknown frames before it asks whether the game is still in front.
+GAME_CHECK_SECONDS = 10
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', 'update_offer',
                     *MENU_SCREENS)
@@ -146,6 +148,10 @@ class DeviceError(BotError):
 
 class UnknownScreen(BotError):
     """Frame matches no calibrated screen, e.g. a camera transition."""
+
+
+class GameClosed(BotError):
+    """The game left the screen (crashed or killed by Android) during a wait; recovery opens it again."""
 
 
 class WaitTimeout(BotError):
@@ -1344,12 +1350,20 @@ class Bot:
     def wait(self, targets: set, allowed: set, timeout: float | None = None) -> str:
         deadline = time.monotonic() + (self.timeout if timeout is None else timeout)
         sped_up = False
+        unknown_since = None
         while time.monotonic() < deadline:
             try:
                 state, image = self.observe()
             except UnknownScreen:
+                # Usually a transition, but the launcher left by a closed game never matches either.
+                unknown_since = unknown_since or time.monotonic()
+                if time.monotonic() - unknown_since >= GAME_CHECK_SECONDS:
+                    if not self.device.game_in_front():
+                        raise GameClosed(f'CoC tertutup saat menunggu layar {"/".join(sorted(targets))}')
+                    unknown_since = time.monotonic()
                 time.sleep(self.poll)
                 continue
+            unknown_since = None
             if state in targets:
                 return state
             if state == 'update_offer':
