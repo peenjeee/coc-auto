@@ -606,6 +606,9 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.UnexpectedScreen):
             runner.tap_until('builder_menu', 'find', {'builder_scout'}, 60)
         self.assertEqual(len(device.inputs), 1)
+        # Nor does a deploy cut short by another screen, such as the connection-lost popup.
+        with self.assertRaises(bot.UnexpectedScreen):
+            self.make_bot(Device(self.frames, 'home'), True).checked_state({'home_scout'}, {'home_result'})
 
     def test_settle_closes_stacked_attack_menus(self):
         config = {**self.config, 'screens': {

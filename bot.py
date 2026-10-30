@@ -1677,7 +1677,7 @@ class Bot:
                 if attempt == UNKNOWN_RETRIES:
                     raise
         if state not in allowed | terminal:
-            raise BotError(f'Deploy dibatalkan: layar berubah menjadi {state}')
+            raise UnexpectedScreen(f'Deploy dibatalkan: layar berubah menjadi {state}')
         return state, image
 
     def deploy_card(self, screen: dict, troop: dict, allowed: set, terminal: set) -> str:
