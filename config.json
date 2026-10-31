@@ -1804,7 +1804,13 @@
       "overrides": [
         "home",
         "builder"
-      ]
+      ],
+      "actions": {
+        "reload": [
+          349,
+          436
+        ]
+      }
     },
     "idle": {
       "anchors": [

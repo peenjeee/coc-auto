@@ -46,6 +46,7 @@ ACTIONS = {
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
     'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
     'idle': ('reload',), 'builders_busy': ('close',), 'update_offer': ('update',), 'disconnected': ('retry',),
+    'other_device': ('reload',),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -86,7 +87,8 @@ UNKNOWN_RETRIES = 3
 FULL_RATIO, STORAGE_RUN_RATIO, STORAGE_MIN_VALUE = 0.95, 0.8, 150
 RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
 POPUP_ACTIONS = {'star_bonus': 'ok', 'builder_star_bonus': 'ok', 'reward_chest': 'open', 'reward_card': 'continue',
-                 'layout_blocked': 'ok', 'league': 'close', 'welcome': 'ok', 'idle': 'reload', 'disconnected': 'retry'}
+                 'layout_blocked': 'ok', 'league': 'close', 'welcome': 'ok', 'idle': 'reload', 'disconnected': 'retry',
+                 'other_device': 'reload'}
 POPUPS = tuple(POPUP_ACTIONS)
 # A retry with the network still down brings the dialog straight back, so give it time between tries.
 POPUP_PAUSE_SECONDS = {'disconnected': 10}
@@ -178,10 +180,6 @@ class OutOfGold(BotError):
 
 class NoFreeBuilder(BotError):
     """Builder Base walls need a free builder; the game offered to free one for gems, which is only ever closed."""
-
-
-class OtherDevice(Exception):
-    """The account was opened on another device; the run stops and never reloads, so that session stays."""
 
 
 class GemSpent(Exception):
@@ -1332,10 +1330,7 @@ class Bot:
 
     def observe(self) -> tuple[str, np.ndarray]:
         image = self.device.capture()
-        state = self.detector.detect(image)
-        if state == 'other_device':
-            raise OtherDevice('Akun dibuka di perangkat lain; bot berhenti tanpa memuat ulang')
-        return state, image
+        return self.detector.detect(image), image
 
     def read_loot(self, image: np.ndarray, screen: dict) -> dict:
         active = [key for key in RESOURCES if self.config.get('minimum', {}).get(key, 0)]
@@ -2799,9 +2794,6 @@ def main() -> int:
     except GemSpent as exc:
         LOG.error('BERHENTI DARURAT: %s', exc)
         return 3
-    except OtherDevice as exc:
-        LOG.warning('%s', exc)
-        return 4
     except UpdateRequired as exc:
         LOG.error('Berhenti: %s', exc)
         return 5

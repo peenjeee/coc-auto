@@ -439,7 +439,7 @@ use a saved screenshot). "Taps" are the points the tool asks for.
 | `python calibrate.py --screen disconnected` | "Sambungan terputus" / "Kesalahan sambungan" | retry |
 | `python calibrate.py --screen search_failed` | "Tidak dapat menyerang desa! Coba lagi nanti." | close |
 | `python calibrate.py --screen gem_offer` | "Perlu lebih banyak …" (resources for gems) | close (the X, never the gem button) |
-| `python calibrate.py --screen other_device` | "Perangkat lain tersambung ke desa ini" | – |
+| `python calibrate.py --screen other_device` | "Perangkat lain tersambung ke desa ini" | reload |
 | `python calibrate.py --screen builders_busy` | "Semua tukang sibuk!" | close (the X) |
 
 **Walls**
@@ -563,7 +563,7 @@ How to change it:
 | A wait times out, an unrecognised screen passes, or a known screen comes up out of turn (slow matchmaking, lag, an animation, a battle that started on its own) | Lets a running battle end or closes the menu, then resumes. Counts as one recovery. |
 | The search is refused ("Tidak dapat menyerang desa! Coba lagi nanti.") | Taps "Ke Beranda", waits a minute, and tries again. Counts as one recovery. |
 | The game offers to buy missing resources with gems ("Perlu lebih banyak …") | Closes it with X, never the gem button. If it came from skipping an opponent with no gold left, attacks the opponent on screen; otherwise recovers. |
-| The account is opened on another device ("Perangkat lain tersambung ke desa ini") | Stops without reloading, so the other session stays; exit code 4. Run the bot again when you are done there. |
+| The account is opened on another device ("Perangkat lain tersambung ke desa ini") | Taps **Muat ulang** and carries on, which takes the session back from the other device. |
 | The game disconnects for inactivity ("Ada orang di sana?") | Taps "Muat ulang game" and carries on. |
 | The server connection drops ("Sambungan terputus", or "Kesalahan sambungan" while loading) | Taps "Coba lagi", waiting 10 seconds between tries while the network is still down, and carries on. |
 | A game update is offered ("Pembaruan Tersedia!") | Updates the game: taps the game's update button, then the Play Store's own Update button, in the update dialog or on the game's store page (found by its text, only for Clash of Clans; install buttons and anything else in the store are never tapped), waits up to 30 minutes for the new version to install, opens CoC again and carries on. If the store shows no Update button (not signed in, no space) or the install does not finish, stops with exit code 5 and asks you to update CoC from the Play Store. A dry-run never updates. |
