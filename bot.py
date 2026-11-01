@@ -2757,8 +2757,8 @@ def main() -> int:
     parser.add_argument('--surrender', choices=('home', 'builder', 'both'),
                         help='Menyerah otomatis di desa ini bila battle belum selesai setelah --surrender-after detik')
     parser.add_argument('--surrender-after', type=int,
-                        help=f'--surrender: detik battle setelah deploy selesai (1..{SURRENDER_MAX_SECONDS}, '
-                             f'default {SURRENDER_DEFAULT_SECONDS})')
+                        help=f'Detik battle setelah deploy selesai (1..{SURRENDER_MAX_SECONDS}, default '
+                             f'{SURRENDER_DEFAULT_SECONDS}); tanpa --surrender berlaku untuk kedua desa')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
     parser.add_argument('--agent', action='store_true',
                         help='Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard')
@@ -2791,11 +2791,11 @@ def main() -> int:
             raise BotError('--hours/--minutes hanya untuk --until-full/--builder/--home/--walls dengan --live')
         if args.max_upgrades and not args.walls:
             raise BotError('--max-upgrades hanya untuk --walls')
-        if args.surrender_after is not None and not args.surrender:
-            raise BotError('--surrender-after hanya bersama --surrender')
         surrender_after = integer(SURRENDER_DEFAULT_SECONDS if args.surrender_after is None else args.surrender_after,
                                   1, SURRENDER_MAX_SECONDS, 'surrender_after')
-        surrender = VILLAGES if args.surrender == 'both' else tuple(filter(None, [args.surrender]))
+        # Off unless asked for; --surrender-after on its own turns it on in both villages.
+        chosen = args.surrender or ('both' if args.surrender_after is not None else None)
+        surrender = VILLAGES if chosen == 'both' else tuple(filter(None, [chosen]))
         if args.dark and (not args.until_full or args.builder is not None or args.home is not None):
             raise BotError('--dark hanya untuk --until-full tanpa --builder/--home (atau pakai --home gold,elixir,dark)')
         if not (args.worker or args.no_remote):

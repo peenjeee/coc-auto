@@ -237,7 +237,7 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. With `--until-full`/`--builder`/`--home` it needs `--live`. |
 | `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded. `0` means no limit. |
 | `--surrender home\|builder\|both` | off | Give up a battle in these villages that is still running `--surrender-after` seconds after the troops are deployed: taps **Menyerah**/**Akhiri Serangan**, then **Oke**. In the Builder Base it counts per stage, so giving up stage 1 skips stage 2. |
-| `--surrender-after N` | `60` | `--surrender` only: battle seconds, 1–120. The battle clock runs at normal speed until its last minute (when the 4x button appears), so past 120 there is little left to save. |
+| `--surrender-after N` | `60` | Battle seconds, 1–120. On its own (without `--surrender`) it turns surrendering on in both villages. The battle clock runs at normal speed until its last minute (when the 4x button appears), so past 120 there is little left to save. |
 | `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 | `--agent` | off | Run no task: show the device's API key and wait for **Start** from the web dashboard. |
