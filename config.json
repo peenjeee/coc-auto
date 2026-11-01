@@ -566,7 +566,12 @@
           }
         ]
       ],
-      "actions": {}
+      "actions": {
+        "surrender": [
+          92,
+          537
+        ]
+      }
     },
     "home_result": {
       "anchors": [
@@ -1118,7 +1123,12 @@
           }
         ]
       ],
-      "actions": {}
+      "actions": {
+        "surrender": [
+          92,
+          501
+        ]
+      }
     },
     "builder_stage2": {
       "anchors": [
@@ -1317,7 +1327,12 @@
           "margin": 3
         }
       ],
-      "actions": {}
+      "actions": {
+        "surrender": [
+          92,
+          505
+        ]
+      }
     },
     "builder_result": {
       "anchors": [
@@ -1809,6 +1824,39 @@
         "reload": [
           349,
           436
+        ]
+      }
+    },
+    "surrender_confirm": {
+      "anchors": [
+        {
+          "roi": [
+            445,
+            440,
+            110,
+            42
+          ],
+          "file": "calibration/surrender_confirm-batal-6db9039470af404d81f518516850cd2d.png"
+        },
+        {
+          "roi": [
+            735,
+            440,
+            90,
+            42
+          ],
+          "file": "calibration/surrender_confirm-oke-911e6e20312c4268badda4b00e334025.png"
+        }
+      ],
+      "overrides": [
+        "home_battle",
+        "builder_battle",
+        "builder_battle2"
+      ],
+      "actions": {
+        "confirm": [
+          778,
+          462
         ]
       }
     },

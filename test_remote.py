@@ -536,12 +536,21 @@ class BuildArgsTests(unittest.TestCase):
         self.assertEqual(remote.build_args({'task': 'walls', 'walls': 'home', 'max_recoveries': 5}),
                          ['--walls', 'home', '--max-recoveries', '5', '--live'])
 
+    def test_surrender_is_passed_on(self):
+        self.assertEqual(remote.build_args({'task': 'farm', 'surrender': 'builder', 'surrender_after': 45}),
+                         ['--until-full', '--surrender', 'builder', '--surrender-after', '45', '--live'])
+        self.assertEqual(remote.build_args({'task': 'attack', 'village': 'home', 'surrender': 'both'}),
+                         ['--mode', 'home', '--cycles', '1', '--surrender', 'both', '--live'])
+
     def test_anything_outside_the_commands_is_refused(self):
         for options in ({'task': 'shell'}, {'task': 'walls', 'walls': 'moon'}, {'task': 'walls', 'hours': -1},
                         {'task': 'farm', 'home': ['gems']}, {'task': 'walls', 'walls': 'home', 'extra': '--x'},
                         {'task': 'attack', 'cycles': '3; rm'}, {'task': 'farm', 'max_upgrades': 3},
                         {'task': 'walls', 'walls': 'home', 'hours': True}, {'task': 'farm', 'dark': 'yes'},
-                        {'task': 'farm', 'dark': True, 'home': ['gold']}, {'task': 'walls', 'walls': 'home', 'dark': True}):
+                        {'task': 'farm', 'dark': True, 'home': ['gold']}, {'task': 'walls', 'walls': 'home', 'dark': True},
+                        {'task': 'farm', 'surrender': 'moon'}, {'task': 'farm', 'surrender_after': 30},
+                        {'task': 'farm', 'surrender': 'home', 'surrender_after': 121},
+                        {'task': 'dry', 'village': 'home', 'surrender': 'home'}):
             with self.subTest(options=options), self.assertRaises(remote.CommandRefused):
                 remote.build_args(options)
 

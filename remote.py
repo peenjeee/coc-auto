@@ -62,9 +62,11 @@ RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', '
 LIMITS = (('searches', '--searches', 0, 1_000_000), ('hours', '--hours', 0, 1000),
           ('minutes', '--minutes', 0, 60_000), ('max_upgrades', '--max-upgrades', 0, 100_000))
 TASK_OPTIONS = {
-    'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'max_recoveries'},
-    'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries'},
-    'attack': {'village', 'cycles', 'searches'},
+    'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'max_recoveries', 'surrender',
+              'surrender_after'},
+    'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', 'surrender',
+             'surrender_after'},
+    'attack': {'village', 'cycles', 'searches', 'surrender', 'surrender_after'},
     'dry': {'village'},
 }
 # Deploy screen -> its list of spread points: Home Village spells, Builder Base troop points.
@@ -215,6 +217,13 @@ def build_args(options: dict) -> list[str]:
     recoveries = whole(options, 'max_recoveries', 0, 1000)
     if recoveries is not None:
         args += ['--max-recoveries', str(recoveries)]
+    if 'surrender' in options:
+        args += ['--surrender', choice(options, 'surrender', VILLAGE_CHOICES)]
+        after = whole(options, 'surrender_after', 1, 120)
+        if after:
+            args += ['--surrender-after', str(after)]
+    elif 'surrender_after' in options:
+        raise CommandRefused('Pilihan surrender_after hanya bersama surrender')
     return args + ['--live']
 
 

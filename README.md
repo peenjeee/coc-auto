@@ -236,6 +236,8 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--walls {home,builder,both}` | – | Spend the stored gold and elixir on walls, then farm both full and repeat until every wall is maxed. Never uses gems. |
 | `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. With `--until-full`/`--builder`/`--home` it needs `--live`. |
 | `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded. `0` means no limit. |
+| `--surrender home\|builder\|both` | off | Give up a battle in these villages that is still running `--surrender-after` seconds after the troops are deployed: taps **Menyerah**/**Akhiri Serangan**, then **Oke**. In the Builder Base it counts per stage, so giving up stage 1 skips stage 2. |
+| `--surrender-after N` | `60` | `--surrender` only: battle seconds, 1–120. The battle clock runs at normal speed until its last minute (when the 4x button appears), so past 120 there is little left to save. |
 | `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 | `--agent` | off | Run no task: show the device's API key and wait for **Start** from the web dashboard. |
@@ -411,14 +413,14 @@ use a saved screenshot). "Taps" are the points the tool asks for.
 | `python calibrate.py --screen home_menu` | Home attack menu ("Pertempuran") | find, close |
 | `python calibrate.py --screen home_army` | Army screen before searching | attack, close |
 | `python calibrate.py --screen home_scout --counts 1 1` | Opponent shown, before deploying | next; deploy point, card slots, loot numbers |
-| `python calibrate.py --screen home_battle` | Home battle in progress | – |
+| `python calibrate.py --screen home_battle` | Home battle in progress | surrender (optional, for `--surrender`) |
 | `python calibrate.py --screen home_result` | Home battle result | return |
 | `python calibrate.py --screen builder` | Builder Base | attack, switch (boat), cart |
 | `python calibrate.py --screen builder_menu` | Builder Base attack menu | find, close |
 | `python calibrate.py --screen builder_scout --counts 1 1` | Builder Base stage 1, before deploying | deploy point, card slots |
-| `python calibrate.py --screen builder_battle` | Builder Base stage 1 in progress | – |
+| `python calibrate.py --screen builder_battle` | Builder Base stage 1 in progress | surrender (optional, for `--surrender`) |
 | `python calibrate.py --screen builder_stage2 --counts 1 1` | Builder Base stage 2, before deploying | deploy point, card slots |
-| `python calibrate.py --screen builder_battle2` | Builder Base stage 2 in progress | – |
+| `python calibrate.py --screen builder_battle2` | Builder Base stage 2 in progress | surrender (optional, for `--surrender`) |
 | `python calibrate.py --screen builder_result` | Builder Base battle result | return |
 | `python calibrate.py --screen builder_cart` | Elixir Cart window | claim, close |
 | `python calibrate.py --screen loading` | Game loading screen | – |
@@ -440,6 +442,7 @@ use a saved screenshot). "Taps" are the points the tool asks for.
 | `python calibrate.py --screen search_failed` | "Tidak dapat menyerang desa! Coba lagi nanti." | close |
 | `python calibrate.py --screen gem_offer` | "Perlu lebih banyak …" (resources for gems) | close (the X, never the gem button) |
 | `python calibrate.py --screen other_device` | "Perangkat lain tersambung ke desa ini" | reload |
+| `python calibrate.py --screen surrender_confirm` | "Akhiri Pertempuran?" (Batal / Oke) | confirm (the Oke button) |
 | `python calibrate.py --screen builders_busy` | "Semua tukang sibuk!" | close (the X) |
 
 **Walls**
@@ -584,7 +587,7 @@ first error instead of recovering.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (307 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (309 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans, popups, the game update, recovery, the
 until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool

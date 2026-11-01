@@ -748,6 +748,35 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
         self.assertEqual(device.inputs, [(40, 60)])
 
+    def test_surrender_gives_up_a_battle_that_runs_too_long(self):
+        confirm = np.random.default_rng(41).integers(0, 256, (90, 160, 3), dtype=np.uint8)
+        anchors = []
+        for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
+            x, y, w, h = roi
+            cv2.imwrite(str(self.root / f'confirm-{number}.png'), confirm[y:y+h, x:x+w])
+            anchors.append({'roi': roi, 'file': f'confirm-{number}.png'})
+        screens = self.config['screens']
+        config = {**self.config, 'screens': {
+            **screens, 'home_battle': {**screens['home_battle'], 'actions': {'surrender': [20, 70]}},
+            'surrender_confirm': {'anchors': anchors, 'actions': {'confirm': [100, 60]}}}}
+        bot.validate_config(config, self.root, 'both')
+        bot.validate_surrender(config, ('home',))
+        with self.assertRaises(bot.BotError):
+            bot.validate_surrender(config, ('builder',))
+        device = Device({**self.frames, 'surrender_confirm': confirm}, 'home_battle')
+        moves = {(20, 70): 'surrender_confirm', (100, 60): 'home_result'}
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', moves[tuple(point)]))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0, surrender=('home',),
+                         surrender_after=0.05)
+        self.assertEqual(runner.wait_battle('home', {'home_result', 'home'}, {'home_scout', 'home_battle'}),
+                         'home_result')
+        self.assertEqual(device.inputs, [(20, 70), (100, 60)])
+        # A village left out of --surrender waits for the battle's own end.
+        device.state, device.inputs = 'builder_battle', []
+        with self.assertRaises(bot.WaitTimeout):
+            runner.wait_battle('builder', {'builder_result'}, {'builder_battle'})
+        self.assertEqual(device.inputs, [])
+
     def test_league_window_is_closed_while_waiting_for_the_village(self):
         league = np.random.default_rng(17).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []

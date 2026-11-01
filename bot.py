@@ -46,7 +46,8 @@ ACTIONS = {
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
     'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
     'idle': ('reload',), 'builders_busy': ('close',), 'update_offer': ('update',), 'disconnected': ('retry',),
-    'other_device': ('reload',),
+    'other_device': ('reload',), 'home_battle': ('surrender',), 'builder_battle': ('surrender',),
+    'builder_battle2': ('surrender',), 'surrender_confirm': ('confirm',),
 }
 DEPLOY_SCREENS = ('home_scout', 'builder_scout', 'builder_stage2')
 OCR_MIN_VALUE, OCR_MAX_SATURATION, OCR_MIN_HEIGHT_RATIO = 200, 70, 0.6
@@ -118,7 +119,10 @@ LAUNCH_ATTEMPTS = 4
 GAME_CHECK_SECONDS = 10
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', 'update_offer',
-                    *MENU_SCREENS)
+                    'surrender_confirm', *MENU_SCREENS)
+# The battle clock runs at 1x until its last minute, when the 4x button appears; past two minutes little is saved.
+SURRENDER_MAX_SECONDS, SURRENDER_DEFAULT_SECONDS = 120, 60
+SURRENDER_STATES = {'home': ('home_battle',), 'builder': ('builder_battle', 'builder_battle2')}
 KNOWN_SCREENS = SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO, HUD_MIN_MEAN_VALUE = 2, 1.2, 235
@@ -350,7 +354,7 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
                 raise BotError(f'{name}: scales target tidak valid')
             for area in target.get('avoid', []):
                 rectangle(area, resolution)
-        optional = ('cart', 'close')
+        optional = ('cart', 'close', 'surrender')
         required = [a for a in allowed if (a != 'switch' or mode == 'both') and a not in optional and a not in targets]
         present = [a for a in optional if a in screen.get('actions', {})]
         for action in required + present:
@@ -880,6 +884,17 @@ def wall_order(choice: str, first: str) -> tuple:
     return tuple(sorted(villages, key=lambda village: village != first))
 
 
+def validate_surrender(config: dict, villages: tuple) -> None:
+    """--surrender taps the battle's surrender button and the confirm dialog; both need tap points."""
+    screens = config['screens']
+    missing = [state for village in villages for state in SURRENDER_STATES[village]
+               if 'surrender' not in screens.get(state, {}).get('actions', {})]
+    if villages and 'confirm' not in screens.get('surrender_confirm', {}).get('actions', {}):
+        missing.append('surrender_confirm')
+    if missing:
+        raise BotError(f'--surrender butuh kalibrasi: {", ".join(missing)}')
+
+
 def validate_walls(config: dict, root: Path, villages: tuple) -> None:
     resolution = config['resolution']
     for name in MENU_SCREENS:
@@ -1302,8 +1317,10 @@ class Bot:
     def __init__(self, config: dict, root: Path, device: ADB, live: bool = False,
                  reader: Callable | None = None, timeout: float = 240, poll: float = 0.05,
                  emulator: 'Emulator | None' = None, goals: dict | None = None, walls: tuple = (),
-                 minutes: int = 0, max_upgrades: int = 0) -> None:
+                 minutes: int = 0, max_upgrades: int = 0, surrender: tuple = (),
+                 surrender_after: float = SURRENDER_DEFAULT_SECONDS) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
+        self.surrender, self.surrender_after = surrender, surrender_after
         self.goals = goals if goals is not None else parse_goals(config, None, None, 'builder')
         self.wall_order, self.walls_done, self.walls_skipped = walls, set(), set()
         self.stop_at = time.monotonic() + minutes * 60 if minutes else None
@@ -1398,6 +1415,24 @@ class Bot:
                 raise UnexpectedScreen(f'Layar tidak diharapkan saat menunggu: {state}')
             time.sleep(self.poll)
         raise WaitTimeout(f'Timeout menunggu layar {"/".join(sorted(targets))}; tidak mencoba input pemulihan')
+
+    def wait_battle(self, village: str, targets: set, allowed: set) -> str:
+        """Wait for the battle to end; with --surrender, give it up once it has run surrender_after seconds."""
+        if village not in self.surrender:
+            return self.wait(targets, allowed)
+        try:
+            return self.wait(targets, allowed, self.surrender_after)
+        except UnexpectedScreen:
+            raise
+        except WaitTimeout:
+            state = self.current_screen()
+            if state not in SURRENDER_STATES[village]:
+                raise
+        LOG.info('Menyerah setelah %s detik battle', self.surrender_after)
+        state = self.tap_until(state, 'surrender', {'surrender_confirm'} | targets, TAP_RETRY_SECONDS * TAP_RETRIES)
+        if state in targets:
+            return state
+        return self.tap_until('surrender_confirm', 'confirm', targets, TAP_RETRY_SECONDS * TAP_RETRIES)
 
     def tap_until(self, state: str, name: str, targets: set, timeout: float, retries: int = TAP_RETRIES) -> str:
         """Tap a menu button and wait; repeat the tap while the same menu is still shown (a lost tap)."""
@@ -1760,7 +1795,7 @@ class Bot:
             # stopping; its loot refills the gold.
             if passes or broke or attempt == searches:
                 self.deploy('home_scout', {'home_scout', 'home_battle'})
-                if self.wait({'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':
+                if self.wait_battle('home', {'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':
                     LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
                 else:
                     self.action('home_result', 'return')
@@ -1856,12 +1891,12 @@ class Bot:
         self.tap_until('builder_menu', 'find', {'builder_scout'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
         self.deploy('builder_scout', {'builder_scout', 'builder_battle'})
         stage2 = {'builder_stage2', 'builder_battle2'}
-        state = self.wait({'builder_stage2', 'builder_result', 'builder'},
-                          {'builder_scout', 'builder_battle', 'builder_battle2'})
+        state = self.wait_battle('builder', {'builder_stage2', 'builder_result', 'builder'},
+                                 {'builder_scout', 'builder_battle', 'builder_battle2'})
         if state == 'builder_stage2':
             self.wait_still(STAGE_SETTLE_SECONDS if self.poll else 0)
             self.deploy('builder_stage2', stage2)
-            state = self.wait({'builder_result', 'builder'}, stage2)
+            state = self.wait_battle('builder', {'builder_result', 'builder'}, stage2)
         if state == 'builder':
             LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
             return
@@ -2719,6 +2754,11 @@ def main() -> int:
     parser.add_argument('--minutes', type=int, default=0, help='Seperti --hours, dalam menit')
     parser.add_argument('--max-upgrades', type=int, default=0,
                         help='--walls: berhenti di desa setelah sekian tembok di-upgrade; 0 = tanpa batas')
+    parser.add_argument('--surrender', choices=('home', 'builder', 'both'),
+                        help='Menyerah otomatis di desa ini bila battle belum selesai setelah --surrender-after detik')
+    parser.add_argument('--surrender-after', type=int,
+                        help=f'--surrender: detik battle setelah deploy selesai (1..{SURRENDER_MAX_SECONDS}, '
+                             f'default {SURRENDER_DEFAULT_SECONDS})')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
     parser.add_argument('--agent', action='store_true',
                         help='Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard')
@@ -2751,6 +2791,11 @@ def main() -> int:
             raise BotError('--hours/--minutes hanya untuk --until-full/--builder/--home/--walls dengan --live')
         if args.max_upgrades and not args.walls:
             raise BotError('--max-upgrades hanya untuk --walls')
+        if args.surrender_after is not None and not args.surrender:
+            raise BotError('--surrender-after hanya bersama --surrender')
+        surrender_after = integer(SURRENDER_DEFAULT_SECONDS if args.surrender_after is None else args.surrender_after,
+                                  1, SURRENDER_MAX_SECONDS, 'surrender_after')
+        surrender = VILLAGES if args.surrender == 'both' else tuple(filter(None, [args.surrender]))
         if args.dark and (not args.until_full or args.builder is not None or args.home is not None):
             raise BotError('--dark hanya untuk --until-full tanpa --builder/--home (atau pakai --home gold,elixir,dark)')
         if not (args.worker or args.no_remote):
@@ -2766,6 +2811,7 @@ def main() -> int:
         villages = walls or tuple(goals or ())
         mode = (villages[0] if len(villages) == 1 else 'both') if villages else args.mode
         validate_config(config, args.config.parent, mode)
+        validate_surrender(config, surrender)
         if walls:
             if not args.live:
                 raise BotError('--walls butuh --live')
@@ -2780,7 +2826,8 @@ def main() -> int:
         if emulator and args.live:
             check_adb_debugging(emulator.console, emulator.index)
         runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals, walls=walls,
-                     minutes=minutes, max_upgrades=args.max_upgrades)
+                     minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
+                     surrender_after=surrender_after)
         if walls:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif until_full and args.live:

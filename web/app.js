@@ -284,6 +284,10 @@ function readOptions() {
   if (['walls', 'farm', 'attack'].includes(task) && number('searches')) options.searches = number('searches');
   if (task === 'attack' || task === 'dry') options.village = data.get('village');
   if (task === 'attack') options.cycles = Math.max(1, number('cycles', 1));
+  if (['walls', 'farm', 'attack'].includes(task) && data.get('surrender')) {
+    options.surrender = data.get('surrender');
+    options.surrender_after = number('surrender_after', 60);
+  }
   return options;
 }
 
@@ -308,6 +312,7 @@ function previewArgs(options) {
     if (options[name]) args.push(flag, String(options[name]));
   }
   if (options.max_recoveries !== undefined) args.push('--max-recoveries', String(options.max_recoveries));
+  if (options.surrender) args.push('--surrender', options.surrender, '--surrender-after', String(options.surrender_after));
   return [...args, '--live'];
 }
 

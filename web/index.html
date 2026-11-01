@@ -99,6 +99,10 @@
           <label data-for="walls farm"><span data-i18n="minutes"></span> <input name="minutes" type="number" min="0" max="60000" value="0"></label>
           <label data-for="walls"><span data-i18n="max_upgrades"></span> <input name="max_upgrades" type="number" min="0" max="100000" value="0"></label>
           <label data-for="walls farm"><span data-i18n="max_recoveries"></span> <input name="max_recoveries" type="number" min="0" max="1000" value="20"></label>
+          <label data-for="walls farm attack"><span data-i18n="surrender"></span>
+            <select name="surrender"><option value="">off</option><option value="home">home</option><option value="builder">builder</option><option value="both">both</option></select>
+          </label>
+          <label data-for="walls farm attack"><span data-i18n="surrender_after"></span> <input name="surrender_after" type="number" min="1" max="120" value="60"></label>
 
           <pre id="preview" class="preview"></pre>
           <div class="actions">
