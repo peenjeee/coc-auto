@@ -520,6 +520,23 @@ class BotTests(unittest.TestCase):
         first, second = (tuple(slot) for slot in camps['slots'][:2])
         self.assertEqual(device.inputs, [first, *[(10, 10)] * 4, second, *[(20, 20)] * 4])
 
+    def test_the_builder_hero_fires_again_only_once_its_ability_meter_is_full(self):
+        root = Path(bot.__file__).parent
+        slot = [129, 128]
+        one, two, full = (cv2.imread(str(root / 'fixtures' / f'builder-hero-meter-{n}.png')) for n in (1, 2, 3))
+        self.assertFalse(bot.hero_meter_full(one, slot))
+        self.assertFalse(bot.hero_meter_full(two, slot))
+        self.assertTrue(bot.hero_meter_full(full, slot))
+        device = Device({'builder_battle': full}, 'builder_battle')
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.hero_slots = [slot]
+        runner.fire_charged_heroes(full, 'builder_battle')
+        runner.fire_charged_heroes(full, 'builder_battle')
+        # One tap on the hero card, then a cooldown while the meter empties.
+        self.assertEqual(device.bursts, [[tuple(slot)]])
+        runner.fire_charged_heroes(full, 'home_battle')
+        self.assertEqual(len(device.bursts), 1)
+
     def test_builder_camps_are_tapped_in_one_go(self):
         device = Device(self.frames, 'builder_battle')
         device.tap = lambda point: device.inputs.append(tuple(point))

@@ -169,6 +169,11 @@ TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
 STAGE_SETTLE_SECONDS = 4
 # Builder Base troop cards are tapped again this long after the last camp lands, which fires their abilities.
 ABILITY_WAIT_SECONDS = 5
+BUILDER_BATTLES = ('builder_battle', 'builder_battle2')
+# A deployed Builder Base hero's ability meter: three steps of rising height above its card, charged magenta. Rows and
+# step columns are offsets from the card's tap point; one tap fires it and empties the meter for a while.
+HERO_METER_ROWS, HERO_METER_STEPS = (-89, -81), ((-36, -16), (-14, 5), (7, 37))
+HERO_METER_CHARGED, HERO_ABILITY_COOLDOWN_SECONDS = 0.5, 3
 LOG = logging.getLogger(__name__)
 
 
@@ -1316,6 +1321,18 @@ def camp_plan(image: np.ndarray, auto: dict, stack: bool = False, templates: dic
                      {'slots': camps, 'tap_only': True, 'wait': ABILITY_WAIT_SECONDS}]
 
 
+def hero_meter_full(image: np.ndarray, slot: list) -> bool:
+    """Every step of a Builder Base hero's ability meter is charged; fired earlier the ability is weaker."""
+    x, y = slot
+    band = cv2.cvtColor(image[y + HERO_METER_ROWS[0]:y + HERO_METER_ROWS[1]], cv2.COLOR_BGR2HSV)
+    for left, right in HERO_METER_STEPS:
+        step = band[:, x + left:x + right]
+        magenta = (step[..., 0] >= 140) & (step[..., 0] <= 165) & (step[..., 1] > 100) & (step[..., 2] > 150)
+        if float(magenta.mean()) < HERO_METER_CHARGED:
+            return False
+    return True
+
+
 def earned_stars(image: np.ndarray, slots: list) -> int:
     """Builder Base stars won so far: the star slots of the damage box that have turned gold."""
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -1498,6 +1515,8 @@ class Bot:
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
         self.trophy_floor, self.climbing, self.trophies_from = trophy_floor, False, 0.0
+        self.hero_slots: list = []
+        self.hero_ready = 0.0
         self.ring, self.quake = ring, quake
         self.digit_templates: dict | None = None
         self.damage_last: int | None = None
@@ -1567,6 +1586,7 @@ class Bot:
                 continue
             if not sped_up:
                 sped_up = self.try_speed_up(image, state)
+            self.fire_charged_heroes(image, state)
             if state in POPUPS:
                 try:
                     self.action(state, POPUP_ACTIONS[state])
@@ -1731,6 +1751,16 @@ class Bot:
         self.device.tap_many([[x + px, y + py]])
         LOG.info('Kecepatan battle dinaikkan ke 4x')
         return True
+
+    def fire_charged_heroes(self, image: np.ndarray, state: str) -> None:
+        """Tap a Builder Base hero's card again once every step of its ability meter is charged."""
+        if not self.live or state not in BUILDER_BATTLES or time.monotonic() < self.hero_ready:
+            return
+        for slot in self.hero_slots:
+            if hero_meter_full(image, slot):
+                self.device.tap_many([slot])
+                self.hero_ready = time.monotonic() + HERO_ABILITY_COOLDOWN_SECONDS
+                LOG.info('Ability hero dipakai: meteran penuh')
 
     def guarded_tap(self, states: set, location: list | Callable, terminal: set | None = None) -> str:
         state, image = self.observe()
@@ -1898,6 +1928,9 @@ class Bot:
             LOG.info('Rencana deploy dari bar: %s kartu', len(cards))
         else:
             plan = screen['troops']
+        # Builder Base heroes are watched through the battle and fire again once their ability meter is full.
+        self.hero_slots = [] if screen_name == 'home_scout' else [
+            troop['slot'] for troop in plan if troop.get('tap_only') and 'slot' in troop]
         for troop in plan:
             if troop.get('wait') and self.live:
                 time.sleep(troop['wait'])

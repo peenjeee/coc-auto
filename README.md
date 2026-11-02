@@ -514,7 +514,9 @@ have neither. Each hero is dropped at the screen's `deploy` point and then tappe
 ability. One tap deploys a whole troop camp, so each troop card is tapped once, at the next point of `points` in
 turn; cards greyed out in stage 1 are skipped. A camp of several units (Raged Barbarians) shows an `Nx` label top
 right instead and gets N taps on its point, one per unit. Five seconds after the last camp lands every troop card is tapped once
-more, which fires the troop abilities, in stage 1 and stage 2 alike. There are no spells.
+more, which fires the troop abilities, in stage 1 and stage 2 alike. Through the battle the hero's ability meter,
+three steps above its card, is watched: once every step is charged (magenta) the hero card is tapped again, as the
+ability fired earlier is weaker and empties the meter. There are no spells.
 
 | Field | Meaning |
 | --- | --- |
@@ -620,7 +622,7 @@ again.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (329 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (330 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans, popups, the game update, recovery, the
 until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool
