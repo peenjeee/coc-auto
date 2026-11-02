@@ -76,8 +76,11 @@ flowchart LR
   The two villages are told apart by their elixir icons (pink in the Home Village, violet in the Builder Base), which
   every Town Hall and Builder Hall level shows, so a Town Hall below 7 (no dark elixir bar) is still the Home Village
   and never taken for the Builder Base.
-- **Numbers** (loot, storage bars, the "Maks" tooltip, the Elixir Cart) are read with per-digit templates built from real screenshots.
-  Several font variants per digit are supported.
+  A search anchor that may sit anywhere in a wide region (the wall buttons) is matched at half size first, then at
+  full size around the best spot, which keeps a screenshot's detection near 70 ms.
+- **Numbers** (loot, storage bars, the "Maks" tooltip, the Elixir Cart, the battle's damage percent, the Builder Base
+  trophies and the `xN` / `Nx` counts on the cards) are read with per-digit templates built from real screenshots.
+  Several font variants per digit are supported. Builder Base stars and the hero's ability meter are read by colour.
 - **Input** is sent as raw multitouch events written to `/dev/input/eventN`, which makes holds and pinches possible.
 
 ## Requirements
@@ -594,7 +597,7 @@ How to change it:
 
 ## Recovery behaviour
 
-| Situation | What `--until-full` and `--walls` do |
+| Situation | What `--until-full`, `--walls` and `--cycles` (with `--live`) do |
 | --- | --- |
 | LDPlayer is not running | Starts it with `ldconsole launch`, waits for ADB and Android boot. |
 | CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. A wait that has seen no known screen for 10 seconds checks that CoC is still in front, so a game Android closes while it loads is reopened at once instead of after the full timeout. |
@@ -608,6 +611,7 @@ How to change it:
 | The game offers to buy missing resources with gems ("Perlu lebih banyak …") | Closes it with X, never the gem button. If it came from skipping an opponent with no gold left, attacks the opponent on screen; otherwise recovers. |
 | The account is opened on another device ("Perangkat lain tersambung ke desa ini") | Taps **Muat ulang** and carries on, which takes the session back from the other device. |
 | The game disconnects for inactivity ("Ada orang di sana?") | Taps "Muat ulang game" and carries on. |
+| A Builder Base stage 1 is won while the surrender dialog is up | The game moves on to stage 2, which can only be given up once it has loaded: Menyerah and Oke are tapped again until the battle has ended (its timer ends it at the latest). |
 | The server connection drops ("Sambungan terputus", or "Kesalahan sambungan" while loading) | Taps "Coba lagi", waiting 10 seconds between tries while the network is still down, and carries on. |
 | A game update is offered ("Pembaruan Tersedia!") | Updates the game: taps the game's update button, then the Play Store's own Update button, in the update dialog or on the game's store page (found by its text, only for Clash of Clans; install buttons and anything else in the store are never tapped), waits up to 30 minutes for the new version to install, opens CoC again and carries on. If the store shows no Update button (not signed in, no space) or the install does not finish, stops with exit code 5 and asks you to update CoC from the Play Store. A dry-run never updates. |
 | All builders are busy when a Builder Base wall is picked ("Semua tukang sibuk!") | Closes the gem offer with X and skips that village's walls; run again once a builder is free. |
@@ -629,8 +633,9 @@ python -m unittest -v test_bot test_game_update test_remote test_relay test_ldpl
 ```
 
 The suites (330 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
-`fixtures/`. They cover screen detection, digit reading, deploy plans, popups, the game update, recovery, the
-until-full loop, the dashboard link (signed commands, settings, the bot as a child
+`fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
+camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
+game update, recovery (`--cycles` included), the until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
 
@@ -651,6 +656,9 @@ test_remote.py         dashboard link tests (key, signatures, options, child pro
 test_relay.py          relay tests against a fake relay server
 test_ldplayer.py       LDPlayer detection tests against fake tool output
 test_device_control.py screen switch tests
+fixtures/              real screen crops and Play Store screens the tests read
+requirements.txt       Python dependencies (OpenCV, NumPy, websockets)
+netlify.toml           online dashboard hosting: published folder and security headers
 config.json            calibration for the current game UI
 config.local.json      this PC's own settings on top of config.json (not in git; the dashboard saves here)
 calibration/           anchor, target and digit templates for config.json
