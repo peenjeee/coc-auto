@@ -12,7 +12,8 @@ const OFFLINE_AFTER_MS = 40000; // the device repeats its signed state every 15 
 const MAX_SKEW_SECONDS = 300;
 const MAX_LINES = 2000;
 const STORE_KEY = 'coc-remote-key';
-const STORE_OPTIONS = 'coc-remote-options';
+// v2: surrender at 50% became the default; choices saved before it held 0 there.
+const STORE_OPTIONS = 'coc-remote-options-v2';
 const AGENT_PREFIX = 'agent:';
 const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
 const KEY_PATTERN = /^coc_[A-Za-z0-9_-]{20,}$/;
@@ -289,7 +290,8 @@ function readOptions() {
       options.surrender = data.get('surrender');
       options.surrender_after = number('surrender_after', 60);
     }
-    if (number('surrender_at')) options.surrender_at = number('surrender_at');
+    // Always sent, 0 included: the bot surrenders at 50% unless told otherwise.
+    options.surrender_at = number('surrender_at', 50);
     if (data.get('ring')) options.ring = true;
     if (data.get('quake')) options.quake = true;
   }
@@ -320,7 +322,7 @@ function previewArgs(options) {
   if (options.surrender) args.push('--surrender', options.surrender, '--surrender-after', String(options.surrender_after));
   if (options.ring) args.push('--ring');
   if (options.quake) args.push('--quake');
-  if (options.surrender_at) args.push('--surrender-at', String(options.surrender_at));
+  if (options.surrender_at !== undefined) args.push('--surrender-at', String(options.surrender_at));
   return [...args, '--live'];
 }
 
@@ -328,7 +330,7 @@ function previewArgs(options) {
 const ARMY_TEMPLATES = {
   valkyrie_quake: { ring: true, quake: true, surrender_at: 50 },
   barbarian_skeleton: { ring: true, quake: false, surrender_at: 50 },
-  dragons: { ring: false, quake: false, surrender_at: 0 },
+  dragons: { ring: false, quake: false, surrender_at: 50 },
   miner_skeleton: { ring: true, quake: false, surrender_at: 50 },
   super_minion: { ring: true, quake: false, surrender_at: 50 },
 };

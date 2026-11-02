@@ -234,8 +234,9 @@ def build_args(options: dict) -> list[str]:
             raise CommandRefused(f'Pilihan {flag} harus ya/tidak')
         if value:
             args.append(f'--{flag}')
-    surrender_at = whole(options, 'surrender_at', 1, 99)
-    if surrender_at:
+    # 0 is passed on too: it turns off the bot's default surrender at 50%.
+    surrender_at = whole(options, 'surrender_at', 0, 99)
+    if surrender_at is not None:
         args += ['--surrender-at', str(surrender_at)]
     return args + ['--live']
 

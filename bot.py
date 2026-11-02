@@ -133,6 +133,8 @@ OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device'
                     'surrender_confirm', *MENU_SCREENS)
 # The battle clock runs at 1x until its last minute, when the 4x button appears; past two minutes little is saved.
 SURRENDER_MAX_SECONDS, SURRENDER_DEFAULT_SECONDS = 120, 60
+# Home Village battles are given up at this damage unless --surrender-at says otherwise (0 = never).
+SURRENDER_AT_DEFAULT = 50
 SURRENDER_STATES = {'home': ('home_battle',), 'builder': ('builder_battle', 'builder_battle2')}
 KNOWN_SCREENS = SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
@@ -2951,7 +2953,8 @@ def main() -> int:
                         help=f'Detik battle setelah deploy selesai (1..{SURRENDER_MAX_SECONDS}, default '
                              f'{SURRENDER_DEFAULT_SECONDS}); tanpa --surrender berlaku untuk kedua desa')
     parser.add_argument('--surrender-at', type=int,
-                        help='Desa asal: menyerah otomatis saat persen kerusakan mencapai angka ini (1..99)')
+                        help=f'Desa asal: menyerah otomatis saat persen kerusakan mencapai angka ini (0..99, default '
+                             f'{SURRENDER_AT_DEFAULT}; 0 = tidak pernah)')
     parser.add_argument('--ring', action='store_true',
                         help='Desa asal: hero (langsung ability) dan siege dulu, lalu pasukan disebar keliling pinggir '
                              'peta (titik cincin di editor deploy)')
@@ -2995,7 +2998,8 @@ def main() -> int:
         # Off unless asked for; --surrender-after on its own turns it on in both villages.
         chosen = args.surrender or ('both' if args.surrender_after is not None else None)
         surrender = VILLAGES if chosen == 'both' else tuple(filter(None, [chosen]))
-        surrender_at = 0 if args.surrender_at is None else integer(args.surrender_at, 1, 99, 'surrender_at')
+        surrender_at = integer(SURRENDER_AT_DEFAULT if args.surrender_at is None else args.surrender_at, 0, 99,
+                               'surrender_at')
         if args.dark and (not args.until_full or args.builder is not None or args.home is not None):
             raise BotError('--dark hanya untuk --until-full tanpa --builder/--home (atau pakai --home gold,elixir,dark)')
         if not (args.worker or args.no_remote):
@@ -3011,8 +3015,16 @@ def main() -> int:
         villages = walls or tuple(goals or ())
         mode = (villages[0] if len(villages) == 1 else 'both') if villages else args.mode
         validate_config(config, args.config.parent, mode)
-        validate_surrender(config, tuple(dict.fromkeys(surrender + (('home',) if surrender_at else ()))),
-                           damage=bool(surrender_at))
+        try:
+            validate_surrender(config, tuple(dict.fromkeys(surrender + (('home',) if surrender_at else ()))),
+                               damage=bool(surrender_at))
+        except BotError as exc:
+            if args.surrender_at is not None or not surrender_at:
+                raise
+            # The default needs the damage calibration; a setup without it farms on without surrendering.
+            LOG.warning('Menyerah di %s%% tidak aktif: %s', surrender_at, exc)
+            surrender_at = 0
+            validate_surrender(config, surrender)
         validate_ring(config, args.ring, args.quake)
         if walls:
             if not args.live:

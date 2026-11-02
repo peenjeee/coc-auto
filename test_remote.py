@@ -560,6 +560,9 @@ class BuildArgsTests(unittest.TestCase):
         self.assertEqual(remote.build_args({'task': 'farm', 'ring': True, 'quake': True, 'surrender_at': 50}),
                          ['--until-full', '--ring', '--quake', '--surrender-at', '50', '--live'])
         self.assertEqual(remote.build_args({'task': 'farm', 'ring': False, 'quake': False}), ['--until-full', '--live'])
+        # 0 turns off the bot's default surrender at 50%, so it is passed on as well.
+        self.assertEqual(remote.build_args({'task': 'farm', 'surrender_at': 0}),
+                         ['--until-full', '--surrender-at', '0', '--live'])
 
     def test_anything_outside_the_commands_is_refused(self):
         for options in ({'task': 'shell'}, {'task': 'walls', 'walls': 'moon'}, {'task': 'walls', 'hours': -1},
