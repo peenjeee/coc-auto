@@ -114,9 +114,11 @@ BAR_CARD_STD, BAR_LABEL_WHITE, BAR_WARDEN_GREEN = 18, 100, 200
 BAR_CARD_WIDTH, BAR_CARD_COLOUR = (65, 98), 0.43
 BAR_CAMP_HEADER, BAR_SETTLE_SECONDS = 0.5, 3
 SPELL_TAPS, SPELL_ROUND = 30, 3
-# --ring: every troop card is tapped round the map-edge pins until it greys out; with its 'xN' count read, exactly
-# that many taps go out RING_BURST at a time, otherwise one at a time.
+# --ring: every troop card streams out of RING_FINGERS fingers held at once on ring pins spread apart, the fingers
+# moving one pin on round the ring each turn, until the card greys out. Without multi-touch the card is tapped
+# instead: with its 'xN' count read, exactly that many taps RING_BURST at a time, otherwise one at a time.
 RING_TAPS, RING_MAX_POINTS, RING_BURST = 60, 30, 20
+RING_FINGERS, RING_HOLD_SECONDS, RING_HOLD_TURNS = 8, 1.0, 60
 # The 'xN' count sits at the top right of a troop or spell card, a little above the card bar.
 CARD_LABEL_ABOVE, CARD_LABEL_HEIGHT, CARD_LABEL_LEFT = 10, 26, 25
 # --quake: four earthquakes on one spot open the walls there; the pins sit on the base's top, right, bottom and left.
@@ -658,6 +660,26 @@ class ADB:
         steps = [step for sx, sy in select for step in
                  (('down', sx, sy), ('sleep', TAP_HOLD_SECONDS), ('up',), ('sleep', TAP_GAP_SECONDS))]
         self.inject(steps + [('down', x, y), ('sleep', seconds), ('up',)])
+
+    def hold_many(self, slot: list | None, locations: list, seconds: float) -> None:
+        """Optionally select a card, then a finger down on every spot at once, held so troops stream out of each."""
+        if not self.live:
+            raise BotError('Input perangkat dinonaktifkan dalam dry-run')
+        spots = [point(location, self.resolution, 'hold') for location in locations]
+        select = [] if slot is None else [point(slot, self.resolution, 'slot')]
+        if not self.touch:
+            # `input` has no multi-touch: the spots are held one after another instead.
+            taps = [f'input tap {sx} {sy}' for sx, sy in select]
+            holds = [f'input swipe {x} {y} {x} {y} {round(seconds * 1000 / len(spots))}' for x, y in spots]
+            self.command('shell', '; '.join(taps + holds))
+            return
+        down = [event for finger, (x, y) in enumerate(spots)
+                for event in ((3, 47, finger), (3, 57, finger + 1), (3, 53, x), (3, 54, y), (3, 58, 1))]
+        up = [event for finger in range(len(spots)) for event in ((3, 47, finger), (3, 57, -1))]
+        steps = [step for sx, sy in select for step in
+                 (('down', sx, sy), ('sleep', TAP_HOLD_SECONDS), ('up',), ('sleep', TAP_GAP_SECONDS))]
+        self.inject(steps + [('frame', 'f_' + '_'.join(f'{x}_{y}' for x, y in spots), down + [(1, 330, 1), (0, 0, 0)]),
+                             ('sleep', seconds), ('frame', f'u_{len(spots)}', up + [(1, 330, 0), (0, 0, 0)])])
 
     def swipe(self, start: list, end: list) -> None:
         if not self.live:
@@ -1279,26 +1301,31 @@ def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = F
         else:
             heroes.append(slot)
     siege_steps = [{'slot': slot, 'count': 1} for slot in siege]
-    if ring:
-        # Exactly the card's count goes out; unread, one tap at a time, as taps left in a burst after a card
-        # empties go to the card the game selects next.
-        troop_steps = [{'slot': slot, 'count': count or RING_TAPS, 'until_empty': True, 'points': auto['ring'],
-                        'burst': RING_BURST if count else 1} for slot, count in troops]
-        plan = ([{'slots': heroes, 'abilities': True}] if heroes else []) + siege_steps + troop_steps
-    else:
-        troop_steps = [{'slot': slot, 'count': 1, 'hold': auto['hold'], 'until_empty': True} for slot, _ in troops]
-        plan = troop_steps + siege_steps + [step for slot in heroes for step in (
-            {'slot': slot, 'count': 1}, {'slot': slot, 'count': 1, 'tap_only': True})]
     if quake:
         quakes = [location for location in auto['quake'] for _ in range(QUAKE_PER_POINT)]
-        return plan + [{'slot': slot, 'count': count or SPELL_TAPS, 'until_empty': True, 'points': quakes,
+        spell_steps = [{'slot': slot, 'count': count or SPELL_TAPS, 'until_empty': True, 'points': quakes,
                         'burst': count or 1} for slot, count in spells]
-    points = auto.get('spell_spread', auto['spells']) if ring else auto['spells']
-    # Each spell card starts one round (front, left, right) after the previous one, so no two land on one spot.
-    for index, (slot, _) in enumerate(spells):
-        start = index * SPELL_ROUND % len(points)
-        plan.append({'slot': slot, 'count': SPELL_TAPS, 'until_empty': True, 'points': points[start:] + points[:start]})
-    return plan
+    else:
+        points = auto.get('spell_spread', auto['spells']) if ring else auto['spells']
+        spell_steps = []
+        for index, (slot, count) in enumerate(spells):
+            # Each spell card starts one round (front, left, right) after the previous one, so no two land on one spot.
+            start = index * SPELL_ROUND % len(points)
+            step = {'slot': slot, 'count': count or SPELL_TAPS, 'until_empty': True,
+                    'points': points[start:] + points[:start]}
+            spell_steps.append({**step, 'burst': count} if count else step)
+    if not ring:
+        troop_steps = [{'slot': slot, 'count': 1, 'hold': auto['hold'], 'until_empty': True} for slot, _ in troops]
+        return troop_steps + siege_steps + [step for slot in heroes for step in (
+            {'slot': slot, 'count': 1}, {'slot': slot, 'count': 1, 'tap_only': True})] + spell_steps
+    # Spells go out RING_FINGERS at a time, one per finger on the next pins in order.
+    spell_steps = [{**step, 'fingers': RING_FINGERS, 'press': TAP_HOLD_SECONDS} for step in spell_steps]
+    # The spells go before the troops, so the troops are the last cards: a finger still down when one card empties
+    # only sends out the troop card the game selects next, which goes round the ring anyway.
+    troop_steps = [{'slot': slot, 'count': count or RING_TAPS, 'until_empty': True, 'points': auto['ring'],
+                    'burst': RING_BURST if count else 1, 'fingers': RING_FINGERS, 'spaced': True}
+                   for slot, count in troops]
+    return ([{'slots': heroes, 'abilities': True}] if heroes else []) + siege_steps + spell_steps + troop_steps
 
 
 def card_empty(image: np.ndarray, slot: list) -> bool:
@@ -1832,6 +1859,8 @@ class Bot:
             if self.live:
                 self.device.tap_many([troop['slot']])
             return self.checked_state(allowed, terminal)[0]
+        if troop.get('fingers') and callable(getattr(self.device, 'hold_many', None)):
+            return self.spread_hold(troop, allowed, terminal)
         points = troop.get('points') or [troop.get('deploy', screen['deploy'])]
         until_empty = troop.get('until_empty', False)
         if troop.get('hold') and callable(getattr(self.device, 'touch_down', None)) \
@@ -1855,6 +1884,27 @@ class Bot:
             sent, remaining = sent + size, remaining - size
             state, image = self.checked_state(allowed, terminal)
             if state in terminal or (until_empty and card_empty(image, troop['slot'])):
+                break
+        return state
+
+    def spread_hold(self, troop: dict, allowed: set, terminal: set) -> str:
+        """--ring, several fingers down at once until the card greys out. Troops ('spaced'): a finger held on each
+        of a few ring pins spread apart while troops stream out of all of them, then on the next pins round.
+        Spells: one quick press per finger on the next pins in order, at most the card's count."""
+        points, state, sent = troop['points'], '', 0
+        spaced = troop.get('spaced', False)
+        fingers = min(troop['fingers'], len(points)) if spaced else troop['fingers']
+        for turn in range(RING_HOLD_TURNS):
+            if spaced:
+                spots = [points[(turn + finger * len(points) // fingers) % len(points)] for finger in range(fingers)]
+            else:
+                spots = [points[(sent + finger) % len(points)] for finger in range(min(fingers, troop['count'] - sent))]
+            if self.live:
+                self.device.hold_many(troop['slot'] if turn == 0 else None, spots,
+                                      troop.get('press', RING_HOLD_SECONDS))
+            sent += len(spots)
+            state, image = self.checked_state(allowed, terminal)
+            if state in terminal or card_empty(image, troop['slot']) or (not spaced and sent >= troop['count']):
                 break
         return state
 

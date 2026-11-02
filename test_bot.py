@@ -368,18 +368,22 @@ class BotTests(unittest.TestCase):
                 'quake': quake}
         centre = [54 + 97 * i for i in range(6)]
         plan = bot.auto_plan(image, auto, ring=True)
-        # Every hero, the Warden first, goes out in one step with the abilities right after.
+        # Every hero, the Warden first, goes out in one step with the abilities right after; then the siege, the
+        # spells, and last the troops, so a finger still down when a card empties only sends out more troops.
         self.assertEqual(plan[0], {'slots': [[centre[4], 150], [centre[3], 150]], 'abilities': True})
         self.assertEqual([(step['slot'][0], step.get('points')) for step in plan[1:]], [
-            (centre[2], None), (centre[0], ring), (centre[1], ring), (centre[5], around)])
+            (centre[2], None), (centre[5], around), (centre[0], ring), (centre[1], ring)])
         self.assertTrue(all('hold' not in step for step in plan))
         self.assertTrue(all(step['until_empty'] for step in plan if step.get('points')))
-        # With no count read, troops go one tap at a time, so no tap is left for the card the game selects next.
+        self.assertEqual([(step['fingers'], step.get('spaced', False)) for step in plan[2:]],
+                         [(bot.RING_FINGERS, False), (bot.RING_FINGERS, True), (bot.RING_FINGERS, True)])
+        # Without multi-touch and no count read, troops go one tap at a time.
         self.assertEqual([step.get('burst') for step in plan if step.get('points') == ring], [1, 1])
         # Earthquakes go four on each pin in turn, with or without the ring.
         quakes = [[70, 70]] * 4 + [[80, 80]] * 4
-        self.assertEqual(bot.auto_plan(image, auto, ring=True, quake=True)[-1]['points'], quakes)
-        self.assertEqual(bot.auto_plan(image, auto, quake=True)[-1]['points'], quakes)
+        spell = [centre[5], 150]
+        for plan in (bot.auto_plan(image, auto, ring=True, quake=True), bot.auto_plan(image, auto, quake=True)):
+            self.assertEqual(next(step for step in plan if step.get('slot') == spell)['points'], quakes)
 
     def test_the_ring_plan_taps_exactly_the_count_read_from_each_card(self):
         config, _, _ = self.bundled()
@@ -392,7 +396,7 @@ class BotTests(unittest.TestCase):
                    if bot.card_kind(image, auto['bar'], card) == 'counted']
         self.assertEqual([bot.card_count(image, auto['bar'], card, templates) for card in counted], [33, 11])
         plan = bot.auto_plan(image, auto, ring=True, quake=True, templates=templates)
-        troops, quakes = plan[-2], plan[-1]
+        quakes, troops = plan[-2], plan[-1]
         self.assertEqual((troops['count'], troops['burst'], troops['points']), (33, bot.RING_BURST, auto['ring']))
         # Eleven earthquakes in one go: four, four and three on the first three pins.
         self.assertEqual((quakes['count'], quakes['burst']), (11, 11))
@@ -411,6 +415,33 @@ class BotTests(unittest.TestCase):
         self.assertIsNone(runner.deploy('home_scout', {'home_scout', 'home_battle'}))
         self.assertEqual(device.inputs, [(20, 80), (40, 40), (60, 80), (40, 40), (20, 80), (60, 80),
                                          (100, 80), (40, 40), (50, 30)])
+
+    def test_ring_troops_stream_from_four_fingers_and_spells_go_four_at_once(self):
+        device = Device(self.frames, 'home_battle')
+        holds, end_after = [], [2]
+
+        def hold_many(slot, spots, seconds):
+            holds.append((slot, [tuple(spot) for spot in spots], seconds))
+            if len(holds) == end_after[0]:
+                device.state = 'home_result'
+        device.hold_many = hold_many
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        allowed, terminal = {'home_battle'}, {'home_result'}
+        ring = [[10 * i, 10] for i in range(8)]
+        troops = {'slot': [20, 80], 'count': 60, 'until_empty': True, 'points': ring, 'fingers': 4, 'spaced': True}
+        self.assertEqual(runner.deploy_card({}, troops, allowed, terminal), 'home_result')
+        # Four fingers spread round the ring, each turn one pin on; the card is selected once.
+        self.assertEqual([spots for _, spots, _ in holds], [[(0, 10), (20, 10), (40, 10), (60, 10)],
+                                                           [(10, 10), (30, 10), (50, 10), (70, 10)]])
+        self.assertEqual([(slot, seconds) for slot, _, seconds in holds],
+                         [([20, 80], bot.RING_HOLD_SECONDS), (None, bot.RING_HOLD_SECONDS)])
+        # Eleven earthquakes: one per finger, four, four, then three.
+        device.state, holds[:], end_after[0] = 'home_battle', [], 0
+        quakes = [[1, 1]] * 4 + [[2, 2]] * 4 + [[3, 3]] * 4 + [[4, 4]] * 4
+        spells = {'slot': [60, 80], 'count': 11, 'until_empty': True, 'points': quakes, 'fingers': 4,
+                  'press': bot.TAP_HOLD_SECONDS}
+        runner.deploy_card({}, spells, allowed, terminal)
+        self.assertEqual([spots for _, spots, _ in holds], [[(1, 1)] * 4, [(2, 2)] * 4, [(3, 3)] * 3])
 
     def test_ring_and_quake_pins_are_checked(self):
         config = copy.deepcopy(self.config)

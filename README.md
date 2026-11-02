@@ -239,8 +239,8 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--surrender home\|builder\|both` | off | Give up a battle in these villages that is still running `--surrender-after` seconds after the troops are deployed: taps **Menyerah**/**Akhiri Serangan**, then **Oke**. In the Builder Base it counts per stage, so giving up stage 1 skips stage 2. |
 | `--surrender-after N` | `60` | Battle seconds, 1–120. On its own (without `--surrender`) it turns surrendering on in both villages. The battle clock runs at normal speed until its last minute (when the 4x button appears), so past 120 there is little left to save. |
 | `--surrender-at P` | off | Home Village: surrender once the battle's **Total Kerusakan** reads P percent (1–99) twice in a row, checked during the deploy too, so the rest of the army stays home. Works with `--surrender-after`; whichever comes first. |
-| `--ring` | off | Home Village fast attack: every hero dropped at `D` then each ability, the siege machine, then each troop card spread round the map-edge ring pins, exactly the `xN` count read from the card (one tap at a time when it does not read), then the spells over the middle of the base. |
-| `--quake` | off | Home Village: the spells go four on each quake pin in turn (four earthquakes break the walls there), all in one go when the card count reads. |
+| `--ring` | off | Home Village fast attack: every hero dropped at `D` then each ability, the siege machine, the spells (skeletons over the middle of the base, eight at once, one per finger), then each troop card streaming out of eight fingers held at once on ring pins round the map edge, moving one pin on each second until the card greys out. Without a touch device the troops are tapped instead, exactly the `xN` count read from the card. |
+| `--quake` | off | Home Village: the spells go four on each quake pin in turn (four earthquakes break the walls there), one per finger, at most the `xN` count read from the card. |
 | `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 | `--agent` | off | Run no task: show the device's API key and wait for **Start** from the web dashboard. |
@@ -592,7 +592,7 @@ first error instead of recovering.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (318 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (319 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans, popups, the game update, recovery, the
 until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool
