@@ -483,10 +483,10 @@ class BotTests(unittest.TestCase):
         abilities = {'slots': centre[1:], 'tap_only': True, 'wait': bot.ABILITY_WAIT_SECONDS}
         self.assertEqual(plan, [{'slot': centre[0], 'count': 1}, {'slot': centre[0], 'count': 1, 'tap_only': True},
                                 {'slots': centre[1:], 'camps': True,
-                                 'points': [[10, 10], [20, 20], [30, 30], [10, 10]]}, abilities])
+                                 'points': [[10, 10], [20, 20], [30, 30], [10, 10]], 'sizes': [1] * 4}, abilities])
         # Stacked, as for Witches, every camp lands on the deploy point after the machine.
         self.assertEqual(bot.auto_plan(image, auto, stack=True)[-2:],
-                         [{'slots': centre[1:], 'camps': True, 'points': None}, abilities])
+                         [{'slots': centre[1:], 'camps': True, 'points': None, 'sizes': [1] * 4}, abilities])
         # A hero alone has no troop abilities to wait for.
         self.assertEqual(len(bot.auto_plan(self.army_bar(['machine']), auto)), 2)
 
@@ -500,6 +500,25 @@ class BotTests(unittest.TestCase):
         self.assertEqual(kinds['stage1'], ['hero'] + ['counted'] * 6)
         # Six Baby Dragon camps that lived through stage 1 (dark blue headers) and two new ones (magenta).
         self.assertEqual(kinds['stage2'], ['counted'] * 8)
+
+    def test_raged_barbarian_camps_get_one_tap_per_unit_on_their_spread_point(self):
+        root = Path(bot.__file__).parent
+        config, _, _ = self.bundled()
+        templates = bot.load_digit_templates(root, config['digits'])
+        bar = cv2.imread(str(root / 'fixtures' / 'builder-barbarian-bar.png'))
+        auto = {'bar': [0, 0, bar.shape[1], bar.shape[0]], 'points': [[10, 10], [20, 20]]}
+        hero, ability, camps, abilities = bot.camp_plan(bar, auto, templates=templates)
+        # Six '4x' camps, each card followed by four taps on its point; the Battle Machine apart on the deploy point.
+        self.assertEqual((hero['count'], ability['tap_only']), (1, True))
+        self.assertEqual(camps['sizes'], [4] * 6)
+        self.assertEqual(len(abilities['slots']), 6)
+        device = Device(self.frames, 'builder_battle')
+        device.tap = lambda point: device.inputs.append(tuple(point))
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.deploy_card({'deploy': [5, 50]}, {**camps, 'slots': camps['slots'][:2]}, {'builder_battle'},
+                           {'builder_result'})
+        first, second = (tuple(slot) for slot in camps['slots'][:2])
+        self.assertEqual(device.inputs, [first, *[(10, 10)] * 4, second, *[(20, 20)] * 4])
 
     def test_builder_camps_are_tapped_in_one_go(self):
         device = Device(self.frames, 'builder_battle')

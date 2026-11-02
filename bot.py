@@ -1260,6 +1260,9 @@ def card_kind(image: np.ndarray, region: list, card: tuple, camps: bool = False)
         # Stage 2 shows the camps that lived through stage 1 under a dark blue header instead; like every troop card,
         # and unlike a hero's, they still carry their white slot number top left.
         number = int(np.all(image[y + 2:y + 20, left + 2:left + 26] > 215, axis=2).sum())
+        # A camp of several units (Raged Barbarians) shows an 'Nx' label top right instead, one unit per tap.
+        if int(np.all(image[y + 2:y + 20, right - 40:right - 2] > 215, axis=2).sum()) >= BAR_LABEL_WHITE:
+            return 'sized'
         return 'counted' if float(magenta.mean()) >= BAR_CAMP_HEADER or number >= BAR_CAMP_NUMBER else 'hero'
     label = image[y + 2:y + 20, right - 40:right - 2]
     if int(np.all(label > 215, axis=2).sum()) >= BAR_LABEL_WHITE:
@@ -1285,26 +1288,31 @@ def card_groups(cards: list) -> list:
     return groups
 
 
-def camp_plan(image: np.ndarray, auto: dict, stack: bool = False) -> list:
+def camp_plan(image: np.ndarray, auto: dict, stack: bool = False, templates: dict | None = None) -> list:
     """Builder Base deploy order for the cards on screen, left to right: a hero (Battle Machine, Battle Copter)
     dropped at the deploy point then its ability, and each troop card tapped once at the next spread point. One tap
     deploys the whole camp and its card stays coloured to show the camp's health, so a card is never held or tapped
-    until grey; the Builder Base has no spells. The heroes go first, then every camp in one go, each card followed
-    by its point; with stack every camp lands on the deploy point, as for Witches. A while later every troop card
-    is tapped once more for its ability."""
+    until grey; the Builder Base has no spells. A camp of several units ('Nx', Raged Barbarians) takes one tap per
+    unit on its point instead. The heroes go first, then every camp in one go, each card followed by its point; with
+    stack every camp lands on the deploy point, as for Witches. A while later every troop card is tapped once more
+    for its ability."""
     region, points = auto['bar'], auto['points']
     middle = region[1] + region[3] // 2
-    heroes, camps = [], []
+    heroes, camps, sizes = [], [], []
     for card in bar_cards(image, region):
         slot = [(card[0] + card[1]) // 2, middle]
-        if card_kind(image, region, card, camps=True) == 'counted':
-            camps.append(slot)
-        else:
+        kind = card_kind(image, region, card, camps=True)
+        if kind == 'hero':
             heroes += [{'slot': slot, 'count': 1}, {'slot': slot, 'count': 1, 'tap_only': True}]
-    spots = None if stack else [points[index % len(points)] for index in range(len(camps))]
+            continue
+        camps.append(slot)
+        sizes.append(card_count(image, region, card, templates, inside=True) if kind == 'sized' and templates else 1)
     if not camps:
         return heroes
-    return heroes + [{'slots': camps, 'camps': True, 'points': spots},
+    # A label that did not read takes the largest size read on the other cards; spare taps go to the next card.
+    sizes = [size or max(filter(None, sizes), default=1) for size in sizes]
+    spots = None if stack else [points[index % len(points)] for index in range(len(camps))]
+    return heroes + [{'slots': camps, 'camps': True, 'points': spots, 'sizes': sizes},
                      {'slots': camps, 'tap_only': True, 'wait': ABILITY_WAIT_SECONDS}]
 
 
@@ -1319,17 +1327,21 @@ def earned_stars(image: np.ndarray, slots: list) -> int:
     return won
 
 
-def card_count(image: np.ndarray, bar: list, card: tuple, templates: dict) -> int | None:
-    """The 'xN' count of a troop or spell card, or None when it does not read cleanly."""
-    top = bar[1] - CARD_LABEL_ABOVE
+def card_count(image: np.ndarray, bar: list, card: tuple, templates: dict, inside: bool = False) -> int | None:
+    """The 'xN' count of a Home Village troop or spell card, whose label rises above the bar, or with inside the
+    'Nx' size of a Builder Base camp, labelled within the card's top; None when it does not read cleanly."""
+    top = bar[1] if inside else bar[1] - CARD_LABEL_ABOVE
     label = image[top:top + CARD_LABEL_HEIGHT, card[0] + CARD_LABEL_LEFT:card[1] - 2]
     try:
         found = [classify(glyph, templates) for glyph in glyphs(label)]
     except BotError:
         return None
-    if len(found) < 2 or found[0] is not None or None in found[1:]:
+    # The unread glyph is the 'x': first on Home Village cards, last on Builder Base camps.
+    x = found[-1:] if inside else found[:1]
+    digits = (found[:-1] if inside else found[1:]) if x == [None] else []
+    if not digits or None in digits:
         return None
-    return int(''.join(found[1:]))
+    return int(''.join(digits))
 
 
 def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = False,
@@ -1341,7 +1353,7 @@ def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = F
     with quake the spells land four on each 'quake' pin in turn. With spread 'points' it is the Builder Base order
     instead."""
     if 'points' in auto:
-        return camp_plan(image, auto, stack)
+        return camp_plan(image, auto, stack, templates)
     region = auto['bar']
     middle = region[1] + region[3] // 2
     found = bar_cards(image, region)
@@ -1983,7 +1995,9 @@ class Bot:
             # Every Builder Base camp in one go, each card then its point (all on the deploy point when stacked).
             if self.live:
                 spots = troop['points'] or [screen['deploy']] * len(troop['slots'])
-                self.device.tap_many([tap for slot, spot in zip(troop['slots'], spots) for tap in (slot, spot)])
+                sizes = troop.get('sizes') or [1] * len(troop['slots'])
+                self.device.tap_many([tap for slot, spot, size in zip(troop['slots'], spots, sizes)
+                                      for tap in (slot, *[spot] * size)])
             return self.checked_state(allowed, terminal)[0]
         if troop.get('abilities'):
             # Every hero dropped at the deploy point, then each one's ability, with one look at the screen after.
