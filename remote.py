@@ -61,19 +61,23 @@ RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', '
 # Option name, CLI flag, range; zero means "no limit" and is left out, except for recoveries.
 LIMITS = (('searches', '--searches', 0, 1_000_000), ('hours', '--hours', 0, 1000),
           ('minutes', '--minutes', 0, 60_000), ('max_upgrades', '--max-upgrades', 0, 100_000))
+# How each attack is fought, for every task that attacks.
+ATTACK_OPTIONS = ('surrender', 'surrender_after', 'surrender_at', 'ring', 'quake')
 TASK_OPTIONS = {
-    'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'max_recoveries', 'surrender',
-              'surrender_after'},
-    'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', 'surrender',
-             'surrender_after'},
-    'attack': {'village', 'cycles', 'searches', 'surrender', 'surrender_after'},
+    'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'max_recoveries', *ATTACK_OPTIONS},
+    'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', *ATTACK_OPTIONS},
+    'attack': {'village', 'cycles', 'searches', *ATTACK_OPTIONS},
     'dry': {'village'},
 }
-# Deploy screen -> its list of spread points: Home Village spells, Builder Base troop points.
-DEPLOY_POINTS = {'home_scout': 'spells', 'builder_scout': 'points', 'builder_stage2': 'points'}
+# Deploy editor tab -> the deploy screen it is drawn on and the pins it moves: Home Village spells, its --ring
+# troop and spell pins and --quake pins, Builder Base troop points.
+DEPLOY_POINTS = {'home_scout': ('home_scout', 'spells'), 'home_ring': ('home_scout', 'ring'),
+                 'home_spell_spread': ('home_scout', 'spell_spread'), 'home_quake': ('home_scout', 'quake'),
+                 'builder_scout': ('builder_scout', 'points'), 'builder_stage2': ('builder_stage2', 'points')}
+DEPLOY_SCREENS = tuple(dict.fromkeys(screen for screen, _ in DEPLOY_POINTS.values()))
 # The deploy editor's sample maps, one real attack screen per deploy screen.
-MAP_FILES = {f'/maps/{name}.jpg': f'maps/{name}.jpg' for name in DEPLOY_POINTS}
-MAX_DEPLOY_POINTS = {'spells': 30, 'points': 20}
+MAP_FILES = {f'/maps/{name}.jpg': f'maps/{name}.jpg' for name in DEPLOY_SCREENS}
+MAX_DEPLOY_POINTS = {'spells': 30, 'points': 20, 'ring': 30, 'spell_spread': 30, 'quake': 8}
 SNAPSHOT_SIZE, SNAPSHOT_QUALITY = (640, 360), 70
 MINIMUM_KEYS, MAX_MINIMUM = ('gold', 'elixir', 'dark'), 999_999_999
 SETUP_FIELDS = ('adb', 'ldconsole', 'serial', 'ld_index', 'touch_device')
@@ -224,6 +228,15 @@ def build_args(options: dict) -> list[str]:
             args += ['--surrender-after', str(after)]
     elif 'surrender_after' in options:
         raise CommandRefused('Pilihan surrender_after hanya bersama surrender')
+    for flag in ('ring', 'quake'):
+        value = options.get(flag, False)
+        if not isinstance(value, bool):
+            raise CommandRefused(f'Pilihan {flag} harus ya/tidak')
+        if value:
+            args.append(f'--{flag}')
+    surrender_at = whole(options, 'surrender_at', 1, 99)
+    if surrender_at:
+        args += ['--surrender-at', str(surrender_at)]
     return args + ['--live']
 
 
@@ -253,18 +266,18 @@ class DeployPoints:
     def read(self) -> dict:
         config = self.config()
         screens = {}
-        for name, kind in DEPLOY_POINTS.items():
+        for tab, (name, kind) in DEPLOY_POINTS.items():
             screen = config['screens'].get(name, {})
             auto = screen.get('auto', {})
             if 'deploy' in screen and kind in auto:
-                screens[name] = {'kind': kind, 'deploy': screen['deploy'], 'points': auto[kind], 'bar': auto['bar']}
+                screens[tab] = {'kind': kind, 'deploy': screen['deploy'], 'points': auto[kind], 'bar': auto['bar']}
         return {'resolution': config['resolution'], 'screens': screens}
 
     def snapshots(self) -> list[dict]:
         """The last frame bot.py saved on each deploy screen, small enough for one relay message."""
         import cv2
         shots = []
-        for name in DEPLOY_POINTS:
+        for name in DEPLOY_SCREENS:
             path = self.captures / f'deploy-{name}.jpg'
             # A screen the bot has not attacked on yet has no frame; the dashboard shows its bundled map.
             image = cv2.imread(str(path)) if path.is_file() else None
@@ -280,12 +293,12 @@ class DeployPoints:
         if not isinstance(screen, str) or screen not in DEPLOY_POINTS:
             raise CommandRefused('Layar deploy tidak dikenal')
         config = self.config()
-        kind = DEPLOY_POINTS[screen]
-        width, bottom = config['resolution'][0], config['screens'][screen]['auto']['bar'][1]
+        name, kind = DEPLOY_POINTS[screen]
+        width, bottom = config['resolution'][0], config['screens'][name]['auto']['bar'][1]
         if not isinstance(points, list) or not 1 <= len(points) <= MAX_DEPLOY_POINTS[kind]:
             raise CommandRefused(f'Jumlah titik harus 1..{MAX_DEPLOY_POINTS[kind]}')
         moved = {'deploy': pin(deploy, width, bottom), 'auto': {kind: [pin(point, width, bottom) for point in points]}}
-        save_local(self.config_path, {'screens': {screen: moved}}, self.root, 'Titik deploy')
+        save_local(self.config_path, {'screens': {name: moved}}, self.root, 'Titik deploy')
 
 
 def save_local(config_path: Path, changes: dict, root: Path, what: str) -> None:

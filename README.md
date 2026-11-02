@@ -238,6 +238,9 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded. `0` means no limit. |
 | `--surrender home\|builder\|both` | off | Give up a battle in these villages that is still running `--surrender-after` seconds after the troops are deployed: taps **Menyerah**/**Akhiri Serangan**, then **Oke**. In the Builder Base it counts per stage, so giving up stage 1 skips stage 2. |
 | `--surrender-after N` | `60` | Battle seconds, 1–120. On its own (without `--surrender`) it turns surrendering on in both villages. The battle clock runs at normal speed until its last minute (when the 4x button appears), so past 120 there is little left to save. |
+| `--surrender-at P` | off | Home Village: surrender once the battle's **Total Kerusakan** reads P percent (1–99) twice in a row, checked during the deploy too, so the rest of the army stays home. Works with `--surrender-after`; whichever comes first. |
+| `--ring` | off | Home Village fast attack: every hero dropped at `D` then each ability, the siege machine, then each troop card spread round the map-edge ring pins, exactly the `xN` count read from the card (one tap at a time when it does not read), then the spells over the middle of the base. |
+| `--quake` | off | Home Village: the spells go four on each quake pin in turn (four earthquakes break the walls there), all in one go when the card count reads. |
 | `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 | `--agent` | off | Run no task: show the device's API key and wait for **Start** from the web dashboard. |
@@ -303,7 +306,9 @@ connects and drawn over a real attack screen of each (`web/maps/`), or over the 
 that deploy screen on this PC (taken while attacking, kept in `captures/`). Drag pins to
 move them, add or remove numbered pins, and save: `D` is the deploy point (troops, siege and heroes; the Battle
 Machine/Copter), the numbered pins are the Home Village spell points (rounds of front, left, right) or the Builder
-Base points, one per troop card. Pins cannot go on the card bar. The device checks them like any calibration,
+Base points, one per troop card. Three more Home Village tabs move the `--ring` pins round the map edge (troops),
+the spell pins over the middle of the base (skeletons, `--ring` without `--quake`) and the `--quake` pins on the
+walls at the base top, right, bottom and left. Pins cannot go on the card bar. The device checks them like any calibration,
 writes them to `config.local.json` (the previous one stays as `config.local.json.bak`; `config.json` is never
 rewritten), and they apply at the next Start.
 
@@ -587,7 +592,7 @@ first error instead of recovering.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (309 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (318 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans, popups, the game update, recovery, the
 until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool

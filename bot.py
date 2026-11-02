@@ -114,6 +114,13 @@ BAR_CARD_STD, BAR_LABEL_WHITE, BAR_WARDEN_GREEN = 18, 100, 200
 BAR_CARD_WIDTH, BAR_CARD_COLOUR = (65, 98), 0.43
 BAR_CAMP_HEADER, BAR_SETTLE_SECONDS = 0.5, 3
 SPELL_TAPS, SPELL_ROUND = 30, 3
+# --ring: every troop card is tapped round the map-edge pins until it greys out; with its 'xN' count read, exactly
+# that many taps go out RING_BURST at a time, otherwise one at a time.
+RING_TAPS, RING_MAX_POINTS, RING_BURST = 60, 30, 20
+# The 'xN' count sits at the top right of a troop or spell card, a little above the card bar.
+CARD_LABEL_ABOVE, CARD_LABEL_HEIGHT, CARD_LABEL_LEFT = 10, 26, 25
+# --quake: four earthquakes on one spot open the walls there; the pins sit on the base's top, right, bottom and left.
+QUAKE_PER_POINT, QUAKE_MAX_POINTS = 4, 8
 LAUNCH_ATTEMPTS = 4
 # How long a wait sees only unknown frames before it asks whether the game is still in front.
 GAME_CHECK_SECONDS = 10
@@ -158,6 +165,10 @@ class UnknownScreen(BotError):
 
 class GameClosed(BotError):
     """The game left the screen (crashed or killed by Android) during a wait; recovery opens it again."""
+
+
+class DamageReached(BotError):
+    """The home battle reached --surrender-at while troops were still being deployed; the rest stay home."""
 
 
 class WaitTimeout(BotError):
@@ -468,6 +479,14 @@ def validate_auto(name: str, auto: dict, resolution: list) -> None:
     hold = auto.get('hold')
     if not isinstance(hold, (int, float)) or not 0 < hold <= MAX_HOLD_SECONDS:
         raise BotError(f'{name}: auto hold tidak valid')
+    for key, most in (('ring', RING_MAX_POINTS), ('spell_spread', RING_MAX_POINTS), ('quake', QUAKE_MAX_POINTS)):
+        pins = auto.get(key)
+        if pins is None:
+            continue
+        if not isinstance(pins, list) or not 1 <= len(pins) <= most:
+            raise BotError(f'{name}: auto {key} perlu 1..{most} titik')
+        for location in pins:
+            point(location, resolution, f'auto {key}')
 
 
 def load_digit_templates(root: Path, folder: str) -> dict:
@@ -884,15 +903,30 @@ def wall_order(choice: str, first: str) -> tuple:
     return tuple(sorted(villages, key=lambda village: village != first))
 
 
-def validate_surrender(config: dict, villages: tuple) -> None:
-    """--surrender taps the battle's surrender button and the confirm dialog; both need tap points."""
+def validate_surrender(config: dict, villages: tuple, damage: bool = False) -> None:
+    """--surrender taps the battle's surrender button and the confirm dialog; both need tap points, and
+    --surrender-at reads the damage percent from the home battle's 'damage' region."""
     screens = config['screens']
     missing = [state for village in villages for state in SURRENDER_STATES[village]
                if 'surrender' not in screens.get(state, {}).get('actions', {})]
     if villages and 'confirm' not in screens.get('surrender_confirm', {}).get('actions', {}):
         missing.append('surrender_confirm')
+    if damage and 'damage' not in screens.get('home_battle', {}):
+        missing.append('home_battle.damage')
+    if damage and not config.get('digits'):
+        missing.append('digits')
     if missing:
         raise BotError(f'--surrender butuh kalibrasi: {", ".join(missing)}')
+    if damage:
+        rectangle(screens['home_battle']['damage'], config['resolution'])
+
+
+def validate_ring(config: dict, ring: bool, quake: bool) -> None:
+    """--ring and --quake use the home deploy plan read from the card bar, with its ring or quake pins."""
+    auto = config['screens'].get('home_scout', {}).get('auto', {})
+    for wanted, key in ((ring, 'ring'), (quake, 'quake')):
+        if wanted and key not in auto:
+            raise BotError(f'--{key} butuh titik home_scout.auto.{key}; atur di editor titik deploy dashboard')
 
 
 def validate_walls(config: dict, root: Path, villages: tuple) -> None:
@@ -1204,11 +1238,27 @@ def camp_plan(image: np.ndarray, auto: dict) -> list:
     return plan
 
 
-def auto_plan(image: np.ndarray, auto: dict) -> list:
+def card_count(image: np.ndarray, bar: list, card: tuple, templates: dict) -> int | None:
+    """The 'xN' count of a troop or spell card, or None when it does not read cleanly."""
+    top = bar[1] - CARD_LABEL_ABOVE
+    label = image[top:top + CARD_LABEL_HEIGHT, card[0] + CARD_LABEL_LEFT:card[1] - 2]
+    try:
+        found = [classify(glyph, templates) for glyph in glyphs(label)]
+    except BotError:
+        return None
+    if len(found) < 2 or found[0] is not None or None in found[1:]:
+        return None
+    return int(''.join(found[1:]))
+
+
+def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = False,
+              templates: dict | None = None) -> list:
     """Deploy order for the cards on screen: every troop held at the deploy point until empty, the siege machine,
     the Grand Warden then the other heroes each followed by its ability, and the spells over the given points,
-    listed as rounds of front, left and right, each round further in. With spread 'points' it is the Builder Base
-    order instead."""
+    listed as rounds of front, left and right, each round further in. With ring the heroes and siege go first, the
+    troops are spread round the map-edge 'ring' pins and the spells over the middle of the base ('spell_spread');
+    with quake the spells land four on each 'quake' pin in turn. With spread 'points' it is the Builder Base order
+    instead."""
     if 'points' in auto:
         return camp_plan(image, auto)
     region = auto['bar']
@@ -1220,20 +1270,32 @@ def auto_plan(image: np.ndarray, auto: dict) -> list:
         slot = [(card[0] + card[1]) // 2, middle]
         if kind == 'counted':
             spell = index > split if split is not None else card_is_spell(image, region, card)
-            (spells if spell else troops).append(slot)
+            count = card_count(image, region, card, templates) if templates and (ring or quake) else None
+            (spells if spell else troops).append((slot, count))
         elif kind == 'siege':
             siege.append(slot)
         elif kind == 'warden':
             heroes.insert(0, slot)
         else:
             heroes.append(slot)
-    plan = [{'slot': slot, 'count': 1, 'hold': auto['hold'], 'until_empty': True} for slot in troops]
-    plan += [{'slot': slot, 'count': 1} for slot in siege]
-    for slot in heroes:
-        plan += [{'slot': slot, 'count': 1}, {'slot': slot, 'count': 1, 'tap_only': True}]
-    points = auto['spells']
+    siege_steps = [{'slot': slot, 'count': 1} for slot in siege]
+    if ring:
+        # Exactly the card's count goes out; unread, one tap at a time, as taps left in a burst after a card
+        # empties go to the card the game selects next.
+        troop_steps = [{'slot': slot, 'count': count or RING_TAPS, 'until_empty': True, 'points': auto['ring'],
+                        'burst': RING_BURST if count else 1} for slot, count in troops]
+        plan = ([{'slots': heroes, 'abilities': True}] if heroes else []) + siege_steps + troop_steps
+    else:
+        troop_steps = [{'slot': slot, 'count': 1, 'hold': auto['hold'], 'until_empty': True} for slot, _ in troops]
+        plan = troop_steps + siege_steps + [step for slot in heroes for step in (
+            {'slot': slot, 'count': 1}, {'slot': slot, 'count': 1, 'tap_only': True})]
+    if quake:
+        quakes = [location for location in auto['quake'] for _ in range(QUAKE_PER_POINT)]
+        return plan + [{'slot': slot, 'count': count or SPELL_TAPS, 'until_empty': True, 'points': quakes,
+                        'burst': count or 1} for slot, count in spells]
+    points = auto.get('spell_spread', auto['spells']) if ring else auto['spells']
     # Each spell card starts one round (front, left, right) after the previous one, so no two land on one spot.
-    for index, slot in enumerate(spells):
+    for index, (slot, _) in enumerate(spells):
         start = index * SPELL_ROUND % len(points)
         plan.append({'slot': slot, 'count': SPELL_TAPS, 'until_empty': True, 'points': points[start:] + points[:start]})
     return plan
@@ -1268,6 +1330,15 @@ def read_number(image: np.ndarray, templates: dict, min_score: float = DIGIT_MIN
     if None in digits:
         raise BotError('Angka loot meragukan; hentikan tanpa input')
     return int(''.join(digits))
+
+
+def read_percent(image: np.ndarray, templates: dict) -> int:
+    """'NN%': every glyph a digit but the percent sign last; a digit caught mid-animation fails the whole read
+    rather than giving a shorter number."""
+    found = [classify(glyph, templates) for glyph in glyphs(image)]
+    if not 2 <= len(found) <= 4 or found[-1] is not None or None in found[:-1]:
+        raise BotError('Persen kerusakan tidak terbaca')
+    return integer(int(''.join(found[:-1])), 0, 100, 'Persen kerusakan')
 
 
 def read_fraction(image: np.ndarray, templates: dict) -> tuple[int, int]:
@@ -1318,9 +1389,13 @@ class Bot:
                  reader: Callable | None = None, timeout: float = 240, poll: float = 0.05,
                  emulator: 'Emulator | None' = None, goals: dict | None = None, walls: tuple = (),
                  minutes: int = 0, max_upgrades: int = 0, surrender: tuple = (),
-                 surrender_after: float = SURRENDER_DEFAULT_SECONDS) -> None:
+                 surrender_after: float = SURRENDER_DEFAULT_SECONDS, surrender_at: int = 0, ring: bool = False,
+                 quake: bool = False) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
-        self.surrender, self.surrender_after = surrender, surrender_after
+        self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
+        self.ring, self.quake = ring, quake
+        self.digit_templates: dict | None = None
+        self.damage_last: int | None = None
         self.goals = goals if goals is not None else parse_goals(config, None, None, 'builder')
         self.wall_order, self.walls_done, self.walls_skipped = walls, set(), set()
         self.stop_at = time.monotonic() + minutes * 60 if minutes else None
@@ -1359,7 +1434,8 @@ class Bot:
         program = executable(self.config.get('tesseract'), 'Tesseract')
         return {key: ocr_resource(crop(image, screen['loot'][key]), program) for key in active}
 
-    def wait(self, targets: set, allowed: set, timeout: float | None = None) -> str:
+    def wait(self, targets: set, allowed: set, timeout: float | None = None,
+             give_up: Callable[[str, np.ndarray], bool] | None = None) -> str:
         deadline = time.monotonic() + (self.timeout if timeout is None else timeout)
         sped_up = False
         unknown_since = None
@@ -1376,7 +1452,7 @@ class Bot:
                 time.sleep(self.poll)
                 continue
             unknown_since = None
-            if state in targets:
+            if state in targets or (give_up and give_up(state, image)):
                 return state
             if state == 'update_offer':
                 self.update_game()
@@ -1417,22 +1493,52 @@ class Bot:
         raise WaitTimeout(f'Timeout menunggu layar {"/".join(sorted(targets))}; tidak mencoba input pemulihan')
 
     def wait_battle(self, village: str, targets: set, allowed: set) -> str:
-        """Wait for the battle to end; with --surrender, give it up once it has run surrender_after seconds."""
-        if village not in self.surrender:
+        """Wait for the battle to end; with --surrender give it up once it has run surrender_after seconds, with
+        --surrender-at once the home battle's damage has reached that percent."""
+        deadline = time.monotonic() + self.surrender_after if village in self.surrender else None
+        limit = self.surrender_at if village == 'home' else 0
+        if deadline is None and not limit:
             return self.wait(targets, allowed)
-        try:
-            return self.wait(targets, allowed, self.surrender_after)
-        except UnexpectedScreen:
-            raise
-        except WaitTimeout:
-            state = self.current_screen()
+        reason = f'kerusakan mencapai {limit}%'
+
+        def give_up(state: str, image: np.ndarray) -> bool:
+            nonlocal reason
             if state not in SURRENDER_STATES[village]:
-                raise
-        LOG.info('Menyerah setelah %s detik battle', self.surrender_after)
+                return False
+            if deadline is not None and time.monotonic() >= deadline:
+                reason = f'setelah {self.surrender_after} detik battle'
+                return True
+            return bool(limit) and state == 'home_battle' and self.damage_reached(image)
+
+        state = self.wait(targets, allowed, give_up=give_up)
+        if state in targets:
+            return state
+        LOG.info('Menyerah: %s', reason)
         state = self.tap_until(state, 'surrender', {'surrender_confirm'} | targets, TAP_RETRY_SECONDS * TAP_RETRIES)
         if state in targets:
             return state
         return self.tap_until('surrender_confirm', 'confirm', targets, TAP_RETRY_SECONDS * TAP_RETRIES)
+
+    def damage_reached(self, image: np.ndarray) -> bool:
+        """--surrender-at: two readings in a row at or over it, so one misread number never ends a battle early."""
+        damage = self.read_damage(image)
+        reached = damage is not None and self.damage_last is not None and min(damage, self.damage_last) >= \
+            self.surrender_at
+        self.damage_last = damage
+        return reached
+
+    def digits(self) -> dict | None:
+        """The digit templates, read once; None without any configured."""
+        if self.digit_templates is None and self.config.get('digits'):
+            self.digit_templates = load_digit_templates(self.root, self.config['digits'])
+        return self.digit_templates
+
+    def read_damage(self, image: np.ndarray) -> int | None:
+        """The home battle's 'Total Kerusakan' percent, or None while it cannot be read."""
+        try:
+            return read_percent(crop(image, self.config['screens']['home_battle']['damage']), self.digits())
+        except BotError:
+            return None
 
     def tap_until(self, state: str, name: str, targets: set, timeout: float, retries: int = TAP_RETRIES) -> str:
         """Tap a menu button and wait; repeat the tap while the same menu is still shown (a lost tap)."""
@@ -1635,7 +1741,8 @@ class Bot:
         if 'auto' in screen:
             # Read the card bar before any card is used; the plan follows the army that is trained.
             plan = self.bar_plan(screen['auto'], allowed)
-            LOG.info('Rencana deploy dari bar: %s kartu', len({tuple(troop['slot']) for troop in plan}))
+            cards = {tuple(slot) for troop in plan for slot in troop.get('slots') or [troop['slot']]}
+            LOG.info('Rencana deploy dari bar: %s kartu', len(cards))
         else:
             plan = screen['troops']
         for troop in plan:
@@ -1666,7 +1773,7 @@ class Bot:
         def read(image: np.ndarray) -> list:
             if self.detector.detect(image) not in allowed:
                 raise BotError('Bar kartu dibaca di luar layar deploy')
-            return auto_plan(image, auto)
+            return auto_plan(image, auto, self.ring, self.quake, self.digits())
         return self.read_stable(read, BAR_SETTLE_SECONDS if self.poll else 0)
 
     def hold_until_empty(self, troop: dict, location: list, allowed: set, terminal: set,
@@ -1708,10 +1815,19 @@ class Bot:
                     raise
         if state not in allowed | terminal:
             raise UnexpectedScreen(f'Deploy dibatalkan: layar berubah menjadi {state}')
+        if state == 'home_battle' and self.surrender_at and self.damage_reached(image):
+            raise DamageReached(f'Kerusakan mencapai {self.surrender_at}% saat deploy; sisa pasukan tidak dikerahkan')
         return state, image
 
     def deploy_card(self, screen: dict, troop: dict, allowed: set, terminal: set) -> str:
         """Select the card and tap in bursts; the screen is checked after every burst."""
+        if troop.get('abilities'):
+            # Every hero dropped at the deploy point, then each one's ability, with one look at the screen after.
+            if self.live:
+                deploy = screen['deploy']
+                self.device.tap_many([tap for slot in troop['slots'] for tap in (slot, deploy)])
+                self.device.tap_many(troop['slots'])
+            return self.checked_state(allowed, terminal)[0]
         if troop.get('tap_only'):
             if self.live:
                 self.device.tap_many([troop['slot']])
@@ -1732,7 +1848,7 @@ class Bot:
             return state
         remaining, sent, state = troop['count'], 0, ''
         while remaining > 0:
-            size = min(DEPLOY_BURST, remaining) if until_empty else remaining
+            size = min(troop.get('burst', DEPLOY_BURST), remaining) if until_empty else remaining
             batch = [points[(sent + i) % len(points)] for i in range(size)]
             if self.live:
                 self.device.tap_many(([troop['slot']] if sent == 0 else []) + batch)
@@ -1794,7 +1910,11 @@ class Bot:
             # Without gold for another search, or at the search limit, the base on screen is attacked instead of
             # stopping; its loot refills the gold.
             if passes or broke or attempt == searches:
-                self.deploy('home_scout', {'home_scout', 'home_battle'})
+                self.damage_last = None
+                try:
+                    self.deploy('home_scout', {'home_scout', 'home_battle'})
+                except DamageReached as exc:
+                    LOG.info('%s', exc)
                 if self.wait_battle('home', {'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':
                     LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
                 else:
@@ -2759,6 +2879,14 @@ def main() -> int:
     parser.add_argument('--surrender-after', type=int,
                         help=f'Detik battle setelah deploy selesai (1..{SURRENDER_MAX_SECONDS}, default '
                              f'{SURRENDER_DEFAULT_SECONDS}); tanpa --surrender berlaku untuk kedua desa')
+    parser.add_argument('--surrender-at', type=int,
+                        help='Desa asal: menyerah otomatis saat persen kerusakan mencapai angka ini (1..99)')
+    parser.add_argument('--ring', action='store_true',
+                        help='Desa asal: hero (langsung ability) dan siege dulu, lalu pasukan disebar keliling pinggir '
+                             'peta (titik cincin di editor deploy)')
+    parser.add_argument('--quake', action='store_true',
+                        help='Desa asal: spell (gempa) 4 per titik di titik gempa atas, kanan, bawah, kiri base '
+                             '(editor deploy), bukan disebar')
     parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
     parser.add_argument('--agent', action='store_true',
                         help='Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard')
@@ -2796,6 +2924,7 @@ def main() -> int:
         # Off unless asked for; --surrender-after on its own turns it on in both villages.
         chosen = args.surrender or ('both' if args.surrender_after is not None else None)
         surrender = VILLAGES if chosen == 'both' else tuple(filter(None, [chosen]))
+        surrender_at = 0 if args.surrender_at is None else integer(args.surrender_at, 1, 99, 'surrender_at')
         if args.dark and (not args.until_full or args.builder is not None or args.home is not None):
             raise BotError('--dark hanya untuk --until-full tanpa --builder/--home (atau pakai --home gold,elixir,dark)')
         if not (args.worker or args.no_remote):
@@ -2811,7 +2940,9 @@ def main() -> int:
         villages = walls or tuple(goals or ())
         mode = (villages[0] if len(villages) == 1 else 'both') if villages else args.mode
         validate_config(config, args.config.parent, mode)
-        validate_surrender(config, surrender)
+        validate_surrender(config, tuple(dict.fromkeys(surrender + (('home',) if surrender_at else ()))),
+                           damage=bool(surrender_at))
+        validate_ring(config, args.ring, args.quake)
         if walls:
             if not args.live:
                 raise BotError('--walls butuh --live')
@@ -2827,7 +2958,7 @@ def main() -> int:
             check_adb_debugging(emulator.console, emulator.index)
         runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals, walls=walls,
                      minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
-                     surrender_after=surrender_after)
+                     surrender_after=surrender_after, surrender_at=surrender_at, ring=args.ring, quake=args.quake)
         if walls:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif until_full and args.live:

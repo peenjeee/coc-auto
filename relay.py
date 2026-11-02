@@ -46,7 +46,7 @@ class Relay:
         self.heartbeat_seconds, self.state_seconds = HEARTBEAT_SECONDS, STATE_EVERY_SECONDS
         # Lines wait here only while connected; a dashboard that comes later asks for the history instead.
         self.lines: deque = deque(maxlen=remote.HISTORY_LINES)
-        self.shots: deque = deque(maxlen=len(remote.DEPLOY_POINTS))
+        self.shots: deque = deque(maxlen=len(remote.DEPLOY_SCREENS))
         self.state_changed = True
         self.connected: bool | None = None
         self.last_hello = 0.0

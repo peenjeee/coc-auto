@@ -284,9 +284,14 @@ function readOptions() {
   if (['walls', 'farm', 'attack'].includes(task) && number('searches')) options.searches = number('searches');
   if (task === 'attack' || task === 'dry') options.village = data.get('village');
   if (task === 'attack') options.cycles = Math.max(1, number('cycles', 1));
-  if (['walls', 'farm', 'attack'].includes(task) && data.get('surrender')) {
-    options.surrender = data.get('surrender');
-    options.surrender_after = number('surrender_after', 60);
+  if (['walls', 'farm', 'attack'].includes(task)) {
+    if (data.get('surrender')) {
+      options.surrender = data.get('surrender');
+      options.surrender_after = number('surrender_after', 60);
+    }
+    if (number('surrender_at')) options.surrender_at = number('surrender_at');
+    if (data.get('ring')) options.ring = true;
+    if (data.get('quake')) options.quake = true;
   }
   return options;
 }
@@ -313,6 +318,9 @@ function previewArgs(options) {
   }
   if (options.max_recoveries !== undefined) args.push('--max-recoveries', String(options.max_recoveries));
   if (options.surrender) args.push('--surrender', options.surrender, '--surrender-after', String(options.surrender_after));
+  if (options.ring) args.push('--ring');
+  if (options.quake) args.push('--quake');
+  if (options.surrender_at) args.push('--surrender-at', String(options.surrender_at));
   return [...args, '--live'];
 }
 

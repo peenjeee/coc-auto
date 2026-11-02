@@ -138,6 +138,20 @@ class DeployPointsTests(unittest.TestCase):
                          ('spells', self.screen('home_scout')['deploy'], self.screen('home_scout')['auto']['spells']))
         self.assertEqual((builder['kind'], builder['bar']), ('points', self.screen('builder_stage2')['auto']['bar']))
 
+    def test_the_ring_and_quake_pins_are_their_own_tabs_on_the_home_map(self):
+        data = self.points.read()
+        auto = self.screen('home_scout')['auto']
+        ring, around = data['screens']['home_ring'], data['screens']['home_spell_spread']
+        quake = data['screens']['home_quake']
+        self.assertEqual([(tab['kind'], tab['points']) for tab in (ring, around, quake)],
+                         [('ring', auto['ring']), ('spell_spread', auto['spell_spread']), ('quake', auto['quake'])])
+        self.points.write('home_quake', quake['deploy'], [[600, 300], [700, 300]])
+        moved = self.screen('home_scout')['auto']
+        self.assertEqual((moved['quake'], moved['spells'], moved['ring']),
+                         ([[600, 300], [700, 300]], auto['spells'], auto['ring']))
+        with self.assertRaises(remote.CommandRefused):
+            self.points.write('home_quake', quake['deploy'], [[600, 300]] * 9)
+
     def test_moved_pins_go_to_the_local_config_and_the_shared_one_is_kept(self):
         import bot
         shared = self.config.read_text(encoding='utf-8')
@@ -542,6 +556,11 @@ class BuildArgsTests(unittest.TestCase):
         self.assertEqual(remote.build_args({'task': 'attack', 'village': 'home', 'surrender': 'both'}),
                          ['--mode', 'home', '--cycles', '1', '--surrender', 'both', '--live'])
 
+    def test_the_ring_attack_is_passed_on(self):
+        self.assertEqual(remote.build_args({'task': 'farm', 'ring': True, 'quake': True, 'surrender_at': 50}),
+                         ['--until-full', '--ring', '--quake', '--surrender-at', '50', '--live'])
+        self.assertEqual(remote.build_args({'task': 'farm', 'ring': False, 'quake': False}), ['--until-full', '--live'])
+
     def test_anything_outside_the_commands_is_refused(self):
         for options in ({'task': 'shell'}, {'task': 'walls', 'walls': 'moon'}, {'task': 'walls', 'hours': -1},
                         {'task': 'farm', 'home': ['gems']}, {'task': 'walls', 'walls': 'home', 'extra': '--x'},
@@ -550,7 +569,8 @@ class BuildArgsTests(unittest.TestCase):
                         {'task': 'farm', 'dark': True, 'home': ['gold']}, {'task': 'walls', 'walls': 'home', 'dark': True},
                         {'task': 'farm', 'surrender': 'moon'}, {'task': 'farm', 'surrender_after': 30},
                         {'task': 'farm', 'surrender': 'home', 'surrender_after': 121},
-                        {'task': 'dry', 'village': 'home', 'surrender': 'home'}):
+                        {'task': 'dry', 'village': 'home', 'surrender': 'home'}, {'task': 'farm', 'ring': 'yes'},
+                        {'task': 'farm', 'surrender_at': 100}, {'task': 'dry', 'village': 'home', 'quake': True}):
             with self.subTest(options=options), self.assertRaises(remote.CommandRefused):
                 remote.build_args(options)
 

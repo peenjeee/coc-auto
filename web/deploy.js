@@ -1,12 +1,18 @@
 // Deploy pin editor: the device's deploy points drawn over its last screenshot of each deploy screen. "D" is the
 // deploy point (troops, siege and heroes; the Battle Machine/Copter in the Builder Base); numbered pins are the
-// Home Village spell points (rounds of front, left, right) or the Builder Base points, one per troop card.
+// Home Village spell points (rounds of front, left, right), its --ring pins round the map edge, the spell pins over
+// the middle of the base for --ring and its --quake pins on the walls, or the Builder Base points, one per troop card.
 import { t } from './i18n.js';
 
-const SCREENS = ['home_scout', 'builder_scout', 'builder_stage2'];
+const SCREENS = ['home_scout', 'home_ring', 'home_spell_spread', 'home_quake', 'builder_scout', 'builder_stage2'];
+// The ring, spell spread and quake tabs move other pins on the same Home Village attack screen.
+const MAP_OF = { home_ring: 'home_scout', home_spell_spread: 'home_scout', home_quake: 'home_scout' };
+const mapOf = (screen) => MAP_OF[screen] || screen;
 // Maps shipped with the dashboard, taken from a real attack screen; the device's own screenshot replaces them.
-const BUNDLED_MAPS = Object.fromEntries(SCREENS.map((screen) => [screen, `maps/${screen}.jpg`]));
-const MAX_POINTS = { spells: 30, points: 20 };
+const BUNDLED_MAPS = Object.fromEntries(SCREENS.map((screen) => [screen, `maps/${mapOf(screen)}.jpg`]));
+const MAX_POINTS = { spells: 30, points: 20, ring: 30, spell_spread: 30, quake: 8 };
+const HINTS = { home_scout: 'deploy_hint_home', home_ring: 'deploy_hint_ring',
+  home_spell_spread: 'deploy_hint_spell_spread', home_quake: 'deploy_hint_quake' };
 const $ = (id) => document.getElementById(id);
 
 export class DeployEditor {
@@ -40,7 +46,7 @@ export class DeployEditor {
   image(screen, source) {
     if (!SCREENS.includes(screen) || typeof source !== 'string' || !source.startsWith('data:image/jpeg;base64,')) return;
     this.images[screen] = source;
-    if (screen === this.screen) this.render();
+    if (screen === mapOf(this.screen)) this.render();
   }
 
   show(screen) {
@@ -81,13 +87,13 @@ export class DeployEditor {
       tab.setAttribute('aria-selected', String(tab.dataset.screen === this.screen));
     }
     const screen = this.current();
-    $('deploy-hint').textContent = t(this.screen === 'home_scout' ? 'deploy_hint_home' : 'deploy_hint_builder');
+    $('deploy-hint').textContent = t(HINTS[this.screen] || 'deploy_hint_builder');
     for (const id of ['pin-add', 'pin-remove', 'deploy-save']) $(id).disabled = !screen;
     const field = $('field');
     const pins = $('pins');
     pins.textContent = '';
     const shot = $('field-shot');
-    const own = this.images[this.screen];
+    const own = this.images[mapOf(this.screen)];
     const source = own || BUNDLED_MAPS[this.screen];
     shot.hidden = !source;
     if (source) shot.src = source;

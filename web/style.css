@@ -268,8 +268,9 @@ button.ghost { background: transparent; color: var(--text-dim); }
 /* button:active nudges buttons with its own transform; a held pin keeps its centring, or it jumps on release. */
 .pin:active { cursor: grabbing; transform: translate(-50%, -50%); }
 .pin.deploy { background: var(--amber); }
-.pin.spells { background: var(--cyan); }
-.pin.points { background: var(--green); }
+.pin.spells, .pin.spell_spread { background: var(--cyan); }
+.pin.points, .pin.ring { background: var(--green); }
+.pin.quake { background: var(--red); }
 .pin.selected { outline: 2px solid #fff; outline-offset: 2px; }
 .pin:hover { color: var(--bg); border-color: #fff; }
 

@@ -361,6 +361,69 @@ class BotTests(unittest.TestCase):
         plan = bot.auto_plan(image, {'bar': [0, 100, 1000, 100], 'hold': 10, 'spells': [[50, 50]]})
         self.assertEqual([('hold' in step, 'points' in step) for step in plan], [(True, False), (False, True)])
 
+    def test_the_ring_plan_sends_heroes_first_then_spreads_troops_round_the_map(self):
+        image = self.army_bar(['troop', 'troop', 'siege', 'hero', 'warden', 'spell'])
+        ring, around, quake = [[10, 10], [20, 20], [30, 30]], [[50, 50], [60, 60]], [[70, 70], [80, 80]]
+        auto = {'bar': [0, 100, 1000, 100], 'hold': 10, 'spells': [[5, 5]], 'ring': ring, 'spell_spread': around,
+                'quake': quake}
+        centre = [54 + 97 * i for i in range(6)]
+        plan = bot.auto_plan(image, auto, ring=True)
+        # Every hero, the Warden first, goes out in one step with the abilities right after.
+        self.assertEqual(plan[0], {'slots': [[centre[4], 150], [centre[3], 150]], 'abilities': True})
+        self.assertEqual([(step['slot'][0], step.get('points')) for step in plan[1:]], [
+            (centre[2], None), (centre[0], ring), (centre[1], ring), (centre[5], around)])
+        self.assertTrue(all('hold' not in step for step in plan))
+        self.assertTrue(all(step['until_empty'] for step in plan if step.get('points')))
+        # With no count read, troops go one tap at a time, so no tap is left for the card the game selects next.
+        self.assertEqual([step.get('burst') for step in plan if step.get('points') == ring], [1, 1])
+        # Earthquakes go four on each pin in turn, with or without the ring.
+        quakes = [[70, 70]] * 4 + [[80, 80]] * 4
+        self.assertEqual(bot.auto_plan(image, auto, ring=True, quake=True)[-1]['points'], quakes)
+        self.assertEqual(bot.auto_plan(image, auto, quake=True)[-1]['points'], quakes)
+
+    def test_the_ring_plan_taps_exactly_the_count_read_from_each_card(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        templates = bot.load_digit_templates(root, config['digits'])
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[586:704] = cv2.imread(str(root / 'fixtures' / 'battle-bar-valkyrie-33-spells-11.png'))
+        auto = config['screens']['home_scout']['auto']
+        counted = [card for card in bot.bar_cards(image, auto['bar'])
+                   if bot.card_kind(image, auto['bar'], card) == 'counted']
+        self.assertEqual([bot.card_count(image, auto['bar'], card, templates) for card in counted], [33, 11])
+        plan = bot.auto_plan(image, auto, ring=True, quake=True, templates=templates)
+        troops, quakes = plan[-2], plan[-1]
+        self.assertEqual((troops['count'], troops['burst'], troops['points']), (33, bot.RING_BURST, auto['ring']))
+        # Eleven earthquakes in one go: four, four and three on the first three pins.
+        self.assertEqual((quakes['count'], quakes['burst']), (11, 11))
+        self.assertEqual(quakes['points'][:11], [auto['quake'][0]] * 4 + [auto['quake'][1]] * 4 + [auto['quake'][2]] * 3)
+
+    def test_a_ring_deploy_drops_every_hero_then_taps_the_abilities_in_one_go(self):
+        config = copy.deepcopy(self.config)
+        config['screens']['home_scout']['auto'] = {'bar': [0, 60, 160, 30], 'hold': 5, 'spells': [[40, 40]]}
+        device = Device(self.frames, 'home_battle')
+        device.tap = lambda point: device.inputs.append(tuple(point))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0, ring=True)
+        runner.bar_plan = lambda auto, allowed: [
+            {'slots': [[20, 80], [60, 80]], 'abilities': True},
+            {'slot': [100, 80], 'count': 2, 'until_empty': True, 'points': [[40, 40], [50, 30]],
+             'burst': bot.RING_BURST}]
+        self.assertIsNone(runner.deploy('home_scout', {'home_scout', 'home_battle'}))
+        self.assertEqual(device.inputs, [(20, 80), (40, 40), (60, 80), (40, 40), (20, 80), (60, 80),
+                                         (100, 80), (40, 40), (50, 30)])
+
+    def test_ring_and_quake_pins_are_checked(self):
+        config = copy.deepcopy(self.config)
+        auto = {'bar': [0, 60, 160, 30], 'hold': 5, 'spells': [[40, 40]], 'ring': [[10, 10], [150, 10]],
+                'spell_spread': [[60, 30]], 'quake': [[80, 10], [140, 40], [80, 55], [20, 40]]}
+        config['screens']['home_scout']['auto'] = auto
+        bot.validate_config(config, self.root, 'both')
+        for bad in ({'ring': []}, {'ring': [[10]]}, {'quake': [[1, 1]] * 9}, {'quake': [[999, 1]]},
+                    {'spell_spread': [[1, 999]]}):
+            config['screens']['home_scout']['auto'] = {**auto, **bad}
+            with self.subTest(bad=bad), self.assertRaises(bot.BotError):
+                bot.validate_config(config, self.root, 'both')
+
     def test_the_builder_base_plan_drops_the_machine_then_taps_each_camp_at_the_next_spread_point(self):
         image = self.army_bar(['machine', 'camp', 'camp', 'camp', 'camp'])
         auto = {'bar': [0, 100, 1000, 100], 'points': [[10, 10], [20, 20], [30, 30]]}
@@ -748,7 +811,8 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.wait({'home'}, set(), 1), 'home')
         self.assertEqual(device.inputs, [(40, 60)])
 
-    def test_surrender_gives_up_a_battle_that_runs_too_long(self):
+    def surrender_device(self):
+        """A home battle whose surrender button opens the confirm dialog, whose Oke ends it on the result screen."""
         confirm = np.random.default_rng(41).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
         for number, roi in enumerate(([5, 5, 15, 12], [130, 5, 15, 12])):
@@ -757,15 +821,51 @@ class BotTests(unittest.TestCase):
             anchors.append({'roi': roi, 'file': f'confirm-{number}.png'})
         screens = self.config['screens']
         config = {**self.config, 'screens': {
-            **screens, 'home_battle': {**screens['home_battle'], 'actions': {'surrender': [20, 70]}},
+            **screens, 'home_battle': {**screens['home_battle'], 'actions': {'surrender': [20, 70]},
+                                       'damage': [100, 70, 50, 15]},
             'surrender_confirm': {'anchors': anchors, 'actions': {'confirm': [100, 60]}}}}
         bot.validate_config(config, self.root, 'both')
-        bot.validate_surrender(config, ('home',))
-        with self.assertRaises(bot.BotError):
-            bot.validate_surrender(config, ('builder',))
         device = Device({**self.frames, 'surrender_confirm': confirm}, 'home_battle')
         moves = {(20, 70): 'surrender_confirm', (100, 60): 'home_result'}
         device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', moves[tuple(point)]))
+        return config, device
+
+    def test_surrender_at_a_damage_percent_needs_two_readings_over_it(self):
+        config, device = self.surrender_device()
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0, surrender_at=50)
+        readings = iter([30, 55, None, 55, 60])
+        runner.read_damage = lambda image: next(readings)
+        self.assertEqual(runner.wait_battle('home', {'home_result', 'home'}, {'home_scout', 'home_battle'}),
+                         'home_result')
+        self.assertEqual(device.inputs, [(20, 70), (100, 60)])
+        # Without a damage region, or digit templates to read it with, there is no percent to go by.
+        with self.assertRaises(bot.BotError):
+            bot.validate_surrender(config, ('home',), damage=True)
+        config['digits'] = 'calibration/digits'
+        bot.validate_surrender(config, ('home',), damage=True)
+        del config['screens']['home_battle']['damage']
+        with self.assertRaises(bot.BotError):
+            bot.validate_surrender(config, ('home',), damage=True)
+
+    def test_a_deploy_stops_once_the_damage_has_reached_the_limit(self):
+        config, device = self.surrender_device()
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0, surrender_at=50)
+        readings = iter([40, 51, 52])
+        runner.read_damage = lambda image: next(readings)
+        allowed = {'home_scout', 'home_battle'}
+        runner.checked_state(allowed, {'home_result'})
+        runner.checked_state(allowed, {'home_result'})
+        with self.assertRaises(bot.DamageReached):
+            runner.checked_state(allowed, {'home_result'})
+        # The Builder Base is never read for it.
+        device.state = 'builder_battle'
+        self.assertEqual(runner.checked_state({'builder_battle'}, {'builder_result'})[0], 'builder_battle')
+
+    def test_surrender_gives_up_a_battle_that_runs_too_long(self):
+        config, device = self.surrender_device()
+        bot.validate_surrender(config, ('home',))
+        with self.assertRaises(bot.BotError):
+            bot.validate_surrender(config, ('builder',))
         runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0, surrender=('home',),
                          surrender_after=0.05)
         self.assertEqual(runner.wait_battle('home', {'home_result', 'home'}, {'home_scout', 'home_battle'}),
@@ -1896,6 +1996,22 @@ class BotTests(unittest.TestCase):
         runner = bot.Bot(config, root, None, live=True)
         self.assertTrue(runner.confirm_safe(image, config['walls']['builder'], 'elixir'))
         self.assertFalse(runner.confirm_safe(image, config['walls']['builder'], 'gold'))
+
+    def test_the_damage_percent_is_read_from_real_battle_screens(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        templates = bot.load_digit_templates(root, config['digits'])
+        # The fixtures are the battle's damage box from x 1060, y 495; the stars left of the number stay out.
+        x, y, w, h = config['screens']['home_battle']['damage']
+        for name, value in (('49', 49), ('94-two-stars', 94), ('100', 100)):
+            image = cv2.imread(str(root / 'fixtures' / f'battle-damage-{name}.png'))
+            with self.subTest(name=name):
+                self.assertEqual(bot.read_percent(image[y - 495:y - 495 + h, x - 1060:x - 1060 + w], templates), value)
+        # A digit caught mid-animation fails the read instead of giving 9 for 94.
+        image = cv2.imread(str(root / 'fixtures' / 'battle-damage-94-two-stars.png'))
+        image[33:55, 158:175] = 255
+        with self.assertRaises(bot.BotError):
+            bot.read_percent(image[y - 495:y - 495 + h, x - 1060:x - 1060 + w], templates)
 
     def test_the_gem_count_reads_over_pale_walls_behind_the_see_through_bar(self):
         config, _, _ = self.bundled()
