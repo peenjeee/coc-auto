@@ -62,7 +62,9 @@ RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', '
 LIMITS = (('searches', '--searches', 0, 1_000_000), ('hours', '--hours', 0, 1000),
           ('minutes', '--minutes', 0, 60_000), ('max_upgrades', '--max-upgrades', 0, 100_000))
 # How each attack is fought, for every task that attacks.
-ATTACK_OPTIONS = ('surrender', 'surrender_after', 'surrender_at', 'ring', 'quake')
+ATTACK_OPTIONS = ('surrender', 'surrender_after', 'surrender_at', 'home_style', 'builder_style', 'quake',
+                  'surrender_stars')
+STYLES = ('ring', 'stack')
 TASK_OPTIONS = {
     'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'max_recoveries', *ATTACK_OPTIONS},
     'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', *ATTACK_OPTIONS},
@@ -228,16 +230,23 @@ def build_args(options: dict) -> list[str]:
             args += ['--surrender-after', str(after)]
     elif 'surrender_after' in options:
         raise CommandRefused('Pilihan surrender_after hanya bersama surrender')
-    for flag in ('ring', 'quake'):
-        value = options.get(flag, False)
-        if not isinstance(value, bool):
-            raise CommandRefused(f'Pilihan {flag} harus ya/tidak')
-        if value:
-            args.append(f'--{flag}')
-    # 0 is passed on too: it turns off the bot's default surrender at 50%.
-    surrender_at = whole(options, 'surrender_at', 0, 99)
-    if surrender_at is not None:
-        args += ['--surrender-at', str(surrender_at)]
+    # Each village's style (troops spread round the base, or on one point) as --ring/--stack with its villages.
+    styles = {village: choice(options, f'{village}_style', STYLES) for village in ('home', 'builder')
+              if f'{village}_style' in options}
+    for style in STYLES:
+        villages = [village for village, chosen in styles.items() if chosen == style]
+        if villages:
+            args += [f'--{style}', 'both' if len(villages) == 2 else villages[0]]
+    quake = options.get('quake', False)
+    if not isinstance(quake, bool):
+        raise CommandRefused('Pilihan quake harus ya/tidak')
+    if quake:
+        args.append('--quake')
+    # 0 is passed on too: it turns off the bot's default surrender at 50% damage or 2 stars.
+    for name, high in (('surrender_at', 99), ('surrender_stars', 3)):
+        value = whole(options, name, 0, high)
+        if value is not None:
+            args += ['--' + name.replace('_', '-'), str(value)]
     return args + ['--live']
 
 

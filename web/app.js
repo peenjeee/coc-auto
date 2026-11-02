@@ -292,7 +292,9 @@ function readOptions() {
     }
     // Always sent, 0 included: the bot surrenders at 50% unless told otherwise.
     options.surrender_at = number('surrender_at', 50);
-    if (data.get('ring')) options.ring = true;
+    options.surrender_stars = number('surrender_stars', 2);
+    options.home_style = data.get('home_style');
+    options.builder_style = data.get('builder_style');
     if (data.get('quake')) options.quake = true;
   }
   return options;
@@ -320,26 +322,39 @@ function previewArgs(options) {
   }
   if (options.max_recoveries !== undefined) args.push('--max-recoveries', String(options.max_recoveries));
   if (options.surrender) args.push('--surrender', options.surrender, '--surrender-after', String(options.surrender_after));
-  if (options.ring) args.push('--ring');
+  for (const style of ['ring', 'stack']) {
+    const villages = ['home', 'builder'].filter((village) => options[`${village}_style`] === style);
+    if (villages.length) args.push(`--${style}`, villages.length === 2 ? 'both' : villages[0]);
+  }
   if (options.quake) args.push('--quake');
   if (options.surrender_at !== undefined) args.push('--surrender-at', String(options.surrender_at));
+  if (options.surrender_stars !== undefined) args.push('--surrender-stars', String(options.surrender_stars));
   return [...args, '--live'];
 }
 
 // Army templates fill in how the attack is fought; the fields can still be changed by hand afterwards.
 const ARMY_TEMPLATES = {
-  valkyrie_quake: { ring: true, quake: true, surrender_at: 50 },
-  barbarian_skeleton: { ring: true, quake: false, surrender_at: 50 },
-  dragons: { ring: false, quake: false, surrender_at: 50 },
-  miner_skeleton: { ring: true, quake: false, surrender_at: 50 },
-  super_minion: { ring: true, quake: false, surrender_at: 50 },
+  valkyrie_quake: { style: 'ring', quake: true, surrender_at: 50 },
+  barbarian_skeleton: { style: 'ring', quake: false, surrender_at: 50 },
+  dragons: { style: 'stack', quake: false, surrender_at: 50 },
+  miner_skeleton: { style: 'ring', quake: false, surrender_at: 50 },
+  super_minion: { style: 'ring', quake: false, surrender_at: 50 },
 };
+
+// Builder Base templates: Witches go together on the deploy point, the rest spread round the base.
+const BUILDER_TEMPLATES = { baby_dragon: 'ring', witch: 'stack', raged_barbarian: 'ring' };
+
+function applyBuilderTemplate() {
+  const form = $('options').elements;
+  const style = BUILDER_TEMPLATES[form.namedItem('builder_army').value];
+  if (style) form.namedItem('builder_style').value = style;
+}
 
 function applyTemplate() {
   const form = $('options').elements;
   const template = ARMY_TEMPLATES[form.namedItem('army').value];
   if (!template) return;
-  form.namedItem('ring').checked = template.ring;
+  form.namedItem('home_style').value = template.style;
   form.namedItem('quake').checked = template.quake;
   form.namedItem('surrender_at').value = String(template.surrender_at);
 }
@@ -472,6 +487,7 @@ function init() {
     button.addEventListener('click', () => changeLanguage(button.dataset.lang));
   }
   $('options').elements.namedItem('army').addEventListener('change', applyTemplate);
+  $('options').elements.namedItem('builder_army').addEventListener('change', applyBuilderTemplate);
   $('options').addEventListener('change', refreshOptions);
   $('options').addEventListener('input', refreshOptions);
   $('options').addEventListener('submit', (submitted) => {

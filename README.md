@@ -39,11 +39,12 @@ The bundled deploy plans were tuned for these armies. Other compositions work to
 
 | Village | Troops | Spells | Run with | How it attacks |
 | --- | --- | --- | --- | --- |
-| **Home Village** (default) | Full **Dragons** and/or **Electro Dragons** | Full **Rage** or full **Freeze** | no extra option | Troops held at one edge point (`D`) until the card is empty, then the siege machine and heroes with their abilities, then the spells along the troops' path; gives up at 50% damage. |
-| **Home Village** (fast ring) | **Valkyries / Super Valkyries**, **Barbarians / Super Barbarians**, **Super Minions** or full **Miners** | **Earthquake** (`--quake`) or **Skeleton** | `--ring`, plus `--quake` for earthquakes | Heroes with their abilities first, the siege machine, then the spells (earthquakes four per wall pin, skeletons over the middle of the base), then the troops streaming out of eight fingers round the map edge; gives up at 50% damage. |
+| **Home Village** stack (default) | Full **Dragons** and/or **Electro Dragons** | Full **Rage** or full **Freeze** | nothing, or `--stack home` | Troops held at one edge point (`D`) until the card is empty, then the siege machine and heroes with their abilities, then the spells along the troops' path. |
+| **Home Village** ring | **Valkyries / Super Valkyries**, **Barbarians / Super Barbarians**, **Super Minions** or full **Miners** | **Earthquake** (`--quake`) or **Skeleton** | `--ring home`, plus `--quake` for earthquakes | Heroes with their abilities first, the siege machine, then the spells (earthquakes four per wall pin, skeletons over the middle of the base), then the troops streaming out of eight fingers round the map edge. |
+| **Builder Base** ring (default) | Full **Baby Dragons** or full **Raged Barbarians** + Battle Machine/Copter | — | nothing, or `--ring builder` | The hero and its ability, then every camp in one go, each on the next spread point round the base. |
+| **Builder Base** stack | Full **Witches** + Battle Machine/Copter | — | `--stack builder` | The hero and its ability, then every camp in one go on the deploy point `D`. |
 
-Every Home Village attack gives up at 50% damage by default (`--surrender-at 0` keeps fighting to the end).
-| **Builder Base** | Full **Baby Dragons** + Battle Machine | — | | Spread around the base in stage 1, remaining troops and reinforcements in stage 2. |
+`--ring` and `--stack` take `home`, `builder` or `both` (alone, `both`), so one `--until-full` run can attack each village its own way, e.g. `--ring home --stack builder` for Valkyries and Witches. By default every Home Village attack gives up at 50% damage (`--surrender-at 0` fights to the end) and every Builder Base attack gives up stage 1 at 2 stars, so stage 2 is never played (`--surrender-stars 0` fights on).
 
 - **Rage and Freeze go with the default plan.** The ring plan drops the spells before the troops, so earthquakes open the walls and skeletons pull the defences before the troops walk in; Rage and Freeze need troops already on the field.
 - **Valkyries + earthquakes are the fastest farm** in live tests: 37 Valkyries out in about 2 seconds and 50% reached about 17 seconds after the deploy began. 300 Barbarians + skeletons took 22–39 seconds, depending on the base. Super Valkyries, Super Barbarians, Super Minions and Miners use the same ring plan but have not been tested live yet.
@@ -259,7 +260,9 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--surrender home\|builder\|both` | off | Give up a battle in these villages that is still running `--surrender-after` seconds after the troops are deployed: taps **Menyerah**/**Akhiri Serangan**, then **Oke**. In the Builder Base it counts per stage, so giving up stage 1 skips stage 2. |
 | `--surrender-after N` | `60` | Battle seconds, 1–120. On its own (without `--surrender`) it turns surrendering on in both villages. The battle clock runs at normal speed until its last minute (when the 4x button appears), so past 120 there is little left to save. |
 | `--surrender-at P` | `50` | Home Village: surrender once the battle's **Total Kerusakan** reads P percent (0–99) twice in a row, checked during the deploy too, so the rest of the army stays home. `0` never surrenders. Works with `--surrender-after`; whichever comes first. A setup without the damage calibration farms on without it (a warning says so) unless the option is given. |
-| `--ring` | off | Home Village fast attack: every hero dropped at `D` then each ability, the siege machine, the spells (skeletons over the middle of the base, eight at once, one per finger), then each troop card streaming out of eight fingers held at once on ring pins round the map edge, moving one pin on each second until the card greys out. Without a touch device the troops are tapped instead, exactly the `xN` count read from the card. |
+| `--surrender-stars N` | `2` | Builder Base: give up stage 1 once its damage box shows N gold stars (0–3) twice in a row, checked during the deploy too; a stage 2 reached anyway is ended from its own screen without deploying. `0` fights on, stage 2 included. |
+| `--stack [home\|builder\|both]` | home | Troops on the one deploy point `D`. Home Village: the default dragon plan. Builder Base: the hero and its ability, then every camp on `D` (full Witches). |
+| `--ring [home\|builder\|both]` | builder | Builder Base: every camp in one go, each on the next spread point (the default). Home Village fast attack: every hero dropped at `D` then each ability, the siege machine, the spells (skeletons over the middle of the base, eight at once, one per finger), then each troop card streaming out of eight fingers held at once on ring pins round the map edge, moving one pin on each second until the card greys out. Without a touch device the troops are tapped instead, exactly the `xN` count read from the card. |
 | `--quake` | off | Home Village: the spells go four on each quake pin in turn (four earthquakes break the walls there), one per finger, at most the `xN` count read from the card. |
 | `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
@@ -612,7 +615,7 @@ first error instead of recovering.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (319 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (322 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans, popups, the game update, recovery, the
 until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool

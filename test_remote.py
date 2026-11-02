@@ -557,12 +557,21 @@ class BuildArgsTests(unittest.TestCase):
                          ['--mode', 'home', '--cycles', '1', '--surrender', 'both', '--live'])
 
     def test_the_ring_attack_is_passed_on(self):
-        self.assertEqual(remote.build_args({'task': 'farm', 'ring': True, 'quake': True, 'surrender_at': 50}),
-                         ['--until-full', '--ring', '--quake', '--surrender-at', '50', '--live'])
-        self.assertEqual(remote.build_args({'task': 'farm', 'ring': False, 'quake': False}), ['--until-full', '--live'])
+        self.assertEqual(remote.build_args({'task': 'farm', 'home_style': 'ring', 'quake': True, 'surrender_at': 50}),
+                         ['--until-full', '--ring', 'home', '--quake', '--surrender-at', '50', '--live'])
+        self.assertEqual(remote.build_args({'task': 'farm', 'quake': False}), ['--until-full', '--live'])
         # 0 turns off the bot's default surrender at 50%, so it is passed on as well.
         self.assertEqual(remote.build_args({'task': 'farm', 'surrender_at': 0}),
                          ['--until-full', '--surrender-at', '0', '--live'])
+        # Each village's style goes out as --ring/--stack with its villages.
+        self.assertEqual(remote.build_args({'task': 'farm', 'home_style': 'stack', 'builder_style': 'stack',
+                                            'surrender_stars': 2}),
+                         ['--until-full', '--stack', 'both', '--surrender-stars', '2', '--live'])
+        self.assertEqual(remote.build_args({'task': 'farm', 'home_style': 'ring', 'builder_style': 'stack'}),
+                         ['--until-full', '--ring', 'home', '--stack', 'builder', '--live'])
+        for bad in ({'builder_style': 'pile'}, {'surrender_stars': 4}, {'builder_stack': True}):
+            with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
+                remote.build_args({'task': 'farm', **bad})
 
     def test_anything_outside_the_commands_is_refused(self):
         for options in ({'task': 'shell'}, {'task': 'walls', 'walls': 'moon'}, {'task': 'walls', 'hours': -1},

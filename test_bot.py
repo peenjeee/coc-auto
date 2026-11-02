@@ -476,12 +476,56 @@ class BotTests(unittest.TestCase):
         cards = bot.bar_cards(image, auto['bar'])
         self.assertEqual([bot.card_kind(image, auto['bar'], card, camps=True) for card in cards],
                          ['hero', 'counted', 'counted', 'counted', 'counted'])
-        centre = [(left + right) // 2 for left, right in cards]
+        centre = [[(left + right) // 2, 150] for left, right in cards]
         plan = bot.auto_plan(image, auto)
-        self.assertEqual([(step['slot'][0], step.get('points'), step.get('tap_only', False)) for step in plan], [
-            (centre[0], None, False), (centre[0], None, True), (centre[1], [[10, 10]], False),
-            (centre[2], [[20, 20]], False), (centre[3], [[30, 30]], False), (centre[4], [[10, 10]], False)])
-        self.assertTrue(all(step['count'] == 1 and 'hold' not in step for step in plan))
+        # The machine and its ability, then every camp in one go, each at the next spread point.
+        self.assertEqual(plan, [{'slot': centre[0], 'count': 1}, {'slot': centre[0], 'count': 1, 'tap_only': True},
+                                {'slots': centre[1:], 'camps': True,
+                                 'points': [[10, 10], [20, 20], [30, 30], [10, 10]]}])
+        # Stacked, as for Witches, every camp lands on the deploy point after the machine.
+        self.assertEqual(bot.auto_plan(image, auto, stack=True)[-1], {'slots': centre[1:], 'camps': True, 'points': None})
+
+    def test_builder_camps_are_tapped_in_one_go(self):
+        device = Device(self.frames, 'builder_battle')
+        device.tap = lambda point: device.inputs.append(tuple(point))
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        screen = {'deploy': [5, 50]}
+        camps = {'slots': [[20, 80], [40, 80]], 'camps': True, 'points': [[10, 10], [30, 30]]}
+        runner.deploy_card(screen, camps, {'builder_battle'}, {'builder_result'})
+        self.assertEqual(device.inputs, [(20, 80), (10, 10), (40, 80), (30, 30)])
+        device.inputs.clear()
+        runner.deploy_card(screen, {**camps, 'points': None}, {'builder_battle'}, {'builder_result'})
+        self.assertEqual(device.inputs, [(20, 80), (5, 50), (40, 80), (5, 50)])
+
+    def test_builder_stars_are_counted_from_real_battle_screens(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        # The fixtures are the damage box from x 1060, y 495.
+        slots = [[x - 1060, y - 495, w, h] for x, y, w, h in config['screens']['builder_battle']['stars']]
+        for stars in range(4):
+            image = cv2.imread(str(root / 'fixtures' / f'builder-stars-{stars}.png'))
+            with self.subTest(stars=stars):
+                self.assertEqual(bot.earned_stars(image, slots), stars)
+
+    def test_builder_stage1_is_given_up_at_two_stars_and_stage2_is_skipped(self):
+        config, device = self.surrender_device()
+        screens = config['screens']
+        config['screens'] = {**screens, 'builder_battle': {**screens['builder_battle'], 'stars': [[0, 0, 5, 5]] * 3,
+                                                           'actions': {'surrender': [20, 70]}},
+                             'builder_stage2': {**screens['builder_stage2'], 'actions': {'surrender': [20, 70]}}}
+        device.state = 'builder_battle'
+        moves = {(20, 70): 'surrender_confirm', (100, 60): 'builder_result'}
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', moves[tuple(point)]))
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0, surrender_stars=2)
+        stars = iter([1, 2, 2])
+        with patch('bot.earned_stars', lambda image, slots: next(stars)):
+            self.assertEqual(runner.wait_battle('builder', {'builder_stage2', 'builder_result'}, {'builder_battle'}),
+                             'builder_result')
+        self.assertEqual(device.inputs, [(20, 70), (100, 60)])
+        # Stage 2 reached anyway (stage 1 won every star at once) is ended from its own screen.
+        device.state, device.inputs = 'builder_stage2', []
+        self.assertEqual(runner.surrender_battle('builder_stage2', {'builder_result', 'builder'}), 'builder_result')
+        self.assertEqual(device.inputs, [(20, 70), (100, 60)])
 
     def test_the_bar_is_read_once_two_frames_show_the_same_cards(self):
         auto = {'bar': [0, 100, 1000, 100], 'points': [[10, 10]]}
@@ -901,7 +945,7 @@ class BotTests(unittest.TestCase):
         allowed = {'home_scout', 'home_battle'}
         runner.checked_state(allowed, {'home_result'})
         runner.checked_state(allowed, {'home_result'})
-        with self.assertRaises(bot.DamageReached):
+        with self.assertRaises(bot.SurrenderReached):
             runner.checked_state(allowed, {'home_result'})
         # The Builder Base is never read for it.
         device.state = 'builder_battle'
