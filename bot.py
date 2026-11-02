@@ -2945,7 +2945,9 @@ class Bot:
             self.action(state, 'return')
             self.wait(set(VILLAGES), {state}, 30)
 
-    def run(self, mode: str, cycles: int, searches: int) -> int:
+    def run(self, mode: str, cycles: int, searches: int, done: int = 0) -> int:
+        """--cycles: attack each village of mode cycles times; done attacks already finished before a recovery are
+        not played again."""
         integer(cycles, 1, 100, 'cycles')
         integer(searches, 0, 1_000_000, 'searches')
         if mode not in ('home', 'builder', 'both'):
@@ -2962,18 +2964,18 @@ class Bot:
             LOG.info('CoC belum terbuka; menyalakan LDPlayer/CoC lalu menunggu desa')
             self.recover()
         self.check_touch()
-        completed = 0
         villages = ('home', 'builder') if mode == 'both' else (mode,)
-        for _ in range(cycles):
-            for village in villages:
-                self.navigate(village)
-                if village == 'home':
-                    self.home_attack(searches)
-                else:
-                    self.builder_attack()
-                completed += 1
-                self.progress += 1
-                LOG.info('Serangan selesai: %s (%s)', village, completed)
+        attacks = [village for _ in range(cycles) for village in villages]
+        completed = done
+        for village in attacks[done:]:
+            self.navigate(village)
+            if village == 'home':
+                self.home_attack(searches)
+            else:
+                self.builder_attack()
+            completed += 1
+            self.progress += 1
+            LOG.info('Serangan selesai: %s (%s)', village, completed)
         return completed
 
 
@@ -3049,8 +3051,8 @@ def main() -> int:
                         help='Habiskan gold+elixir yang ada untuk upgrade tembok, farming sampai penuh, ulangi '
                              'sampai semua tembok maksimal; tidak pernah memakai gem')
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
-                        help='--until-full/--walls: batas pemulihan (crash, DC, layar macet) tanpa kemajuan; dihitung '
-                             'ulang setelah serangan selesai atau tembok di-upgrade')
+                        help='Dengan --live: batas pemulihan (crash, DC, layar macet) tanpa kemajuan; dihitung ulang '
+                             'setelah serangan selesai atau tembok di-upgrade')
     parser.add_argument('--hours', type=int, default=0,
                         help='--until-full/--walls: berhenti setelah sekian jam (bisa digabung --minutes); serangan '
                              'atau upgrade yang sedang jalan diselesaikan dulu, lalu berhenti di desa')
@@ -3185,6 +3187,11 @@ def main() -> int:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif until_full and args.live:
             runner.run_until_full_resilient(args.searches, args.max_recoveries)
+        elif args.live:
+            # Only --cycles attacks count as progress here, so after a recovery the run picks up at the lost attack.
+            runner.run_until_full_resilient(
+                args.searches, args.max_recoveries,
+                job=lambda searches: runner.run(args.mode, args.cycles, searches, done=runner.progress))
         else:
             runner.run(args.mode, args.cycles, args.searches)
         return 0

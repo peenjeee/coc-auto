@@ -2413,6 +2413,29 @@ class BotTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
 
+    def test_cycles_reopen_a_closed_game_and_replay_only_the_lost_attack(self):
+        device = Device(self.frames)
+        device.front = True
+        device.launches = []
+        device.game_in_front = lambda: device.front
+        device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        attacks = []
+        runner.navigate = lambda village: None
+
+        def builder_attack():
+            attacks.append(1)
+            if len(attacks) == 2:
+                device.front = False
+                raise bot.BotError('Layar tidak dikenal')
+        runner.builder_attack = builder_attack
+        job = lambda searches: runner.run('builder', 3, searches, done=runner.progress)
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2, job=job), 3)
+        # Attack 2 was lost to the closed game and played again; attacks 1 and 3 ran once.
+        self.assertEqual(len(attacks), 4)
+        self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
+
     def test_resilient_run_starts_game_that_is_not_open(self):
         device = Device(self.frames)
         device.front = False

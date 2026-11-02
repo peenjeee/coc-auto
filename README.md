@@ -265,7 +265,7 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--stack [home\|builder\|both]` | home | Troops on the one deploy point `D`. Home Village: the default dragon plan. Builder Base: the hero and its ability, then every camp on `D` (full Witches). |
 | `--ring [home\|builder\|both]` | builder | Builder Base: every camp in one go, each on the next spread point (the default). Home Village fast attack: every hero dropped at `D` then each ability, the siege machine, the spells (skeletons over the middle of the base, eight at once, one per finger), then each troop card streaming out of eight fingers held at once on ring pins round the map edge, moving one pin on each second until the card greys out. Without a touch device the troops are tapped instead, exactly the `xN` count read from the card. |
 | `--quake` | off | Home Village: the spells go four on each quake pin in turn (four earthquakes break the walls there), one per finger, at most the `xN` count read from the card. |
-| `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) `--until-full` and `--walls` may make without progress. The count starts again after every finished attack or upgraded wall. |
+| `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) a `--live` run (`--until-full`, `--walls` or `--cycles`) may make without progress. The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 | `--agent` | off | Run no task: show the device's API key and wait for **Start** from the web dashboard. |
 | `--key` | off | Only show this PC's API key and the dashboard addresses, then exit. Nothing is started. |
@@ -608,8 +608,9 @@ How to change it:
 Every recovery counts towards `--max-recoveries` (20). A finished attack or an upgraded wall starts the count again,
 so the run stops only after that many recoveries with no progress in between.
 
-Single attacks (`--mode`/`--cycles`) also start LDPlayer and open CoC first when they are not up, but stop at the
-first error instead of recovering.
+Single attacks (`--mode`/`--cycles`) also start LDPlayer and open CoC first when they are not up, and with `--live`
+recover the same way. After a recovery they pick up at the attack that was lost; finished attacks are not played
+again.
 
 ## Testing
 
@@ -617,7 +618,7 @@ first error instead of recovering.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (325 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (326 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans, popups, the game update, recovery, the
 until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool
