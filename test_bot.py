@@ -320,13 +320,17 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs, [(70, 70)])
 
     def army_bar(self, kinds):
-        """A 1000x200 frame whose bar (y 100-200) holds one painted card per kind, 97 px apart. 'camp' is a Builder
-        Base troop card (magenta header top right), 'machine' a Builder Base hero card (shorter, no header)."""
+        """A 1000x200 frame whose bar (y 100-200) holds one painted card per kind, 97 px apart and 30 px more where
+        the group changes (troops, siege machines, heroes, spells), as in the game. 'camp' is a Builder Base troop
+        card (magenta header top right), 'machine' a Builder Base hero card (shorter, no header)."""
         colours = {'troop': (182, 127, 64), 'siege': (220, 200, 60), 'hero': (211, 44, 60),
                    'warden': (211, 44, 60), 'spell': (184, 68, 88), 'camp': (80, 180, 60), 'machine': (200, 110, 70)}
+        group = {'troop': 0, 'camp': 0, 'siege': 1, 'hero': 2, 'warden': 2, 'machine': 2, 'spell': 3}
         image = np.full((200, 1000, 3), 40, dtype=np.uint8)
+        left = 10
         for index, kind in enumerate(kinds):
-            left = 10 + index * 97
+            if index:
+                left += 97 + 30 * (group[kind] != group[kinds[index - 1]])
             image[100:200, left:left + 88] = colours[kind]
             image[170:200, left:left + 88] = 0
             if kind in ('troop', 'spell'):
@@ -346,7 +350,7 @@ class BotTests(unittest.TestCase):
         kinds = [bot.card_kind(image, auto['bar'], card) for card in bot.bar_cards(image, auto['bar'])]
         self.assertEqual(kinds, ['counted', 'counted', 'siege', 'hero', 'warden', 'hero', 'counted', 'counted'])
         plan = bot.auto_plan(image, auto)
-        centre = [54 + 97 * i for i in range(8)]
+        centre = [(left + right) // 2 for left, right in bot.bar_cards(image, auto['bar'])]
         self.assertEqual([(step['slot'][0], step.get('hold'), step.get('tap_only', False)) for step in plan], [
             (centre[0], 10, False), (centre[1], 10, False), (centre[2], None, False),
             (centre[4], None, False), (centre[4], None, True), (centre[3], None, False), (centre[3], None, True),
@@ -356,17 +360,28 @@ class BotTests(unittest.TestCase):
         self.assertEqual([step['points'] for step in plan[-2:]], [rounds, rounds[3:] + rounds[:3]])
         self.assertTrue(all(step['slot'][1] == 150 for step in plan))
 
-    def test_an_army_without_siege_or_heroes_tells_troops_from_spells_by_colour(self):
-        image = self.army_bar(['troop', 'spell'])
-        plan = bot.auto_plan(image, {'bar': [0, 100, 1000, 100], 'hold': 10, 'spells': [[50, 50]]})
-        self.assertEqual([('hold' in step, 'points' in step) for step in plan], [(True, False), (False, True)])
+    def test_troops_and_spells_are_told_apart_by_the_gap_between_card_groups(self):
+        auto = {'bar': [0, 100, 1000, 100], 'hold': 10, 'spells': [[50, 50]]}
+        # No hero or siege card in between: whatever the card colours, the first group is troops, the next spells.
+        image = self.army_bar(['troop', 'troop', 'spell'])
+        self.assertEqual([('hold' in step, 'points' in step) for step in bot.auto_plan(image, auto)],
+                         [(True, False), (True, False), (False, True)])
+        # A siege machine card read as a counted card sits in a group between the troops and the spells.
+        image = self.army_bar(['troop', 'siege', 'hero', 'spell'])
+        cards = bot.bar_cards(image, auto['bar'])
+        image[103:118, cards[1][0] + 52:cards[1][0] + 84] = 255
+        self.assertEqual(bot.card_kind(image, auto['bar'], cards[1]), 'counted')
+        plan = bot.auto_plan(image, auto)
+        siege = [(cards[1][0] + cards[1][1]) // 2, 150]
+        self.assertEqual([step for step in plan if step['slot'] == siege], [{'slot': siege, 'count': 1}])
+        self.assertEqual(sum('points' in step for step in plan), 1)
 
     def test_the_ring_plan_sends_heroes_first_then_spreads_troops_round_the_map(self):
         image = self.army_bar(['troop', 'troop', 'siege', 'hero', 'warden', 'spell'])
         ring, around, quake = [[10, 10], [20, 20], [30, 30]], [[50, 50], [60, 60]], [[70, 70], [80, 80]]
         auto = {'bar': [0, 100, 1000, 100], 'hold': 10, 'spells': [[5, 5]], 'ring': ring, 'spell_spread': around,
                 'quake': quake}
-        centre = [54 + 97 * i for i in range(6)]
+        centre = [(left + right) // 2 for left, right in bot.bar_cards(image, auto['bar'])]
         plan = bot.auto_plan(image, auto, ring=True)
         # Every hero, the Warden first, goes out in one step with the abilities right after; then the siege, the
         # spells, and last the troops, so a finger still down when a card empties only sends out more troops.
@@ -461,7 +476,7 @@ class BotTests(unittest.TestCase):
         cards = bot.bar_cards(image, auto['bar'])
         self.assertEqual([bot.card_kind(image, auto['bar'], card, camps=True) for card in cards],
                          ['hero', 'counted', 'counted', 'counted', 'counted'])
-        centre = [54 + 97 * i for i in range(5)]
+        centre = [(left + right) // 2 for left, right in cards]
         plan = bot.auto_plan(image, auto)
         self.assertEqual([(step['slot'][0], step.get('points'), step.get('tap_only', False)) for step in plan], [
             (centre[0], None, False), (centre[0], None, True), (centre[1], [[10, 10]], False),

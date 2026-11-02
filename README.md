@@ -50,6 +50,8 @@ Every Home Village attack gives up at 50% damage by default (`--surrender-at 0` 
 - **Miners dig under the walls**, so they need no earthquakes: pair them with skeletons, or no spells.
 - The loot minimum is `0` by default, the fastest farm: every opponent is attacked as it comes, without reading its loot.
 - Heroes and a siege machine are optional in both plans; the default plan's sweep step deploys any card left in the bar.
+  Troops and spells are told apart by how the game groups the card bar (troops, siege machines, heroes, spells, with a
+  wider gap between groups), not by card colour, so any troop type works, with or without heroes and a siege machine.
 
 ## How it works
 

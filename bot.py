@@ -123,6 +123,8 @@ RING_TAPS, RING_MAX_POINTS, RING_BURST = 60, 30, 20
 RING_FINGERS, RING_HOLD_SECONDS, RING_HOLD_TURNS = 8, 1.0, 60
 # The 'xN' count sits at the top right of a troop or spell card, a little above the card bar.
 CARD_LABEL_ABOVE, CARD_LABEL_HEIGHT, CARD_LABEL_LEFT = 10, 26, 25
+# Cards of one group sit 8-13 px apart in the bar, groups (troops, siege machines, heroes, spells) 20-41 px.
+CARD_GROUP_GAP = 17
 # --quake: four earthquakes on one spot open the walls there; the pins sit on the base's top, right, bottom and left.
 QUAKE_PER_POINT, QUAKE_MAX_POINTS = 4, 8
 LAUNCH_ATTEMPTS = 4
@@ -1236,14 +1238,13 @@ def card_kind(image: np.ndarray, region: list, card: tuple, camps: bool = False)
     return 'warden' if green >= BAR_WARDEN_GREEN else 'hero'
 
 
-def card_is_spell(image: np.ndarray, region: list, card: tuple) -> bool:
-    """Only for armies with no siege or hero card to split troops from spells: troop cards are blue, spells purple."""
-    _, y, _, h = region
-    hsv = cv2.cvtColor(image[y:y + h, card[0]:card[1]], cv2.COLOR_BGR2HSV)
-    bright = (hsv[..., 1] > 100) & (hsv[..., 2] > 120)
-    blue = int((bright & (hsv[..., 0] >= 95) & (hsv[..., 0] <= 112)).sum())
-    purple = int((bright & (hsv[..., 0] >= 118) & (hsv[..., 0] <= 140)).sum())
-    return purple >= blue
+def card_groups(cards: list) -> list:
+    """The group of each card: the game lays out troops, siege machines, heroes and spells as groups, with a wider
+    gap between groups than between the cards of one group."""
+    groups = [0]
+    for left, right in zip(cards, cards[1:]):
+        groups.append(groups[-1] + (right[0] - left[1] > CARD_GROUP_GAP))
+    return groups
 
 
 def camp_plan(image: np.ndarray, auto: dict) -> list:
@@ -1289,15 +1290,19 @@ def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = F
         return camp_plan(image, auto)
     region = auto['bar']
     middle = region[1] + region[3] // 2
-    cards = [(card, card_kind(image, region, card)) for card in bar_cards(image, region)]
-    split = next((index for index, (_, kind) in enumerate(cards) if kind != 'counted'), None)
+    found = bar_cards(image, region)
+    cards = [(card, card_kind(image, region, card), group) for card, group in zip(found, card_groups(found))]
+    # Counted cards are troops in the first group and spells in the last counted group after it, with or without
+    # heroes and siege machines between them; a counted card in a group between those is a siege machine.
+    last = max((group for _, kind, group in cards if kind == 'counted'), default=0)
     troops, siege, heroes, spells = [], [], [], []
-    for index, (card, kind) in enumerate(cards):
+    for card, kind, group in cards:
         slot = [(card[0] + card[1]) // 2, middle]
-        if kind == 'counted':
-            spell = index > split if split is not None else card_is_spell(image, region, card)
+        if kind == 'counted' and 0 < group < last:
+            siege.append(slot)
+        elif kind == 'counted':
             count = card_count(image, region, card, templates) if templates and (ring or quake) else None
-            (spells if spell else troops).append((slot, count))
+            (spells if group else troops).append((slot, count))
         elif kind == 'siege':
             siege.append(slot)
         elif kind == 'warden':
