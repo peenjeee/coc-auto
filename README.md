@@ -35,14 +35,18 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 
 ## Recommended armies
 
-The bundled deploy plans were tuned for these armies. Other compositions work too, but deploy points and card order may need recalibration (see [Changing the army and deploy plan](#changing-the-army-and-deploy-plan)).
+The bundled deploy plans were tuned for these armies. Other compositions work too, but deploy points and card order may need recalibration (see [Changing the army and deploy plan](#changing-the-army-and-deploy-plan)). The Home Village has two ways to attack:
 
-| Village | Troops | Spells | Notes |
-| --- | --- | --- | --- |
-| **Home Village** | Full **Dragons** | Full **Rage** or full **Freeze** | Heroes and a siege machine are optional; the sweep step deploys any card left in the bar. |
-| **Builder Base** | Full **Baby Dragons** + Battle Machine | — | Spread around the base in stage 1, remaining troops and reinforcements in stage 2. |
+| Village | Troops | Spells | Run with | How it attacks |
+| --- | --- | --- | --- | --- |
+| **Home Village** (default) | Full **Dragons** and/or **Electro Dragons** | Full **Rage** or full **Freeze** | no extra option | Troops held at one edge point (`D`) until the card is empty, then the siege machine and heroes with their abilities, then the spells along the troops' path. |
+| **Home Village** (fast ring) | **Valkyries / Super Valkyries**, **Barbarians / Super Barbarians** or **Super Minions** | **Earthquake** (`--quake`) or **Skeleton** | `--ring --surrender-at 50`, plus `--quake` for earthquakes | Heroes with their abilities first, the siege machine, then the spells (earthquakes four per wall pin, skeletons over the middle of the base), then the troops streaming out of eight fingers round the map edge; gives up at 50% damage. |
+| **Builder Base** | Full **Baby Dragons** + Battle Machine | — | | Spread around the base in stage 1, remaining troops and reinforcements in stage 2. |
 
-Dragons are deployed by holding one edge point until the card is empty, and spells are thrown along the troops' path, so air armies give the most consistent results.
+- **Rage and Freeze go with the default plan.** The ring plan drops the spells before the troops, so earthquakes open the walls and skeletons pull the defences before the troops walk in; Rage and Freeze need troops already on the field.
+- **Valkyries + earthquakes are the fastest farm** in live tests: 37 Valkyries out in about 2 seconds and 50% reached about 17 seconds after the deploy began. 300 Barbarians + skeletons took 22–39 seconds, depending on the base. Super Valkyries, Super Barbarians and Super Minions use the same ring plan but have not been tested live yet.
+- Set the loot minimum to `0` for the fastest farm: every opponent is attacked as it comes, without reading its loot.
+- Heroes and a siege machine are optional in both plans; the default plan's sweep step deploys any card left in the bar.
 
 ## How it works
 
