@@ -508,8 +508,9 @@ row show the same cards, so a new army needs no slot changes; its `troops` list 
 | `hold` | Seconds each troop card is held at the screen's `deploy` point; it stops early once the card is grey. |
 | `spells` | Spell drop points, listed as rounds of front, left and right, each round further into the base. |
 
-In the Builder Base `auto` has `bar` and `points` instead. Troop cards carry a magenta header and hero cards (Battle
-Machine, Battle Copter) do not. Each hero is dropped at the screen's `deploy` point and then tapped again for its
+In the Builder Base `auto` has `bar` and `points` instead. Troop cards carry a magenta header, or a dark blue one for
+the camps that lived through stage 1, and a white slot number top left; hero cards (Battle Machine, Battle Copter)
+have neither. Each hero is dropped at the screen's `deploy` point and then tapped again for its
 ability. One tap deploys a whole troop camp, so each troop card is tapped once, at the next point of `points` in
 turn; cards greyed out in stage 1 are skipped. Five seconds after the last camp lands every troop card is tapped once
 more, which fires the troop abilities, in stage 1 and stage 2 alike. There are no spells.
@@ -618,7 +619,7 @@ again.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (327 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (328 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans, popups, the game update, recovery, the
 until-full loop, the dashboard link (signed commands, settings, the bot as a child
 process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool

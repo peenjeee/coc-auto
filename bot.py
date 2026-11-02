@@ -115,6 +115,8 @@ SWEEP_TAPS = 12
 BAR_CARD_STD, BAR_LABEL_WHITE, BAR_WARDEN_GREEN = 18, 100, 200
 BAR_CARD_WIDTH, BAR_CARD_COLOUR = (65, 98), 0.43
 BAR_CAMP_HEADER, BAR_SETTLE_SECONDS = 0.5, 3
+# White pixels of a Builder Base troop card's slot number (65+ seen); hero cards have none.
+BAR_CAMP_NUMBER = 30
 SPELL_TAPS, SPELL_ROUND = 30, 3
 # --ring: every troop card streams out of RING_FINGERS fingers held at once on ring pins spread apart, the fingers
 # moving one pin on round the ring each turn, until the card greys out. Without multi-touch the card is tapped
@@ -1255,7 +1257,10 @@ def card_kind(image: np.ndarray, region: list, card: tuple, camps: bool = False)
     if camps:
         header = cv2.cvtColor(image[y + 2:y + 18, right - 40:right - 4], cv2.COLOR_BGR2HSV)
         magenta = (header[..., 0] >= 135) & (header[..., 0] <= 165) & (header[..., 1] > 100) & (header[..., 2] > 120)
-        return 'counted' if float(magenta.mean()) >= BAR_CAMP_HEADER else 'hero'
+        # Stage 2 shows the camps that lived through stage 1 under a dark blue header instead; like every troop card,
+        # and unlike a hero's, they still carry their white slot number top left.
+        number = int(np.all(image[y + 2:y + 20, left + 2:left + 26] > 215, axis=2).sum())
+        return 'counted' if float(magenta.mean()) >= BAR_CAMP_HEADER or number >= BAR_CAMP_NUMBER else 'hero'
     label = image[y + 2:y + 20, right - 40:right - 2]
     if int(np.all(label > 215, axis=2).sum()) >= BAR_LABEL_WHITE:
         return 'counted'

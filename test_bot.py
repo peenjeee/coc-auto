@@ -490,6 +490,17 @@ class BotTests(unittest.TestCase):
         # A hero alone has no troop abilities to wait for.
         self.assertEqual(len(bot.auto_plan(self.army_bar(['machine']), auto)), 2)
 
+    def test_camps_carried_into_stage2_spread_like_new_ones_and_only_the_hero_drops_on_its_point(self):
+        root = Path(bot.__file__).parent
+        kinds = {}
+        for stage in ('stage1', 'stage2'):
+            bar = cv2.imread(str(root / 'fixtures' / f'builder-{stage}-bar.png'))
+            region = [0, 0, bar.shape[1], bar.shape[0]]
+            kinds[stage] = [bot.card_kind(bar, region, card, camps=True) for card in bot.bar_cards(bar, region)]
+        self.assertEqual(kinds['stage1'], ['hero'] + ['counted'] * 6)
+        # Six Baby Dragon camps that lived through stage 1 (dark blue headers) and two new ones (magenta).
+        self.assertEqual(kinds['stage2'], ['counted'] * 8)
+
     def test_builder_camps_are_tapped_in_one_go(self):
         device = Device(self.frames, 'builder_battle')
         device.tap = lambda point: device.inputs.append(tuple(point))
