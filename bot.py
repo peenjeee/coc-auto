@@ -72,6 +72,8 @@ TOUCH_DEVICE = re.compile(r'/dev/input/event\d{1,2}')
 PINCH_STEPS = 10
 PINCH_STEP_SECONDS = 0.02
 ZOOM_SETTLE_SECONDS = 1.5
+# A pinch on a map already zoomed out moves nothing but the animations, which stay well under this.
+ZOOM_UNCHANGED_DIFF = 5
 STILL_DIFF = 1.5
 CAPTURE_RETRIES = 2
 ZOOM_MAX_PINCHES = 6
@@ -1752,22 +1754,24 @@ class Bot:
         except (OSError, cv2.error) as exc:
             LOG.warning('Screenshot deploy untuk dashboard tidak tersimpan: %s', exc)
 
-    def deploy(self, screen_name: str, allowed: set) -> str | None:
+    def deploy(self, screen_name: str, allowed: set, image: np.ndarray | None = None) -> str | None:
         screen = self.config['screens'][screen_name]
         terminal = {'home_result'} if screen_name == 'home_scout' else {'builder_result'}
         if screen_name == 'builder_scout':
             terminal |= {'builder_stage2'}
-        state, image = self.checked_state(allowed, terminal)
+        state, image = self.checked_state(allowed, terminal, image)
         if state in terminal:
             return state
-        if self.battle_zoom():
-            state, image = self.checked_state(allowed, terminal)
+        still = self.battle_zoom(image)
+        if still is not None:
+            state, image = self.checked_state(allowed, terminal, still)
             if state in terminal:
                 return state
         self.keep_deploy_frame(screen_name, image)
         if 'auto' in screen:
-            # Read the card bar before any card is used; the plan follows the army that is trained.
-            plan = self.bar_plan(screen['auto'], allowed)
+            # Read the card bar before any card is used; the plan follows the army that is trained. The home cards
+            # stand still, so the frame in hand is read; Builder Base stage 2 waits for its cards to slide in.
+            plan = self.bar_plan(screen['auto'], allowed, image if screen_name == 'home_scout' else None)
             cards = {tuple(slot) for troop in plan for slot in troop.get('slots') or [troop['slot']]}
             LOG.info('Rencana deploy dari bar: %s kartu', len(cards))
         else:
@@ -1794,13 +1798,15 @@ class Bot:
                 return state
         return None
 
-    def bar_plan(self, auto: dict, allowed: set) -> list:
-        """Deploy plan from the card bar once two frames in a row show the same cards; at the start of Builder Base
-        stage 2 the last cards are still sliding into the bar."""
+    def bar_plan(self, auto: dict, allowed: set, image: np.ndarray | None = None) -> list:
+        """Deploy plan from the card bar of the given frame, or once two frames in a row show the same cards; at
+        the start of Builder Base stage 2 the last cards are still sliding into the bar."""
         def read(image: np.ndarray) -> list:
             if self.detector.detect(image) not in allowed:
                 raise BotError('Bar kartu dibaca di luar layar deploy')
             return auto_plan(image, auto, self.ring, self.quake, self.digits())
+        if image is not None:
+            return read(image)
         return self.read_stable(read, BAR_SETTLE_SECONDS if self.poll else 0)
 
     def hold_until_empty(self, troop: dict, location: list, allowed: set, terminal: set,
@@ -1821,19 +1827,31 @@ class Bot:
             if self.live:
                 self.device.touch_up()
 
-    def battle_zoom(self) -> bool:
-        """Zoom out on the battle map before any card is selected, so edge deploy points line up."""
+    def battle_zoom(self, image: np.ndarray) -> np.ndarray | None:
+        """Zoom out on the battle map before any card is selected, so edge deploy points line up; the still frame
+        after, or None without a zoom. The game keeps the zoom between attacks, so once a pinch leaves the map as it
+        was the rest are skipped."""
         zoom = self.config.get('zoom_out')
         if not zoom or not self.live:
-            return False
+            return None
+        start_gap, end_gap = zoom['gap']
         for _ in range(zoom.get('battle_pinches', zoom['pinches'])):
-            start_gap, end_gap = zoom['gap']
             self.device.pinch(zoom['device'], zoom['center'], start_gap, end_gap)
-        self.wait_still(ZOOM_SETTLE_SECONDS if self.poll else 0)
-        return True
+            still = self.wait_still(ZOOM_SETTLE_SECONDS if self.poll else 0)
+            if float(cv2.absdiff(small_gray(image), small_gray(still)).mean()) < ZOOM_UNCHANGED_DIFF:
+                break
+            image = still
+        return still
 
-    def checked_state(self, allowed: set, terminal: set) -> tuple[str, np.ndarray]:
-        for attempt in range(UNKNOWN_RETRIES + 1):
+    def checked_state(self, allowed: set, terminal: set, image: np.ndarray | None = None) -> tuple[str, np.ndarray]:
+        """The screen while deploying, from the given frame or a fresh one; a screen out of turn stops the deploy."""
+        state = None
+        if image is not None:
+            try:
+                state = self.detector.detect(image)
+            except UnknownScreen:
+                pass
+        for attempt in range(UNKNOWN_RETRIES + 1 if state is None else 0):
             try:
                 state, image = self.observe()
                 break
@@ -1948,12 +1966,15 @@ class Bot:
             state, image = self.observe()
             if state != 'home_scout':
                 raise BotError('Scout berubah sebelum OCR')
-            try:
-                loot, image = self.read_until(self.scout_loot, LOOT_READ_SECONDS if self.poll else 0)
-                LOG.info('Loot terbaca: %s', loot)
-            except BotError as exc:
-                LOG.warning('Loot lawan tidak terbaca (%s); lewati lawan ini', exc)
-                loot = None
+            if not any(self.config.get('minimum', {}).values()):
+                loot = {}  # No loot minimum: every opponent is attacked as it comes, with nothing to read.
+            else:
+                try:
+                    loot, image = self.read_until(self.scout_loot, LOOT_READ_SECONDS if self.poll else 0)
+                    LOG.info('Loot terbaca: %s', loot)
+                except BotError as exc:
+                    LOG.warning('Loot lawan tidak terbaca (%s); lewati lawan ini', exc)
+                    loot = None
             passes = loot is not None and meets_minimum(loot, self.config.get('minimum', {}))
             if attempt == searches and not (passes or broke):
                 LOG.warning('Batas %s pencarian tercapai; serang lawan yang sedang tampil', searches)
@@ -1962,7 +1983,7 @@ class Bot:
             if passes or broke or attempt == searches:
                 self.damage_last = None
                 try:
-                    self.deploy('home_scout', {'home_scout', 'home_battle'})
+                    self.deploy('home_scout', {'home_scout', 'home_battle'}, image)
                 except DamageReached as exc:
                     LOG.info('%s', exc)
                 if self.wait_battle('home', {'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':

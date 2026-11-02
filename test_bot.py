@@ -408,7 +408,7 @@ class BotTests(unittest.TestCase):
         device = Device(self.frames, 'home_battle')
         device.tap = lambda point: device.inputs.append(tuple(point))
         runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0, ring=True)
-        runner.bar_plan = lambda auto, allowed: [
+        runner.bar_plan = lambda auto, allowed, image=None: [
             {'slots': [[20, 80], [60, 80]], 'abilities': True},
             {'slot': [100, 80], 'count': 2, 'until_empty': True, 'points': [[40, 40], [50, 30]],
              'burst': bot.RING_BURST}]
@@ -1042,7 +1042,7 @@ class BotTests(unittest.TestCase):
                      'home_army' if village == 'home' else 'builder_scout', ('home_army', 'attack'): 'home_scout'}
             actions = []
             runner.action = lambda s, n: (actions.append((s, n)), setattr(device, 'state', steps.get((s, n), device.state)))
-            runner.deploy = lambda screen, allowed: setattr(device, 'state', village)
+            runner.deploy = lambda screen, allowed, image=None: setattr(device, 'state', village)
             runner.collect_cart = lambda: None
             with self.subTest(village=village):
                 getattr(runner, attack)(0) if village == 'home' else runner.builder_attack(collect=False)
@@ -3031,12 +3031,24 @@ class BotTests(unittest.TestCase):
         config = self.zoom_config()
         scout = {**config['screens']['home_scout'], 'troops': [{'slot': [20, 80], 'count': 1}]}
         config = {**config, 'screens': {**config['screens'], 'home_scout': scout}}
+        # The map moves with every pinch, so all of them are made before the first card is selected.
         device = Device(self.frames, 'home_scout')
         device.tap = lambda point: device.inputs.append(tuple(point))
+        levels = []
+        for level in range(3):
+            frame = self.frames['home_scout'].copy()
+            frame[20:90] = 60 * level
+            levels.append(frame)
+        device.capture = lambda: levels[min(sum(i[0] == 'pinch' for i in device.inputs), 2)].copy()
         bot.Bot(config, self.root, device, live=True, timeout=0.02, poll=0).deploy('home_scout', {'home_scout'})
         kinds = [i[0] if isinstance(i[0], str) else 'tap' for i in device.inputs]
         self.assertEqual(kinds[:2], ['pinch', 'pinch'])
         self.assertEqual(device.inputs[2], (20, 80))
+        # A map already zoomed out, as the game keeps the zoom between attacks, stops after one pinch.
+        still = Device(self.frames, 'home_scout')
+        still.tap = lambda point: still.inputs.append(tuple(point))
+        bot.Bot(config, self.root, still, live=True, timeout=0.02, poll=0).deploy('home_scout', {'home_scout'})
+        self.assertEqual([i[0] if isinstance(i[0], str) else 'tap' for i in still.inputs][:2], ['pinch', 'tap'])
         dry = Device(self.frames, 'home_scout')
         bot.Bot(config, self.root, dry, live=False, timeout=0.02, poll=0).deploy('home_scout', {'home_scout'})
         self.assertEqual(dry.inputs, [])
