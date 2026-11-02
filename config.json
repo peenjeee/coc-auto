@@ -7,8 +7,8 @@
     720
   ],
   "minimum": {
-    "gold": 500000,
-    "elixir": 500000,
+    "gold": 0,
+    "elixir": 0,
     "dark": 0
   },
   "screens": {

@@ -46,7 +46,7 @@ The bundled deploy plans were tuned for these armies. Other compositions work to
 - **Rage and Freeze go with the default plan.** The ring plan drops the spells before the troops, so earthquakes open the walls and skeletons pull the defences before the troops walk in; Rage and Freeze need troops already on the field.
 - **Valkyries + earthquakes are the fastest farm** in live tests: 37 Valkyries out in about 2 seconds and 50% reached about 17 seconds after the deploy began. 300 Barbarians + skeletons took 22–39 seconds, depending on the base. Super Valkyries, Super Barbarians, Super Minions and Miners use the same ring plan but have not been tested live yet.
 - **Miners dig under the walls**, so they need no earthquakes: pair them with skeletons, or no spells.
-- Set the loot minimum to `0` for the fastest farm: every opponent is attacked as it comes, without reading its loot.
+- The loot minimum is `0` by default, the fastest farm: every opponent is attacked as it comes, without reading its loot.
 - Heroes and a siege machine are optional in both plans; the default plan's sweep step deploys any card left in the bar.
 
 ## How it works
@@ -126,7 +126,7 @@ not in git, so `git pull` never collides with it, and the dashboard saves its se
 | `adb`, `ldconsole` | Paths in your LDPlayer install folder | e.g. `C:\LDPlayer\LDPlayer14\adb.exe` and `C:\LDPlayer\LDPlayer14\ldconsole.exe`; the folder name depends on the LDPlayer version. |
 | `ld_index`, `serial` | Your instance | `ld_index` is the instance number in LDMultiPlayer (0 for the first). `serial` is `emulator-<5554 + 2 × index>`: `emulator-5554` for index 0, `emulator-5556` for index 1. Check with `adb devices`. |
 | `touch_device`, `zoom_out.device` | The touchscreen node | Run `adb -s <serial> shell getevent -pl` and use the `/dev/input/eventN` whose block lists `ABS_MT_POSITION_X`. Set both keys to it; holds, pinches and fast taps go there. |
-| `minimum` | A loot filter that fits your Town Hall | `500000` gold and elixir suits high Town Halls. Lower it for a low Town Hall, or every opponent is skipped. `0` turns a resource off. If searching runs out of gold 3 attacks in a row, the bot stops (exit code 6) and asks you to lower it. |
+| `minimum` | `0` (the default), or a loot filter that fits your Town Hall | `0` attacks every opponent as it comes without reading its loot, the fastest farm. To skip poor bases, `500000` gold and elixir suits high Town Halls; set it lower for a low Town Hall, or every opponent is skipped. `0` turns a resource off. If searching runs out of gold 3 attacks in a row, the bot stops (exit code 6) and asks you to lower it. |
 | `walls.home.gold_reserve` | Gold kept for searching | `200000` by default; lower it for a low Town Hall whose gold storage is small, or gold wall upgrades never pass it. |
 | `tesseract` | Only when `digits` is not set | Loot is read with the digit templates in `calibration/digits`. Tesseract is needed only if you remove `digits`. |
 
@@ -153,6 +153,15 @@ If your setup matches (see [First-time setup](#first-time-setup-for-another-pc-o
 ```bash
 python bot.py --until-full --live
 ```
+
+The fastest farm, with a Valkyrie + earthquake army (see [Recommended armies](#recommended-armies)): heroes and
+earthquakes first, Valkyries round the base, and give up at 50% damage:
+
+```bash
+python bot.py --until-full --ring --quake --surrender-at 50 --live
+```
+
+With skeletons instead of earthquakes, leave out `--quake`.
 
 | Command | Purpose |
 | --- | --- |
