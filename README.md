@@ -25,11 +25,11 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Self-recovery** | Restarts a stopped LDPlayer (`ldconsole`), waits for ADB after a disconnect, and reopens CoC after a crash. |
 | **Home Village** | Searches opponents with a minimum gold / elixir / dark-elixir filter (unlimited searches by default). |
 | **Deploy plan** | Reads the card bar on the scout screen, so it follows whatever army is trained: holds each troop card at the deploy point until it is empty, drops the siege machine, then the Grand Warden (found by its green ground/air toggle) and the other heroes, each followed by its ability, and throws the spells in rounds of front, left and right, each round further into the base so no two spells share a spot. |
-| **Builder Base** | Reads the card bar too: drops the Battle Machine or Battle Copter and fires its ability, spreads one troop card per point around the base, fires the troop abilities five seconds later, handles stage 2 (a stage 1 won while the surrender dialog is up has its stage 2 given up too), and claims the **Elixir Cart** before every attack. |
+| **Builder Base** | Reads the card bar too: drops the Battle Machine or Battle Copter and fires its ability, spreads one troop card per point around the base (one tap per unit for multi-unit camps such as Raged Barbarians), fires the troop abilities five seconds later and the hero's again whenever its meter is full, handles stage 2 (a stage 1 won while the surrender dialog is up has its stage 2 given up too), keeps fighting to the end while trophies are under `--trophy-floor`, and claims the **Elixir Cart** before every attack. |
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
 | **Walls** | `--walls` spends stored gold and elixir on walls, cheapest level first, then farms both full and repeats until every wall is maxed. It never spends gems. |
-| **Web dashboard** | Live log and full control from a phone or the PC: start any command, stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. Installable as an app. |
+| **Web dashboard** | Live log and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. Installable as an app. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
 | **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. A setup that cannot work (taps that cannot land, ADB debugging off, a loot minimum no opponent meets) stops the run with what to change. |
 
@@ -41,7 +41,7 @@ The bundled deploy plans were tuned for these armies. Other compositions work to
 | --- | --- | --- | --- | --- |
 | **Home Village** stack (default) | Full **Dragons** and/or **Electro Dragons** | Full **Rage** or full **Freeze** | nothing, or `--stack home` | Troops held at one edge point (`D`) until the card is empty, then the siege machine and heroes with their abilities, then the spells along the troops' path. |
 | **Home Village** ring | **Valkyries / Super Valkyries**, **Barbarians / Super Barbarians**, **Super Minions** or full **Miners** | **Earthquake** (`--quake`) or **Skeleton** | `--ring home`, plus `--quake` for earthquakes | Heroes with their abilities first, the siege machine, then the spells (earthquakes four per wall pin, skeletons over the middle of the base), then the troops streaming out of eight fingers round the map edge. |
-| **Builder Base** ring (default) | Full **Baby Dragons** or full **Raged Barbarians** + Battle Machine/Copter | — | nothing, or `--ring builder` | The hero and its ability, then every camp in one go, each on the next spread point round the base. |
+| **Builder Base** ring (default) | Full **Baby Dragons** or full **Raged Barbarians** + Battle Machine/Copter | — | nothing, or `--ring builder` | The hero and its ability, then every camp in one go, each on the next spread point round the base (a Raged Barbarian camp gets one tap per unit, `4x` = four). |
 | **Builder Base** stack | Full **Witches** + Battle Machine/Copter | — | `--stack builder` | The hero and its ability, then every camp in one go on the deploy point `D`. |
 
 `--ring` and `--stack` take `home`, `builder` or `both` (alone, `both`), so one `--until-full` run can attack each village its own way, e.g. `--ring home --stack builder` for Valkyries and Witches. By default every Home Village attack gives up at 50% damage (`--surrender-at 0` fights to the end) and every Builder Base attack gives up stage 1 at 2 stars, so stage 2 is never played (`--surrender-stars 0` fights on).
@@ -49,6 +49,10 @@ The bundled deploy plans were tuned for these armies. Other compositions work to
 - **Rage and Freeze go with the default plan.** The ring plan drops the spells before the troops, so earthquakes open the walls and skeletons pull the defences before the troops walk in; Rage and Freeze need troops already on the field.
 - **Valkyries + earthquakes are the fastest farm** in live tests: 37 Valkyries out in about 2 seconds and 50% reached about 17 seconds after the deploy began. 300 Barbarians + skeletons took 22–39 seconds, depending on the base. Super Valkyries, Super Barbarians, Super Minions and Miners use the same ring plan but have not been tested live yet.
 - **Miners dig under the walls**, so they need no earthquakes: pair them with skeletons, or no spells.
+- **Builder Base:** the Witch stack, the Baby Dragon ring and the Raged Barbarian ring were tested live, stage 2
+  included. Camps that live through stage 1 spread again in stage 2. The hero's ability fires once more whenever the
+  three steps of its meter are charged, as it is weaker before. `--trophy-floor 2000` fights every battle to the end
+  while trophies are under 2000 and goes back to the 2-star surrender above it.
 - The loot minimum is `0` by default, the fastest farm: every opponent is attacked as it comes, without reading its loot.
 - Heroes and a siege machine are optional in both plans; the default plan's sweep step deploys any card left in the bar.
   Troops and spells are told apart by how the game groups the card bar (troops, siege machines, heroes, spells, with a
@@ -284,17 +288,17 @@ dashboard (open the address it prints in a browser). Enter the key there to foll
 - **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The PC connects out to an online relay channel
   named after a hash of the key, so no router port has to be opened.
 
-![Dashboard walkthrough: one Builder Base attack started from the dashboard (LDPlayer and CoC started by the bot, Elixir Cart, deploy, 4x), LDPlayer auto-detect, the screen and language notes, deploy pins on all three maps, and the Indonesian view](docs/dashboard.gif)
-
-▶️ [Dashboard walkthrough video (MP4)](docs/dashboard.mp4)
-
-![Web dashboard on a PC: device status, task options and the live log of a running bot](docs/dashboard-desktop.jpg)
+![Web dashboard on a PC: device status, the task options in sections and the live log of three Builder Base attacks](docs/dashboard-desktop.jpg)
 
 <p>
   <img src="docs/dashboard-mobile.jpg" alt="Dashboard on a phone: status and task options" width="260">
   <img src="docs/dashboard-settings.jpg" alt="Device settings: minimum opponent loot and the LDPlayer screen" width="260">
   <img src="docs/dashboard-deploy.jpg" alt="Deploy pins over a real attack screen" width="260">
 </p>
+
+▶️ [Dashboard walkthrough video (MP4)](docs/dashboard.mp4), recorded before the Clash-style look; the flow is the same:
+one Builder Base attack started from the dashboard, LDPlayer auto-detect, the screen and language notes, and deploy
+pins on all three maps.
 
 You can open the dashboard locally, or online when you are out or away from the PC. For online use, the PC that runs
 the bot must stay connected to the internet. Open [coc.0xpnj.dev](https://coc.0xpnj.dev) and enter the API key of the
@@ -318,8 +322,10 @@ It shows the key and waits for **Start** from the dashboard. `python bot.py --ke
 dashboard can control the PC only while `--agent` (or any other bot command) is running there.
 
 The dashboard (Indonesian or English, switch in the title bar) shows whether the PC is online, the bot's state and
-command, and the live log. Its form covers every command above (task, villages, resources, dark elixir, walls,
-`--first`, searches, time and upgrade limits, recoveries) and shows the equivalent `python bot.py ...` line; **Start** runs it
+command, and the live log, which stays in view while the options scroll. Its form covers every command above, in
+sections: **Task**, **Targets** (villages, resources, dark elixir, walls, `--first`), **Limits** (attacks, searches,
+time, upgrades, recoveries), **Army** (the army templates, ring or stack per village, `--quake`) and **Surrender**
+(damage, stars, trophy floor, time). It shows the equivalent `python bot.py ...` line; **Start** runs it
 (a running task is stopped first). Other buttons: stop bot, repeat the last command, open CoC, close CoC, restart
 LDPlayer, turn LDPlayer off; the last three stop the bot first. When the PC is off, offline or the bot is not
 running, the dashboard says so instead of sending, and a command that gets no answer within 10 seconds is reported.
@@ -354,7 +360,7 @@ if it is running.
 Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
 the running bot), and everything the PC sends online is signed with it too, so nobody else on the channel can pose
 as the device or as the dashboard. The key itself never leaves the browser or the PC, and the page loads no
-third-party code. Only the options the CLI offers are accepted. The local dashboard listens on 127.0.0.1 only and
+third-party code: even its font, Lilita One, is served from `web/fonts/` (SIL Open Font License, `web/fonts/OFL.txt`). Only the options the CLI offers are accepted. The local dashboard listens on 127.0.0.1 only and
 refuses other sites (Host, Origin and JSON checks). Use `--new-key` if the key was shared by mistake.
 
 The online relay is already set up (`remote` in `config.json`, and `web/config.js`); there is nothing to configure
@@ -637,7 +643,7 @@ relay.py               online relay for the dashboard
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging)
 game_update.py         Play Store Update button and installed game version, for the automatic game update
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
-web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own relay client, ID/EN text, app manifest, service worker and icons
+web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own relay client, ID/EN text, app manifest, service worker, icons and its font (fonts/)
 calibrate.py           calibration CLI (screenshots only, never taps)
 test_bot.py            offline unit tests
 test_game_update.py    Play Store screen and game version reading tests
