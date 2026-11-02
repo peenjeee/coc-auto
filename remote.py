@@ -63,7 +63,7 @@ LIMITS = (('searches', '--searches', 0, 1_000_000), ('hours', '--hours', 0, 1000
           ('minutes', '--minutes', 0, 60_000), ('max_upgrades', '--max-upgrades', 0, 100_000))
 # How each attack is fought, for every task that attacks.
 ATTACK_OPTIONS = ('surrender', 'surrender_after', 'surrender_at', 'home_style', 'builder_style', 'quake',
-                  'surrender_stars')
+                  'surrender_stars', 'trophy_floor')
 STYLES = ('ring', 'stack')
 TASK_OPTIONS = {
     'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'max_recoveries', *ATTACK_OPTIONS},
@@ -247,6 +247,9 @@ def build_args(options: dict) -> list[str]:
         value = whole(options, name, 0, high)
         if value is not None:
             args += ['--' + name.replace('_', '-'), str(value)]
+    floor = whole(options, 'trophy_floor', 0, 10_000)
+    if floor:
+        args += ['--trophy-floor', str(floor)]
     return args + ['--live']
 
 

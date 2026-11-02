@@ -293,6 +293,7 @@ function readOptions() {
     // Always sent, 0 included: the bot surrenders at 50% unless told otherwise.
     options.surrender_at = number('surrender_at', 50);
     options.surrender_stars = number('surrender_stars', 2);
+    options.trophy_floor = number('trophy_floor', 0);
     options.home_style = data.get('home_style');
     options.builder_style = data.get('builder_style');
     if (data.get('quake')) options.quake = true;
@@ -329,6 +330,7 @@ function previewArgs(options) {
   if (options.quake) args.push('--quake');
   if (options.surrender_at !== undefined) args.push('--surrender-at', String(options.surrender_at));
   if (options.surrender_stars !== undefined) args.push('--surrender-stars', String(options.surrender_stars));
+  if (options.trophy_floor) args.push('--trophy-floor', String(options.trophy_floor));
   return [...args, '--live'];
 }
 

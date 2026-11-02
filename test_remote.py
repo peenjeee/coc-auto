@@ -569,7 +569,12 @@ class BuildArgsTests(unittest.TestCase):
                          ['--until-full', '--stack', 'both', '--surrender-stars', '2', '--live'])
         self.assertEqual(remote.build_args({'task': 'farm', 'home_style': 'ring', 'builder_style': 'stack'}),
                          ['--until-full', '--ring', 'home', '--stack', 'builder', '--live'])
-        for bad in ({'builder_style': 'pile'}, {'surrender_stars': 4}, {'builder_stack': True}):
+        # The trophy floor is off at 0, so it only goes out when set.
+        self.assertEqual(remote.build_args({'task': 'farm', 'trophy_floor': 2000}),
+                         ['--until-full', '--trophy-floor', '2000', '--live'])
+        self.assertEqual(remote.build_args({'task': 'farm', 'trophy_floor': 0}), ['--until-full', '--live'])
+        for bad in ({'builder_style': 'pile'}, {'surrender_stars': 4}, {'builder_stack': True},
+                    {'trophy_floor': 10_001}, {'trophy_floor': '2000'}):
             with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
                 remote.build_args({'task': 'farm', **bad})
 

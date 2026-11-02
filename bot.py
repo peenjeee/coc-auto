@@ -140,7 +140,12 @@ SURRENDER_AT_DEFAULT = 50
 # Builder Base stage 1 is given up at this many stars unless --surrender-stars says otherwise (0 = never); a won
 # star slot of the damage box is about half gold pixels, an empty one has none.
 SURRENDER_STARS_DEFAULT, STAR_GOLD_SHARE = 2, 0.25
+TROPHY_FLOOR_MAX = 10_000
+# After a battle the village keeps showing the old trophy count for up to 6.4 s before it jumps to the new one.
+TROPHY_SETTLE_SECONDS = 8
 SURRENDER_STATES = {'home': ('home_battle',), 'builder': ('builder_battle', 'builder_battle2')}
+# Surrender rounds before giving up: stage 1 then stage 2, with one to spare.
+SURRENDER_ROUNDS = 3
 KNOWN_SCREENS = SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO, HUD_MIN_MEAN_VALUE = 2, 1.2, 235
@@ -159,6 +164,8 @@ CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 CART_MISS_LIMIT = 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
 STAGE_SETTLE_SECONDS = 4
+# Builder Base troop cards are tapped again this long after the last camp lands, which fires their abilities.
+ABILITY_WAIT_SECONDS = 5
 LOG = logging.getLogger(__name__)
 
 
@@ -1263,7 +1270,8 @@ def camp_plan(image: np.ndarray, auto: dict, stack: bool = False) -> list:
     dropped at the deploy point then its ability, and each troop card tapped once at the next spread point. One tap
     deploys the whole camp and its card stays coloured to show the camp's health, so a card is never held or tapped
     until grey; the Builder Base has no spells. The heroes go first, then every camp in one go, each card followed
-    by its point; with stack every camp lands on the deploy point, as for Witches."""
+    by its point; with stack every camp lands on the deploy point, as for Witches. A while later every troop card
+    is tapped once more for its ability."""
     region, points = auto['bar'], auto['points']
     middle = region[1] + region[3] // 2
     heroes, camps = [], []
@@ -1274,7 +1282,10 @@ def camp_plan(image: np.ndarray, auto: dict, stack: bool = False) -> list:
         else:
             heroes += [{'slot': slot, 'count': 1}, {'slot': slot, 'count': 1, 'tap_only': True}]
     spots = None if stack else [points[index % len(points)] for index in range(len(camps))]
-    return heroes + ([{'slots': camps, 'camps': True, 'points': spots}] if camps else [])
+    if not camps:
+        return heroes
+    return heroes + [{'slots': camps, 'camps': True, 'points': spots},
+                     {'slots': camps, 'tap_only': True, 'wait': ABILITY_WAIT_SECONDS}]
 
 
 def earned_stars(image: np.ndarray, slots: list) -> int:
@@ -1449,10 +1460,12 @@ class Bot:
                  emulator: 'Emulator | None' = None, goals: dict | None = None, walls: tuple = (),
                  minutes: int = 0, max_upgrades: int = 0, surrender: tuple = (),
                  surrender_after: float = SURRENDER_DEFAULT_SECONDS, surrender_at: int = 0, ring: bool = False,
-                 quake: bool = False, surrender_stars: int = 0, builder_stack: bool = False) -> None:
+                 quake: bool = False, surrender_stars: int = 0, builder_stack: bool = False,
+                 trophy_floor: int = 0) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
+        self.trophy_floor, self.climbing, self.trophies_from = trophy_floor, False, 0.0
         self.ring, self.quake = ring, quake
         self.digit_templates: dict | None = None
         self.damage_last: int | None = None
@@ -1557,6 +1570,8 @@ class Bot:
         """Wait for the battle to end; with --surrender give it up once it has run surrender_after seconds, with
         --surrender-at once the home battle's damage has reached that percent, with --surrender-stars once the
         Builder Base battle has won that many stars."""
+        if village == 'builder' and self.climbing:
+            return self.wait(targets, allowed)
         deadline = time.monotonic() + self.surrender_after if village in self.surrender else None
         damage = self.surrender_at if village == 'home' else 0
         stars = self.surrender_stars if village == 'builder' else 0
@@ -1582,11 +1597,39 @@ class Bot:
         return self.surrender_battle(state, targets)
 
     def surrender_battle(self, state: str, targets: set) -> str:
-        """Tap the battle's surrender button, then Oke in its dialog; the screen the battle ends on."""
-        state = self.tap_until(state, 'surrender', {'surrender_confirm'} | targets, TAP_RETRY_SECONDS * TAP_RETRIES)
-        if state in targets:
-            return state
-        return self.tap_until('surrender_confirm', 'confirm', targets, TAP_RETRY_SECONDS * TAP_RETRIES)
+        """Tap the battle's surrender button, then Oke in its dialog; the screen the battle ends on. Builder Base
+        stage 1 can still be won while the dialog is up; the game then goes on to stage 2, which is given up too."""
+        builder = {*SURRENDER_STATES['builder'], 'builder_stage2'}
+        stages = builder if state in builder else set()
+        timeout = TAP_RETRY_SECONDS * TAP_RETRIES
+        for _ in range(SURRENDER_ROUNDS):
+            state = self.tap_until(state, 'surrender', {'surrender_confirm'} | targets | stages - {state}, timeout)
+            if state == 'surrender_confirm':
+                state = self.tap_until('surrender_confirm', 'confirm', targets | stages, timeout)
+            if state in targets:
+                return state
+            LOG.info('Tahap 1 selesai saat menyerah; tahap 2 juga diserahkan')
+        raise BotError('Battle tidak berakhir setelah menyerah')
+
+    def below_trophy_floor(self) -> bool:
+        """--trophy-floor: under it the Builder Base battle is fought to the end to win trophies back; at or over it
+        the battle surrenders as set. An unreadable count keeps the setting."""
+        if not self.trophy_floor:
+            return False
+        if self.live and self.poll:
+            time.sleep(max(0.0, self.trophies_from - time.monotonic()))
+        try:
+            state, image = self.observe()
+            if state != 'builder':
+                raise BotError(f'layar {state}')
+            trophies = read_number(crop(image, self.config['screens']['builder']['trophies']), self.digits())
+        except BotError as exc:
+            LOG.warning('Trofi desa malam tidak terbaca (%s); menyerah sesuai pengaturan', exc)
+            return False
+        below = trophies < self.trophy_floor
+        LOG.info('Trofi desa malam %s %s %s: %s', trophies, '<' if below else '>=', self.trophy_floor,
+                 'serang sampai selesai' if below else 'menyerah sesuai pengaturan')
+        return below
 
     def stars_reached(self, image: np.ndarray) -> bool:
         """--surrender-stars: the Builder Base stars won, twice in a row at or over it."""
@@ -1909,7 +1952,8 @@ class Bot:
             raise UnexpectedScreen(f'Deploy dibatalkan: layar berubah menjadi {state}')
         if state == 'home_battle' and self.surrender_at and self.damage_reached(image):
             raise SurrenderReached(f'Kerusakan mencapai {self.surrender_at}% saat deploy; sisa pasukan tidak dikerahkan')
-        if state in SURRENDER_STATES['builder'] and self.surrender_stars and self.stars_reached(image):
+        if (state in SURRENDER_STATES['builder'] and self.surrender_stars and not self.climbing
+                and self.stars_reached(image)):
             raise SurrenderReached(f'{self.surrender_stars} bintang saat deploy; sisa pasukan tidak dikerahkan')
         return state, image
 
@@ -1929,8 +1973,10 @@ class Bot:
                 self.device.tap_many(troop['slots'])
             return self.checked_state(allowed, terminal)[0]
         if troop.get('tap_only'):
+            if troop.get('slots'):
+                LOG.info('Ability %s kartu pasukan', len(troop['slots']))
             if self.live:
-                self.device.tap_many([troop['slot']])
+                self.device.tap_many(troop.get('slots') or [troop['slot']])
             return self.checked_state(allowed, terminal)[0]
         if troop.get('fingers') and callable(getattr(self.device, 'hold_many', None)):
             return self.spread_hold(troop, allowed, terminal)
@@ -2133,6 +2179,7 @@ class Bot:
     def builder_attack(self, collect: bool = True) -> None:
         if collect:
             self.collect_cart()
+        self.climbing = self.below_trophy_floor()
         self.tap_until('builder', 'attack', {'builder_menu'}, 30)
         self.tap_until('builder_menu', 'find', {'builder_scout'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
         self.stars_last = None
@@ -2144,7 +2191,7 @@ class Bot:
         stage2 = {'builder_stage2', 'builder_battle2'}
         state = self.wait_battle('builder', {'builder_stage2', 'builder_result', 'builder'},
                                  {'builder_scout', 'builder_battle', 'builder_battle2'})
-        if state == 'builder_stage2' and self.surrender_stars:
+        if state == 'builder_stage2' and self.surrender_stars and not self.climbing:
             # Stage 1 won every star before they were seen; stage 2 is not played.
             LOG.info('Tahap 1 selesai; tahap 2 dilewati')
             state = self.surrender_battle('builder_stage2', {'builder_result', 'builder'})
@@ -2154,9 +2201,10 @@ class Bot:
             state = self.wait_battle('builder', {'builder_result', 'builder'}, stage2)
         if state == 'builder':
             LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
-            return
-        self.action('builder_result', 'return')
-        self.wait({'builder'}, {'builder_result'}, 30)
+        else:
+            self.action('builder_result', 'return')
+            self.wait({'builder'}, {'builder_result'}, 30)
+        self.trophies_from = time.monotonic() + TROPHY_SETTLE_SECONDS
 
     def storage_max(self, village: str, key: str, spec: dict) -> int:
         """Tap the storage bar once per session and read 'Maks' from its tooltip."""
@@ -3020,6 +3068,9 @@ def main() -> int:
     parser.add_argument('--surrender-stars', type=int,
                         help=f'Desa malam: menyerah di tahap 1 saat bintang mencapai angka ini; tahap 2 tidak dimainkan '
                              f'(0..3, default {SURRENDER_STARS_DEFAULT}; 0 = tidak pernah)')
+    parser.add_argument('--trophy-floor', type=int, default=0,
+                        help='Desa malam: selama trofi di bawah angka ini, serang sampai selesai tanpa menyerah; di '
+                             'atasnya menyerah lagi sesuai pengaturan (0 = mati)')
     parser.add_argument('--ring', nargs='?', const='both', choices=('home', 'builder', 'both'),
                         help='Pasukan disebar keliling base (tanpa nilai = kedua desa). Desa asal: hero (langsung '
                              'ability), siege, spell, lalu pasukan keliling pinggir peta. Desa malam: default')
@@ -3070,6 +3121,7 @@ def main() -> int:
                                'surrender_at')
         surrender_stars = integer(SURRENDER_STARS_DEFAULT if args.surrender_stars is None else args.surrender_stars,
                                   0, 3, 'surrender_stars')
+        trophy_floor = integer(args.trophy_floor, 0, TROPHY_FLOOR_MAX, 'trophy_floor')
         if args.dark and (not args.until_full or args.builder is not None or args.home is not None):
             raise BotError('--dark hanya untuk --until-full tanpa --builder/--home (atau pakai --home gold,elixir,dark)')
         if not (args.worker or args.no_remote):
@@ -3103,6 +3155,10 @@ def main() -> int:
                 raise
             LOG.warning('Menyerah di %s bintang tidak aktif: %s', surrender_stars, exc)
             surrender_stars = 0
+        if trophy_floor:
+            if not (config.get('digits') and 'trophies' in config['screens'].get('builder', {})):
+                raise BotError('--trophy-floor butuh kalibrasi: digits dan builder.trophies')
+            rectangle(config['screens']['builder']['trophies'], config['resolution'])
         ring, stack = (VILLAGES if choice == 'both' else tuple(filter(None, [choice]))
                        for choice in (args.ring, args.stack))
         if set(ring) & set(stack):
@@ -3124,7 +3180,7 @@ def main() -> int:
         runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals, walls=walls,
                      minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
                      surrender_after=surrender_after, surrender_at=surrender_at, ring='home' in ring, quake=args.quake,
-                     surrender_stars=surrender_stars, builder_stack='builder' in stack)
+                     surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor)
         if walls:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif until_full and args.live:

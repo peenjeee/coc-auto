@@ -478,12 +478,17 @@ class BotTests(unittest.TestCase):
                          ['hero', 'counted', 'counted', 'counted', 'counted'])
         centre = [[(left + right) // 2, 150] for left, right in cards]
         plan = bot.auto_plan(image, auto)
-        # The machine and its ability, then every camp in one go, each at the next spread point.
+        # The machine and its ability, then every camp in one go, each at the next spread point, then a while later
+        # every troop card again for its ability.
+        abilities = {'slots': centre[1:], 'tap_only': True, 'wait': bot.ABILITY_WAIT_SECONDS}
         self.assertEqual(plan, [{'slot': centre[0], 'count': 1}, {'slot': centre[0], 'count': 1, 'tap_only': True},
                                 {'slots': centre[1:], 'camps': True,
-                                 'points': [[10, 10], [20, 20], [30, 30], [10, 10]]}])
+                                 'points': [[10, 10], [20, 20], [30, 30], [10, 10]]}, abilities])
         # Stacked, as for Witches, every camp lands on the deploy point after the machine.
-        self.assertEqual(bot.auto_plan(image, auto, stack=True)[-1], {'slots': centre[1:], 'camps': True, 'points': None})
+        self.assertEqual(bot.auto_plan(image, auto, stack=True)[-2:],
+                         [{'slots': centre[1:], 'camps': True, 'points': None}, abilities])
+        # A hero alone has no troop abilities to wait for.
+        self.assertEqual(len(bot.auto_plan(self.army_bar(['machine']), auto)), 2)
 
     def test_builder_camps_are_tapped_in_one_go(self):
         device = Device(self.frames, 'builder_battle')
@@ -496,6 +501,10 @@ class BotTests(unittest.TestCase):
         device.inputs.clear()
         runner.deploy_card(screen, {**camps, 'points': None}, {'builder_battle'}, {'builder_result'})
         self.assertEqual(device.inputs, [(20, 80), (5, 50), (40, 80), (5, 50)])
+        # The ability step taps each troop card once, with no map tap.
+        device.inputs.clear()
+        runner.deploy_card(screen, {'slots': camps['slots'], 'tap_only': True}, {'builder_battle'}, {'builder_result'})
+        self.assertEqual(device.inputs, [(20, 80), (40, 80)])
 
     def test_builder_stars_are_counted_from_real_battle_screens(self):
         config, _, _ = self.bundled()
@@ -512,6 +521,7 @@ class BotTests(unittest.TestCase):
         screens = config['screens']
         config['screens'] = {**screens, 'builder_battle': {**screens['builder_battle'], 'stars': [[0, 0, 5, 5]] * 3,
                                                            'actions': {'surrender': [20, 70]}},
+                             'builder_battle2': {**screens['builder_battle2'], 'actions': {'surrender': [20, 70]}},
                              'builder_stage2': {**screens['builder_stage2'], 'actions': {'surrender': [20, 70]}}}
         device.state = 'builder_battle'
         moves = {(20, 70): 'surrender_confirm', (100, 60): 'builder_result'}
@@ -526,6 +536,68 @@ class BotTests(unittest.TestCase):
         device.state, device.inputs = 'builder_stage2', []
         self.assertEqual(runner.surrender_battle('builder_stage2', {'builder_result', 'builder'}), 'builder_result')
         self.assertEqual(device.inputs, [(20, 70), (100, 60)])
+        # Stage 1 won while the dialog was up: Oke lands on the stage 2 battle, which is given up the same way.
+        ends = iter(['builder_battle2', 'builder_result'])
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(
+            device, 'state', 'surrender_confirm' if tuple(point) == (20, 70) else next(ends)))
+        device.state, device.inputs = 'builder_battle2', []
+        self.assertEqual(runner.surrender_battle('builder_battle2', {'builder_stage2', 'builder_result', 'builder'}),
+                         'builder_result')
+        self.assertEqual(device.inputs, [(20, 70), (100, 60), (20, 70), (100, 60)])
+
+    def test_builder_trophies_under_the_floor_are_fought_for_without_surrender(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        image = cv2.imread(str(root / 'fixtures' / 'builder-trophies-2482.png'))
+        for floor, below in ((0, False), (2482, False), (2483, True), (3000, True)):
+            runner = bot.Bot(config, root, Device({'builder': image}, 'builder'), live=True, trophy_floor=floor)
+            with self.subTest(floor=floor):
+                self.assertEqual(runner.below_trophy_floor(), below)
+        # Off the village screen the count is not read and the battle surrenders as set.
+        runner = bot.Bot(config, root, Device({'builder': np.zeros_like(image)}, 'builder'), live=True,
+                         trophy_floor=3000)
+        self.assertFalse(runner.below_trophy_floor())
+        # Under the floor the battle is only waited out: no star or time limit gives it up.
+        runner = bot.Bot(config, root, Device({'builder': image}, 'builder'), live=True, surrender=('builder',),
+                         surrender_stars=2, trophy_floor=3000)
+        runner.climbing = True
+        targets, allowed = {'builder_stage2', 'builder_result'}, {'builder_battle'}
+        with patch.object(runner, 'wait', return_value='builder_stage2') as wait:
+            self.assertEqual(runner.wait_battle('builder', targets, allowed), 'builder_stage2')
+        wait.assert_called_once_with(targets, allowed)
+
+    def test_builder_attack_fights_on_under_the_trophy_floor_and_surrenders_again_over_it(self):
+        config = copy.deepcopy(self.config)
+        config['screens']['builder']['trophies'] = [0, 0, 20, 10]
+        runner = bot.Bot(config, self.root, Device(self.frames, 'builder'), live=True, timeout=1, poll=0,
+                         surrender_stars=2, trophy_floor=2000)
+        deploys, surrenders, battles = [], [], iter(['builder_stage2', 'builder_result', 'builder_stage2'])
+        runner.collect_cart = lambda: None
+        runner.tap_until = lambda state, name, targets, *rest: next(iter(targets))
+        runner.deploy = lambda screen, allowed, image=None: deploys.append(screen)
+        runner.wait_battle = lambda village, targets, allowed: next(battles)
+        runner.surrender_battle = lambda state, targets: surrenders.append(state) or 'builder_result'
+        runner.wait_still = runner.action = runner.wait = lambda *args: None
+        with patch('bot.read_number', side_effect=[1999, 2000]):
+            runner.builder_attack()
+            self.assertEqual((deploys, surrenders), (['builder_scout', 'builder_stage2'], []))
+            deploys.clear()
+            runner.builder_attack()
+        self.assertEqual((deploys, surrenders), (['builder_scout'], ['builder_stage2']))
+
+    def test_builder_stars_seen_during_the_deploy_are_ignored_under_the_trophy_floor(self):
+        config = copy.deepcopy(self.config)
+        config['screens']['builder_battle']['stars'] = [[0, 0, 5, 5]] * 3
+        runner = bot.Bot(config, self.root, Device(self.frames, 'builder_battle'), live=True, timeout=1, poll=0,
+                         surrender_stars=2)
+        with patch('bot.earned_stars', lambda image, slots: 3):
+            runner.climbing = True
+            for _ in range(2):
+                self.assertEqual(runner.checked_state({'builder_battle'}, set())[0], 'builder_battle')
+            runner.climbing = False
+            runner.checked_state({'builder_battle'}, set())
+            with self.assertRaises(bot.SurrenderReached):
+                runner.checked_state({'builder_battle'}, set())
 
     def test_the_bar_is_read_once_two_frames_show_the_same_cards(self):
         auto = {'bar': [0, 100, 1000, 100], 'points': [[10, 10]]}
