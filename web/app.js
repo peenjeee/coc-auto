@@ -324,6 +324,24 @@ function previewArgs(options) {
   return [...args, '--live'];
 }
 
+// Army templates fill in how the attack is fought; the fields can still be changed by hand afterwards.
+const ARMY_TEMPLATES = {
+  valkyrie_quake: { ring: true, quake: true, surrender_at: 50 },
+  barbarian_skeleton: { ring: true, quake: false, surrender_at: 50 },
+  dragons: { ring: false, quake: false, surrender_at: 0 },
+  miner_skeleton: { ring: true, quake: false, surrender_at: 50 },
+  super_minion: { ring: true, quake: false, surrender_at: 50 },
+};
+
+function applyTemplate() {
+  const form = $('options').elements;
+  const template = ARMY_TEMPLATES[form.namedItem('army').value];
+  if (!template) return;
+  form.namedItem('ring').checked = template.ring;
+  form.namedItem('quake').checked = template.quake;
+  form.namedItem('surrender_at').value = String(template.surrender_at);
+}
+
 function refreshOptions() {
   // "Include dark elixir" belongs to the plain fill-until-full; picked resources say it themselves.
   const form = $('options');
@@ -451,6 +469,7 @@ function init() {
   for (const button of document.querySelectorAll('[data-lang]')) {
     button.addEventListener('click', () => changeLanguage(button.dataset.lang));
   }
+  $('options').elements.namedItem('army').addEventListener('change', applyTemplate);
   $('options').addEventListener('change', refreshOptions);
   $('options').addEventListener('input', refreshOptions);
   $('options').addEventListener('submit', (submitted) => {

@@ -161,7 +161,9 @@ earthquakes first, Valkyries round the base, and give up at 50% damage:
 python bot.py --until-full --ring --quake --surrender-at 50 --live
 ```
 
-With skeletons instead of earthquakes, leave out `--quake`.
+With skeletons instead of earthquakes, leave out `--quake`. On the web dashboard, the **army template** list fills in
+these options for each recommended army (Valkyries + earthquakes, Barbarians + skeletons, dragons, Miners +
+skeletons, Super Minions); they can still be changed by hand afterwards.
 
 | Command | Purpose |
 | --- | --- |
