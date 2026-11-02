@@ -144,8 +144,6 @@ TROPHY_FLOOR_MAX = 10_000
 # After a battle the village keeps showing the old trophy count for up to 6.4 s before it jumps to the new one.
 TROPHY_SETTLE_SECONDS = 8
 SURRENDER_STATES = {'home': ('home_battle',), 'builder': ('builder_battle', 'builder_battle2')}
-# Surrender rounds before giving up: stage 1 then stage 2, with one to spare.
-SURRENDER_ROUNDS = 3
 KNOWN_SCREENS = SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
 HUD_ALIGN_PX, HUD_GAP_RATIO, HUD_MIN_MEAN_VALUE = 2, 1.2, 235
@@ -1598,18 +1596,18 @@ class Bot:
 
     def surrender_battle(self, state: str, targets: set) -> str:
         """Tap the battle's surrender button, then Oke in its dialog; the screen the battle ends on. Builder Base
-        stage 1 can still be won while the dialog is up; the game then goes on to stage 2, which is given up too."""
+        stage 1 can still be won while the dialog is up; the game then goes on to stage 2, which can only be given up
+        once it has loaded, so the taps go on until the battle has ended. Its timer ends it at the latest."""
         builder = {*SURRENDER_STATES['builder'], 'builder_stage2'}
         stages = builder if state in builder else set()
         timeout = TAP_RETRY_SECONDS * TAP_RETRIES
-        for _ in range(SURRENDER_ROUNDS):
+        while True:
             state = self.tap_until(state, 'surrender', {'surrender_confirm'} | targets | stages - {state}, timeout)
             if state == 'surrender_confirm':
                 state = self.tap_until('surrender_confirm', 'confirm', targets | stages, timeout)
             if state in targets:
                 return state
             LOG.info('Tahap 1 selesai saat menyerah; tahap 2 juga diserahkan')
-        raise BotError('Battle tidak berakhir setelah menyerah')
 
     def below_trophy_floor(self) -> bool:
         """--trophy-floor: under it the Builder Base battle is fought to the end to win trophies back; at or over it
