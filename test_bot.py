@@ -545,6 +545,26 @@ class BotTests(unittest.TestCase):
                          'builder_result')
         self.assertEqual(device.inputs, [(20, 70), (100, 60), (20, 70), (100, 60)])
 
+    def test_the_wall_buttons_are_found_by_the_coarse_search_as_by_a_full_one(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        detector = bot.Detector(config, root)
+        selected = cv2.imread(str(root / 'fixtures' / 'home-wall-selected.png'))
+        village = cv2.imread(str(root / 'fixtures' / 'builder-trophies-2482.png'))
+        self.assertEqual(detector.detect(selected), 'wall_selected')
+        self.assertEqual(detector.detect(village), 'builder')
+        for image in (selected, village):
+            for (x, y, w, h), template, _, scales, _ in detector.templates['wall_selected']:
+                region = image[y:y + h, x:x + w]
+                for scale in scales:
+                    scaled = cv2.resize(template, None, fx=scale, fy=scale) if scale != 1.0 else template
+                    full = float(cv2.matchTemplate(region, scaled, cv2.TM_SQDIFF_NORMED).min())
+                    with self.subTest(scale=scale):
+                        # Never better than the full search; on the real buttons, as good.
+                        self.assertGreaterEqual(bot.match_min(region, scaled), full - 1e-6)
+                        if image is selected and full <= 0.03:
+                            self.assertAlmostEqual(bot.match_min(region, scaled), full, delta=0.001)
+
     def test_builder_trophies_under_the_floor_are_fought_for_without_surrender(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
