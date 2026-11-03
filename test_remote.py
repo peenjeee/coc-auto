@@ -7,6 +7,7 @@ import threading
 import time
 import unittest
 
+import messages
 import remote
 
 KEY = 'coc_testkey_0123456789abcdefghijklmnop'
@@ -312,6 +313,18 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(self.stored()['minimum'], {'gold': 1, 'elixir': 2, 'dark': 0})
         bare = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice())
         self.assertEqual(bare.command(*signed('get_settings'))['code'], 'refused')
+
+    def test_the_dashboard_language_is_saved_for_the_terminal_and_used_at_once(self):
+        self.addCleanup(messages.use, 'id')
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), settings=self.settings)
+        result = supervisor.command(*signed('set_language', {'language': 'en'}))
+        self.assertEqual((result['ok'], result['code'], result['data']['language']), (True, 'language_saved', 'en'))
+        self.assertEqual(self.stored()['language'], 'en')
+        self.assertEqual(messages.translate('REMOTE: menghentikan bot'), 'REMOTE: stopping bot')
+        for language in ('fr', None, 1, ['en']):
+            with self.subTest(language=language), self.assertRaises(remote.CommandRefused):
+                self.settings.write_language(language)
+        self.assertEqual(self.stored()['language'], 'en')
 
 
 class DeviceSwitchTests(unittest.TestCase):

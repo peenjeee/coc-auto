@@ -27,6 +27,7 @@ import numpy as np
 
 import game_update
 import ldplayer
+import messages
 
 RESOURCES = ('gold', 'elixir', 'dark')
 VILLAGE_GOALS = {'builder': ('gold', 'elixir', 'cart'), 'home': ('gold', 'elixir', 'dark')}
@@ -476,6 +477,8 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
     touch = config.get('touch_device')
     if touch is not None and (not isinstance(touch, str) or not TOUCH_DEVICE.fullmatch(touch)):
         raise BotError('touch_device harus /dev/input/eventN')
+    if config.get('language', 'id') not in messages.LANGUAGES:
+        raise BotError('language harus id atau en')
     zoom = config.get('zoom_out')
     if zoom:
         if not isinstance(zoom.get('device'), str) or not TOUCH_DEVICE.fullmatch(zoom['device']):
@@ -3336,6 +3339,18 @@ def read_config(path: Path) -> dict:
     return config
 
 
+def configured_language(path: Path) -> str:
+    """The terminal language, read straight from config.json and config.local.json before anything else so even
+    the first errors use it; a file that cannot be read leaves Indonesian and is reported later on its own."""
+    language = 'id'
+    for source in (path, local_config_path(path)):
+        try:
+            language = json.loads(source.read_text(encoding='utf-8')).get('language', language)
+        except (OSError, ValueError, AttributeError):
+            pass
+    return language
+
+
 def load_config(path: Path) -> dict:
     """The calibration with this PC's settings from config.local.json on top."""
     config, local_path = read_config(path), local_config_path(path)
@@ -3423,6 +3438,7 @@ def main() -> int:
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    messages.install(configured_language(args.config))
     if args.key:
         import remote
         return remote.show_key(args.config, renew=args.new_key)

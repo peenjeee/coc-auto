@@ -12,7 +12,9 @@ import cv2
 import numpy as np
 
 from bot import (ADB, ACTIONS, BotError, DEPLOY_SCREENS, KNOWN_SCREENS, RESOURCES,
-                 asset_path, crop, executable, glyphs, integer, load_config, read_config, rectangle)
+                 asset_path, configured_language, crop, executable, glyphs, integer, load_config, read_config,
+                 rectangle)
+import messages
 
 LOG = logging.getLogger(__name__)
 
@@ -145,6 +147,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    messages.install(configured_language(args.config))
     try:
         if args.init:
             if args.config.exists() or not args.serial:

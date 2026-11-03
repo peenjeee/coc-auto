@@ -25,6 +25,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from device_control import DeviceActions, SettingRefused
 import ldplayer
+import messages
 
 HERE = Path(__file__).resolve().parent
 BOT_SCRIPT, WEB_DIR = HERE / 'bot.py', HERE / 'web'
@@ -53,7 +54,7 @@ KEY_FILE = Path('.coc-auto') / 'device.json'
 COMMAND_MAX_AGE_SECONDS = 120
 # Settings action -> its answer code; every one answers with the settings as they are now (or what was found).
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
-                    'set_setup': 'setup_saved'}
+                    'set_setup': 'setup_saved', 'set_language': 'language_saved'}
 ACTIONS = ('start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
            'fit_display', 'restore_display', *SETTINGS_ACTIONS)
 VILLAGE_CHOICES = ('home', 'builder', 'both')
@@ -373,7 +374,7 @@ class Settings:
         config = self.config()
         minimum = config.get('minimum') or {}
         return {'minimum': {key: minimum.get(key, 0) for key in MINIMUM_KEYS},
-                'setup': {name: config.get(name) for name in SETUP_FIELDS}}
+                'setup': {name: config.get(name) for name in SETUP_FIELDS}, 'language': config.get('language', 'id')}
 
     def detect(self) -> dict:
         return self.detector(self.config())
@@ -383,6 +384,13 @@ class Settings:
             raise CommandRefused('Minimal loot perlu gold, elixir dan dark')
         changes = {'minimum': {key: required(minimum, key, 0, MAX_MINIMUM) for key in MINIMUM_KEYS}}
         save_local(self.config_path, changes, self.root, 'Minimal loot')
+
+    def write_language(self, language: object) -> str:
+        """The language the terminal and the dashboard log speak, the same one the dashboard is shown in."""
+        if language not in messages.LANGUAGES:
+            raise CommandRefused('Bahasa harus id atau en')
+        save_local(self.config_path, {'language': language}, self.root, 'Bahasa')
+        return language
 
     def write_setup(self, setup: object) -> None:
         import bot
@@ -436,6 +444,7 @@ class Supervisor:
             listener(kind, data)
 
     def log(self, line: str) -> None:
+        line = messages.translate(line)
         with self.lock:
             self.lines.append(line)
         print(line, flush=True)
@@ -574,6 +583,10 @@ class Supervisor:
         elif action == 'set_setup':
             self.settings.write_setup(options.get('setup'))
             message = 'Pengaturan LDPlayer disimpan; berlaku saat Start berikutnya'
+        elif action == 'set_language':
+            # This terminal switches at once; a bot already running keeps its language until the next Start.
+            messages.use(self.settings.write_language(options.get('language')))
+            message = 'Bahasa terminal disimpan; bot memakainya saat Start berikutnya'
         else:
             message = 'Pengaturan dimuat'
         return code, message, {**self.settings.read(), 'display': self.display_data()}
@@ -710,9 +723,10 @@ def remote_settings(config_path: Path) -> dict:
 def banner(key: str, settings: dict, renewed: bool, hint: str) -> None:
     """The key goes to this terminal only, never into the streamed log."""
     print('=' * 60)
-    print(f'API key perangkat : {key}' + ('  (BARU; key lama tidak berlaku lagi)' if renewed else ''))
-    print(f'Dashboard lokal   : http://localhost:{settings["port"]}')
-    print(f'Dashboard online  : {settings["dashboard"]}')
+    print(messages.translate(f'API key perangkat : {key}')
+          + (messages.translate('  (BARU; key lama tidak berlaku lagi)') if renewed else ''))
+    print(messages.translate(f'Dashboard lokal   : http://localhost:{settings["port"]}'))
+    print(messages.translate(f'Dashboard online  : {settings["dashboard"]}'))
     print(hint)
     print('=' * 60, flush=True)
 
@@ -720,7 +734,8 @@ def banner(key: str, settings: dict, renewed: bool, hint: str) -> None:
 def show_key(config_path: Path, renew: bool = False, home: Path | None = None) -> int:
     """Only show this device's API key; nothing is started."""
     banner(device_key(home, renew), remote_settings(config_path), renew,
-           'Supaya bisa dikendalikan dari web, jalankan: python bot.py --agent (lalu tekan Start di dashboard).')
+           messages.translate('Supaya bisa dikendalikan dari web, jalankan: python bot.py --agent (lalu tekan Start di '
+                              'dashboard).'))
     return 0
 
 
@@ -748,7 +763,8 @@ def supervise(job: list[str], config_path: Path, renew_key: bool = False) -> int
                             DeviceActions(config_path), DeployPoints(config_path, config_path.parent / 'captures'),
                             Settings(config_path))
     banner(key, settings, renew_key,
-           'Masukkan API key itu di dashboard untuk melihat log dan mengendalikan bot. Ctrl+C untuk keluar.')
+           messages.translate('Masukkan API key itu di dashboard untuk melihat log dan mengendalikan bot. Ctrl+C untuk '
+                              'keluar.'))
     try:
         server = serve_dashboard(supervisor, WEB_DIR, settings['port'])
     except OSError as exc:

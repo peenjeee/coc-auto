@@ -353,7 +353,8 @@ python bot.py --agent
 It shows the key and waits for **Start** from the dashboard. `python bot.py --key` only shows the key and exits; the
 dashboard can control the PC only while `--agent` (or any other bot command) is running there.
 
-The dashboard (Indonesian or English, switch in the title bar) shows whether the PC is online, the bot's state and
+The dashboard (Indonesian or English, switch in the title bar; the switch also sets the bot's terminal language,
+`language` in config) shows whether the PC is online, the bot's state and
 command, and the live log, which stays in view while the options scroll. Its form covers every command above, in
 sections: **Task**, **Targets** (villages, resources, dark elixir, walls, `--bulk-walls`, `--wall-resource`, `--first`), **Limits**
 (attacks, searches, time, upgrades, `--wall-every`, recoveries), **Army** (the army templates, ring or stack per village, `--quake`) and **Surrender**
@@ -603,6 +604,7 @@ How to change it:
 | `adb`, `serial`, `resolution` | ADB executable, device serial, and screen size. |
 | `ldconsole`, `ld_index` | LDPlayer console and instance index, used to start a stopped emulator. |
 | `touch_device` | Raw touch input device, e.g. `/dev/input/event4`. |
+| `language` | Terminal and dashboard log language: `id` (default) or `en`. The dashboard's ID/EN switch saves it in `config.local.json`; a running bot switches at its next Start. |
 | `tesseract` | Tesseract executable; used for loot only when `digits` is not set. |
 | `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
 | `remote` | Web dashboard: online relay address and key, local `port` (8765), and the `dashboard` address printed in the terminal. |
@@ -661,7 +663,7 @@ again.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (341 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (347 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, the dashboard link (signed commands, settings, the bot as a child
@@ -673,6 +675,7 @@ output. They do not replace a live run on a real account.
 ```text
 bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
 remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
+messages.py            terminal messages in English when config "language" is "en" (texts in messages_en.json)
 relay.py               online relay for the dashboard
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging)
 game_update.py         Play Store Update button and installed game version, for the automatic game update
@@ -685,6 +688,7 @@ test_remote.py         dashboard link tests (key, signatures, options, child pro
 test_relay.py          relay tests against a fake relay server
 test_ldplayer.py       LDPlayer detection tests against fake tool output
 test_device_control.py screen switch tests
+test_messages.py       every terminal message has its English text; translation of the log
 fixtures/              real screen crops and Play Store screens the tests read
 requirements.txt       Python dependencies (OpenCV, NumPy, websockets)
 netlify.toml           online dashboard hosting: published folder and security headers

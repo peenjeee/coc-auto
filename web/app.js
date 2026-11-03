@@ -141,7 +141,7 @@ function resultText(result) {
   return text === key ? String(result.message || '') : text;
 }
 
-const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved'];
+const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved', 'language_saved'];
 const DISPLAY_ANSWERS = ['display_fitted', 'display_ok', 'display_restored', 'display_unchanged'];
 
 function handleResult(result, quiet = false) {
@@ -150,7 +150,14 @@ function handleResult(result, quiet = false) {
   if (!result.ok || !result.data) return;
   if (result.code === 'deploy_loaded') editor.load(result.data);
   else if (result.code === 'setup_detected') settings.detected(result.data);
-  else if (SETTINGS_ANSWERS.includes(result.code)) settings.load(result.data);
+  else if (SETTINGS_ANSWERS.includes(result.code)) {
+    settings.load(result.data);
+    // The device's terminal speaks the dashboard's language; one still on the other is switched once.
+    const shown = document.documentElement.lang;
+    if (result.code === 'settings_loaded' && result.data.language && result.data.language !== shown) {
+      send('set_language', { language: shown }, { quiet: true });
+    }
+  }
   else if (DISPLAY_ANSWERS.includes(result.code)) settings.showDisplay(result.data);
 }
 
@@ -493,7 +500,10 @@ function init() {
   restoreOptions();
   refreshOptions();
   for (const button of document.querySelectorAll('[data-lang]')) {
-    button.addEventListener('click', () => changeLanguage(button.dataset.lang));
+    button.addEventListener('click', () => {
+      changeLanguage(button.dataset.lang);
+      if (link && online) send('set_language', { language: button.dataset.lang }, { quiet: true });
+    });
   }
   $('options').elements.namedItem('army').addEventListener('change', applyTemplate);
   $('options').elements.namedItem('builder_army').addEventListener('change', applyBuilderTemplate);
