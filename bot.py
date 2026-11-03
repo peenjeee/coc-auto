@@ -154,6 +154,8 @@ HUD_ALIGN_PX, HUD_GAP_RATIO, HUD_MIN_MEAN_VALUE = 2, 1.2, 235
 # A digit is about as wide as tall; a blob much wider is touching digits, cut where the bridge is thinnest.
 DIGIT_ASPECT, WIDE_RATIO, BRIDGE_RATIO = 0.95, 1.4, 0.15
 ANCHOR_MAX_SCORE, SEARCH_ANCHOR_MAX_SCORE = 0.02, 0.05
+# Calibrated on a game in Indonesian; a template with text has its English look under the same name in this folder.
+TWIN_FOLDER = 'en'
 # A search region this many times a template's area is scanned at half size first, then at full size only within
 # a few pixels of the best spot; the wall buttons' half-screen search drops from ~130 ms to ~30 ms per screenshot.
 COARSE_SEARCH_AREA, COARSE_REFINE_PX = 16, 4
@@ -171,6 +173,7 @@ WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS, WALL_PRICE_SECONDS = 4, 0.4, 2
 BULK_STEP_PX, BULK_ROW_PX, BULK_LABEL, BULK_LABEL_RED = 139, 127, (-52, 12, 104, 38), 200
 BULK_MAX_TAPS, BULK_TAP_SECONDS = 60, 0.4
 WHITE_LEVEL = 200
+TEXT_MASK_MIN = 0.1
 # An event sale (Hammer Jam) prints the wall price in this saturated green; the button behind it is paler.
 SALE_HUE, SALE_MIN_SATURATION, SALE_MIN_VALUE = (35, 65), 200, 220
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
@@ -287,6 +290,41 @@ def asset_path(root: Path, name: object) -> Path:
     return path
 
 
+def twin_name(root: Path, name: str) -> str | None:
+    """The English twin of a template with text in it: the same file name in an 'en' folder beside it, for a game
+    set to English; None while none was calibrated."""
+    twin = str(Path(name).parent / TWIN_FOLDER / Path(name).name)
+    return twin if asset_path(root, twin).is_file() else None
+
+
+def find_look(image: np.ndarray, root: Path, name: str, max_score: float, scales: tuple = (1.0,)) -> tuple:
+    """find_target with the template, then with its English twin."""
+    twin = twin_name(root, name)
+    try:
+        return find_target(image, cv2.imread(str(asset_path(root, name))), max_score, scales)
+    except BotError:
+        if twin is None:
+            raise
+    return find_target(image, cv2.imread(str(asset_path(root, twin))), max_score, scales)
+
+
+def text_shown(image: np.ndarray, root: Path, name: str, max_score: float) -> bool:
+    """The template's white text with its outline, or its English twin's, somewhere in image. The background
+    between the letters is left out: a tooltip sits over resource bars that fill up."""
+    for look in (name, twin_name(root, name)):
+        if not look:
+            continue
+        template = cv2.imread(str(asset_path(root, look)))
+        text = cv2.dilate(np.all(template > WHITE_LEVEL, axis=2).astype(np.uint8) * 255, np.ones((3, 3), np.uint8))
+        # A template with hardly any white text is compared whole.
+        mask = cv2.merge([text] * 3) if np.count_nonzero(text) >= TEXT_MASK_MIN * text.size else None
+        scores = cv2.matchTemplate(image, template, cv2.TM_SQDIFF_NORMED, mask=mask)
+        scores = scores[np.isfinite(scores)]
+        if scores.size and float(scores.min()) <= max_score:
+            return True
+    return False
+
+
 def crop(image: np.ndarray, roi: list) -> np.ndarray:
     x, y, w, h = roi
     return image[y:y+h, x:x+w]
@@ -362,6 +400,9 @@ def validate_config(config: dict, root: Path, mode: str) -> None:
             if not isinstance(group, list) or len(group) < 2:
                 raise BotError(f'{name}: alt_anchors perlu minimal dua anchor')
             for anchor in group:
+                if 'search' in anchor:
+                    validate_search_anchor(name, anchor, root, resolution)
+                    continue
                 roi = rectangle(anchor['roi'], resolution)
                 template = cv2.imread(str(asset_path(root, anchor['file'])))
                 if template is None or list(template.shape[:2]) != [roi[3], roi[2]] or float(template.std()) < 5:
@@ -822,6 +863,18 @@ def load_anchor(root: Path, anchor: dict) -> tuple:
     return anchor['roi'], template, anchor.get('margin', 0), (1.0,), ANCHOR_MAX_SCORE
 
 
+def anchor_groups(root: Path, screen: dict) -> list:
+    """The screen's other anchor groups, then its anchors and each such group as a game in English shows them, where
+    any of their templates has an English twin."""
+    groups = screen.get('alt_anchors', [])
+    english = []
+    for group in [screen['anchors'], *groups]:
+        twinned = [{**anchor, 'file': twin_name(root, anchor['file']) or anchor['file']} for anchor in group]
+        if twinned != group:
+            english.append(twinned)
+    return [*groups, *english]
+
+
 def match_min(region: np.ndarray, template: np.ndarray) -> float:
     """Best TM_SQDIFF_NORMED score of template in region. A refined spot is a subset of all spots, so the coarse
     pass can only miss a match, never make one up."""
@@ -843,9 +896,14 @@ class Detector:
                           for name, screen in config['screens'].items()}
         self.overrides = {name: set(screen.get('overrides', [])) for name, screen in config['screens'].items()}
         self.alternatives = {
-            name: [[load_anchor(root, a) for a in group] for group in screen.get('alt_anchors', [])]
+            name: [[load_anchor(root, a) for a in group] for group in anchor_groups(root, screen)]
             for name, screen in config['screens'].items()
         }
+
+    def shows(self, image: np.ndarray, name: str) -> bool:
+        """The screen's anchors, or any of its other groups and English looks, match."""
+        return self.matches(image, self.templates[name]) or any(self.matches(image, group)
+                                                                for group in self.alternatives[name])
 
     def matches(self, image: np.ndarray, anchors: list) -> bool:
         for roi, template, margin, scales, max_score in anchors:
@@ -869,10 +927,7 @@ class Detector:
     def detect(self, image: np.ndarray) -> str:
         if list(image.shape[1::-1]) != self.resolution:
             raise BotError('Resolusi layar berbeda dari kalibrasi')
-        matches = []
-        for name, anchors in self.templates.items():
-            if self.matches(image, anchors) or any(self.matches(image, group) for group in self.alternatives[name]):
-                matches.append(name)
+        matches = [name for name in self.templates if self.shows(image, name)]
         if not matches:
             raise UnknownScreen('Layar tidak dikenal; tidak ada input dikirim')
         overridden = set().union(*(self.overrides.get(name, set()) for name in matches))
@@ -1932,11 +1987,10 @@ class Bot:
         selection = zoom.get('selection')
         if not selection:
             return
-        template = cv2.imread(str(asset_path(self.root, selection['file'])))
         for attempt in range(ZOOM_CLEAR_ATTEMPTS + 1):
             state, image = self.observe()
             try:
-                find_target(image, template, selection['max_score'])
+                find_look(image, self.root, selection['file'], selection['max_score'])
             except TargetMissing:
                 return
             if attempt == ZOOM_CLEAR_ATTEMPTS:
@@ -2386,12 +2440,7 @@ class Bot:
                 return True
             except BotError:
                 return False
-        template = cv2.imread(str(asset_path(self.root, label['file'])))
-        try:
-            find_target(crop(image, label['region']), template, label['max_score'])
-            return True
-        except BotError:
-            return False
+        return text_shown(crop(image, label['region']), self.root, label['file'], label['max_score'])
 
     def read_until(self, reader: Callable, limit: float):
         """Read from fresh screenshots until the value appears; no fixed wait."""
@@ -2493,7 +2542,7 @@ class Bot:
         raise LimitReached(f'Selesai: {reason}; bot berhenti di desa')
 
     def list_open(self, image: np.ndarray) -> bool:
-        return self.detector.matches(image, self.detector.templates['build_list'])
+        return self.detector.shows(image, 'build_list')
 
     def find_gem_row(self, spec: dict) -> None:
         """On the village screen before a wall session: which row the gem bar is in on this account. The builder
@@ -2550,11 +2599,13 @@ class Bot:
         """(price, y) of every 'Tembok' row in view, top first. A price running past the bottom of the list is
         half hidden by the tabs, so it counts as unread; that row shows whole after the next swipe."""
         row, templates = spec['row'], self.templates()
-        template = cv2.imread(str(asset_path(self.root, row['file'])))
         _, dy, _, h = row['price']
         _, top, _, height = row['region']
+        ys = sorted({y for look in (row['file'], twin_name(self.root, row['file'])) if look
+                     for y in find_rows(image, cv2.imread(str(asset_path(self.root, look))), row['region'],
+                                        row['max_score'], row.get('scales', (1.0,)))})
         return [(row_price(image, row['price'], y, templates) if y + dy + h <= top + height else math.inf, y)
-                for y in find_rows(image, template, row['region'], row['max_score'], row.get('scales', (1.0,)))]
+                for y in ys]
 
     def priced_row(self, image: np.ndarray, spec: dict, price: float) -> int | None:
         found = [y for shown, y in self.wall_rows(image, spec) if shown == price]
@@ -2780,9 +2831,8 @@ class Bot:
         return True
 
     def sale_shown(self, image: np.ndarray, sale: dict) -> bool:
-        label = cv2.imread(str(asset_path(self.root, sale['file'])))
         try:
-            find_target(crop(image, sale['label']), label, ANCHOR_MAX_SCORE)
+            find_look(crop(image, sale['label']), self.root, sale['file'], ANCHOR_MAX_SCORE)
         except BotError:
             return False
         return True
@@ -2925,9 +2975,8 @@ class Bot:
     def bulk_word(self, image: np.ndarray, bulk: dict, resource: str) -> bool:
         """The bulk dialog names what it spends ("… dengan 2000000 Emas?"): Oke only when that is the chosen resource,
         so a gem price is never confirmed."""
-        word = cv2.imread(str(asset_path(self.root, bulk['words'][resource])))
         try:
-            find_target(crop(image, bulk['text']), word, SEARCH_ANCHOR_MAX_SCORE)
+            find_look(crop(image, bulk['text']), self.root, bulk['words'][resource], SEARCH_ANCHOR_MAX_SCORE)
         except BotError:
             return False
         return True

@@ -865,7 +865,7 @@ class BotTests(unittest.TestCase):
         # Selected after the pinch (pinching again would select it again), gone once the list was shut.
         seen = iter([([40, 40], 1.0), bot.TargetMissing('gone')])
 
-        def find(image, template, score):
+        def find(image, template, score, scales=(1.0,)):
             result = next(seen)
             if isinstance(result, Exception):
                 raise result
@@ -2363,15 +2363,49 @@ class BotTests(unittest.TestCase):
         root = Path(bot.__file__).parent
         detector, runner = bot.Detector(config, root), bot.Bot(config, root, None, live=True)
         bulk = config['walls']['home']['bulk']
-        # "Yakin ingin meningkatkan tembok yang dipilih dengan … Emas? / Eliksir? / Emas Tukang?" over Batal and Oke.
+        # "Yakin ingin meningkatkan tembok yang dipilih dengan … Emas? / Eliksir? / Emas Tukang?" over Batal and Oke,
+        # and the English game's "… for 1000000 Gold? / Elixir?" over Cancel and Okay.
         for name, resource, other in (('gold', 'gold', 'elixir'), ('elixir', 'elixir', 'gold'),
-                                      ('builder', 'gold', 'elixir')):
+                                      ('builder', 'gold', 'elixir'), ('en-gold', 'gold', 'elixir'),
+                                      ('en-elixir', 'elixir', 'gold')):
             image = np.zeros((720, 1280, 3), dtype=np.uint8)
             image[160:560, 320:960] = cv2.imread(str(root / 'fixtures' / f'wall-bulk-dialog-{name}.png'))
             with self.subTest(dialog=name):
                 self.assertEqual(detector.detect(image), 'wall_bulk_confirm')
                 self.assertTrue(runner.bulk_word(image, bulk, resource))
                 self.assertFalse(runner.bulk_word(image, bulk, other))
+
+    def test_an_english_twin_is_tried_after_the_template_it_stands_for(self):
+        rng = np.random.default_rng(53)
+        (self.root / 'en').mkdir()
+        indonesian, english = (rng.integers(0, 256, (12, 20, 3), dtype=np.uint8) for _ in range(2))
+        cv2.imwrite(str(self.root / 'label.png'), indonesian)
+        cv2.imwrite(str(self.root / 'en' / 'label.png'), english)
+        self.assertEqual(Path(bot.twin_name(self.root, 'label.png')), Path('en') / 'label.png')
+        self.assertIsNone(bot.twin_name(self.root, 'maks.png'))
+        screens = {**self.config['screens'], 'league': {
+            'anchors': [{'roi': [40, 30, 20, 12], 'file': 'label.png'},
+                        {'roi': [100, 30, 20, 12], 'file': 'label.png'}], 'actions': {'close': [150, 8]}}}
+        detector = bot.Detector({**self.config, 'screens': screens}, self.root)
+        for look in (indonesian, english):
+            image = np.zeros((90, 160, 3), np.uint8)
+            image[30:42, 40:60] = image[30:42, 100:120] = look
+            self.assertEqual(detector.detect(image), 'league')
+            image[30:42, 100:120] = 0
+            self.assertEqual(bot.find_look(image, self.root, 'label.png', 0.02)[0], [50, 36])
+        # Text over a bar that fills up: only the letters and their outline are compared.
+        letters = np.zeros((14, 30), np.uint8)
+        letters[3:11, 4:26:4] = 255
+        outline = cv2.dilate(letters, np.ones((3, 3), np.uint8)) > 0
+        text = np.full((14, 30, 3), 30, np.uint8)
+        text[outline], text[letters > 0] = 0, 255
+        cv2.imwrite(str(self.root / 'en' / 'text.png'), text)
+        cv2.imwrite(str(self.root / 'text.png'), np.zeros((14, 30, 3), np.uint8) + 90)
+        over_bar = np.full((30, 60, 3), (180, 40, 160), np.uint8)
+        spot = over_bar[8:22, 10:40]
+        spot[outline], spot[letters > 0] = 0, 255
+        self.assertTrue(bot.text_shown(over_bar, self.root, 'text.png', 0.05))
+        self.assertFalse(bot.text_shown(np.full((30, 60, 3), (180, 40, 160), np.uint8), self.root, 'text.png', 0.05))
 
     def test_bulk_walls_go_up_by_ten_then_back_one_at_a_time_to_what_is_affordable(self):
         runner = bot.Bot(self.config, self.root, Device(self.frames), live=True, timeout=1, poll=0, bulk_walls=True)

@@ -1243,6 +1243,31 @@
             ],
             "file": "calibration/builder_scout-bdd5eca50f8f4370beddcb066e8ff1ba.png"
           }
+        ],
+        [
+          {
+            "roi": [
+              570,
+              16,
+              142,
+              15
+            ],
+            "file": "calibration/builder_scout-countdown-en-f9f23320ce824130a11526d01f0f1d01.png",
+            "margin": 3
+          },
+          {
+            "file": "calibration/builder_scout-defender-en-f58d459729864dc68ff006347aab1219.png",
+            "search": [
+              40,
+              5,
+              140,
+              40
+            ],
+            "scales": [
+              1.0
+            ],
+            "max_score": 0.05
+          }
         ]
       ]
     },
@@ -1337,6 +1362,29 @@
           "file": "calibration/builder_stage2-countdown-9d1db97a1df94bc9943149af3127e61e.png",
           "margin": 3
         }
+      ],
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              30,
+              485,
+              125,
+              40
+            ],
+            "file": "calibration/builder_stage2-6654f209497f443685faf73ff0342cdf.png"
+          },
+          {
+            "roi": [
+              570,
+              16,
+              142,
+              15
+            ],
+            "file": "calibration/builder_scout-countdown-en-f9f23320ce824130a11526d01f0f1d01.png",
+            "margin": 3
+          }
+        ]
       ],
       "actions": {
         "surrender": [
@@ -1517,6 +1565,29 @@
           "file": "calibration/builder_battle2-ef024e562f1f4316869d262b9a1cfd8b.png",
           "margin": 3
         }
+      ],
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              30,
+              485,
+              125,
+              40
+            ],
+            "file": "calibration/builder_battle2-4b1dd0ab8d9e4a6b90ed8ae1ab0960ea.png"
+          },
+          {
+            "roi": [
+              580,
+              16,
+              122,
+              15
+            ],
+            "file": "calibration/battle-ends-en-3815bd8ba0784370913ef5d3372f2e64.png",
+            "margin": 3
+          }
+        ]
       ],
       "actions": {
         "surrender": [
@@ -1870,6 +1941,28 @@
               20
             ],
             "file": "calibration/wall_confirm-sale-label-b06a8b967a17479b80b2019217102cc4.png",
+            "margin": 8
+          }
+        ],
+        [
+          {
+            "roi": [
+              368,
+              30,
+              384,
+              38
+            ],
+            "file": "calibration/wall_confirm-title-b20e94a565334d03be35cc39156d94c9.png",
+            "margin": 12
+          },
+          {
+            "roi": [
+              1022,
+              592,
+              108,
+              18
+            ],
+            "file": "calibration/wall_confirm-time-label-en-f4a6bfdf7f1e4207b92d0c51913803ba.png",
             "margin": 8
           }
         ]

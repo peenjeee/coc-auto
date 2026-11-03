@@ -85,7 +85,7 @@ flowchart LR
 
 ## Requirements
 
-- Windows with **LDPlayer** (tested on LDPlayer 14, Android 14, **1280×720**, Indonesian game language)
+- Windows with **LDPlayer** (tested on LDPlayer 14, Android 14, **1280×720**, the game in Indonesian or English)
 - **Python 3.10+**
 - ADB from LDPlayer (`adb.exe`) with **local ADB debugging** enabled in LDPlayer settings (the dashboard's "fit
   screen" turns it on)
@@ -117,8 +117,8 @@ C:\LDPlayer\LDPlayer14\adb.exe devices
 ```
 
 > [!IMPORTANT]
-> The bundled calibration was built and tested with the game language set to **Bahasa Indonesia**
-> on LDPlayer at **1280×720**. Screens are recognised from on-screen text and icons, so a different
+> The bundled calibration was built and tested with the game language set to **Bahasa Indonesia** or
+> **English** on LDPlayer at **1280×720**. Screens are recognised from on-screen text and icons, so another
 > language, resolution, UI scale, or army layout will not match out of the box.
 > If the bot stops with *"Layar tidak dikenal"* (unknown screen) or taps the wrong place,
 > recalibrate it for your own setup — see [Calibration](#calibration).
@@ -134,7 +134,7 @@ not in git, so `git pull` never collides with it, and the dashboard saves its se
 | What | Must be | Why / how to check |
 | --- | --- | --- |
 | LDPlayer resolution | **1280×720, DPI 240** (Settings → Advanced → Resolution, or "fit screen" in the dashboard) | Screens are matched pixel for pixel. DPI changes the UI scale, so at another DPI no template matches even at 1280×720. |
-| Game language | **Bahasa Indonesia** | Many anchors are Indonesian text ("Pertempuran", "Tembok", "Maks:"). With another language every text anchor has to be recalibrated. Set it in CoC's own settings: CoC keeps its own language, so changing Android's or LDPlayer's language does not change it. |
+| Game language | **Bahasa Indonesia** or **English** | Many anchors are text ("Pertempuran"/"Battle", "Tembok"/"Wall", "Maks:"/"Max:"). Each template with text has an English twin under the same file name in `calibration/en/`, tried after the Indonesian one; a few English-only anchors cover labels whose box differs ("Upgrade time", "Battle starts in", "Defender", "Battle ends in"). Popups that could not be brought up on purpose (star bonus, rewards, league, idle, disconnected, update offer) are calibrated in Indonesian only. With another language every text anchor has to be recalibrated. Set it in CoC's own settings (Town Hall icon top left → Settings → Language): CoC keeps its own language, so changing Android's or LDPlayer's language does not change it. |
 | `adb`, `ldconsole` | Paths in your LDPlayer install folder | e.g. `C:\LDPlayer\LDPlayer14\adb.exe` and `C:\LDPlayer\LDPlayer14\ldconsole.exe`; the folder name depends on the LDPlayer version. |
 | `ld_index`, `serial` | Your instance | `ld_index` is the instance number in LDMultiPlayer (0 for the first). `serial` is `emulator-<5554 + 2 × index>`: `emulator-5554` for index 0, `emulator-5556` for index 1. Check with `adb devices`. |
 | `touch_device`, `zoom_out.device` | The touchscreen node | Run `adb -s <serial> shell getevent -pl` and use the `/dev/input/eventN` whose block lists `ABS_MT_POSITION_X`. Set both keys to it; holds, pinches and fast taps go there. |
@@ -666,7 +666,7 @@ again.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (350 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (351 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, the dashboard link (signed commands, settings, the bot as a child
