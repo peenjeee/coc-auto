@@ -1561,7 +1561,8 @@ class Bot:
                  minutes: int = 0, max_upgrades: int = 0, surrender: tuple = (),
                  surrender_after: float = SURRENDER_DEFAULT_SECONDS, surrender_at: int = 0, ring: bool = False,
                  quake: bool = False, surrender_stars: int = 0, builder_stack: bool = False,
-                 trophy_floor: int = 0, bulk_walls: bool = False) -> None:
+                 trophy_floor: int = 0, bulk_walls: bool = False, wall_every: int = 0,
+                 wall_resources: tuple = WALL_RESOURCES) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
@@ -1576,7 +1577,7 @@ class Bot:
         self.wall_order, self.walls_done, self.walls_skipped = walls, set(), set()
         self.stop_at = time.monotonic() + minutes * 60 if minutes else None
         self.upgrade_limit, self.upgrades_done = max_upgrades or None, 0
-        self.bulk_walls = bulk_walls
+        self.bulk_walls, self.wall_every, self.wall_resources = bulk_walls, wall_every, wall_resources
         self.gems_known: int | None = None
         self.gem_shift = 0
         self.wall_excluded: set = set()
@@ -2425,8 +2426,9 @@ class Bot:
             return False
         return 'cart' not in wanted or self.cart_full or self.cart_lost
 
-    def run_until_full(self, searches: int) -> int:
-        """Farm the chosen villages in order until each one's chosen resources are full."""
+    def run_until_full(self, searches: int, attack_limit: int = 0) -> int:
+        """Farm the chosen villages in order until each one's chosen resources are full, or for attack_limit attacks
+        (--wall-every) when that comes first; the number of attacks."""
         integer(searches, 0, 1_000_000, 'searches')
         full, attacks = set(), 0
         self.wait(set(VILLAGES), set(), 30)
@@ -2447,6 +2449,9 @@ class Bot:
                     return attacks
                 village = pending[0]
                 continue
+            if attack_limit and attacks >= attack_limit:
+                LOG.info('%s serangan selesai; cek tembok lagi', attacks)
+                return attacks
             if village == 'home':
                 self.home_attack(searches)
             else:
@@ -2989,7 +2994,8 @@ class Bot:
         self.find_gem_row(spec)
         self.open_build_list(village, spec)
         self.start_gem_watch(spec)
-        self.wall_excluded, self.wall_price = set(), None
+        # --wall-resource: what is left out is never paid with.
+        self.wall_excluded, self.wall_price = set(WALL_RESOURCES) - set(self.wall_resources), None
         upgraded = 0
         while True:
             self.check_limits()
@@ -3010,14 +3016,16 @@ class Bot:
                     self.upgrades_done += done
                     continue
             if not self.upgrade_wall(spec):
-                LOG.info('Gold dan elixir %s tidak cukup lagi setelah %s upgrade tembok', village, upgraded)
+                LOG.info('%s %s tidak cukup lagi setelah %s upgrade tembok',
+                         ' dan '.join(self.wall_resources).capitalize(), village, upgraded)
                 self.close_menus()
                 return upgraded
             upgraded += 1
             self.upgrades_done += 1
 
     def run_walls(self, searches: int) -> int:
-        """Per village in order: spend gold and elixir on walls, farm both full, repeat until every wall is maxed."""
+        """Per village in order: spend gold and elixir (or the --wall-resource one) on walls, farm it full or for
+        --wall-every attacks, repeat until every wall is maxed."""
         for village in self.wall_order:
             farmed = False
             while village not in self.walls_done:
@@ -3033,10 +3041,12 @@ class Bot:
                     break
                 if upgraded == 0 and farmed:
                     raise BotError(f'Tembok {village} tidak bisa di-upgrade walau gudang penuh; di Town Hall rendah '
-                                   'turunkan walls.home.gold_reserve, selain itu periksa kalibrasi')
-                self.goals = {village: {'gold', 'elixir'}}
-                self.run_until_full(searches)
-                farmed = True
+                                   'turunkan walls.home.gold_reserve, dengan --wall-resource pastikan tembok itu bisa '
+                                   'dibayar dengan resource tersebut, selain itu periksa kalibrasi')
+                self.goals = {village: set(self.wall_resources)}
+                attacks = self.run_until_full(searches, self.wall_every)
+                # Cut short by --wall-every the storage may not be full yet, so no affordable wall is no fault then.
+                farmed = not self.wall_every or attacks < self.wall_every
         if self.walls_done:
             LOG.info('Semua tembok sudah maksimal: %s', ', '.join(sorted(self.walls_done)))
         return len(self.walls_done)
@@ -3372,6 +3382,12 @@ def main() -> int:
     parser.add_argument('--bulk-walls', action='store_true',
                         help='--walls: upgrade banyak tembok selevel sekaligus lewat "Tingkatkan Lebih Banyak" '
                              '(sebanyak yang terbayar, satu Oke), lebih cepat dari satu per satu')
+    parser.add_argument('--wall-every', type=int, default=0,
+                        help='--walls: cek tembok lagi setiap sekian serangan, tanpa menunggu gudang penuh; '
+                             '0 = tunggu gudang penuh')
+    parser.add_argument('--wall-resource', choices=('gold', 'elixir', 'both'), default='both',
+                        help='--walls: bayar tembok dengan gold, elixir, atau keduanya (gold dulu); farming hanya '
+                             'sampai resource itu penuh')
     parser.add_argument('--surrender', choices=('home', 'builder', 'both'),
                         help='Menyerah otomatis di desa ini bila battle belum selesai setelah --surrender-after detik')
     parser.add_argument('--surrender-after', type=int,
@@ -3422,6 +3438,7 @@ def main() -> int:
         integer(args.hours, 0, 1000, 'hours')
         integer(args.minutes, 0, 60_000, 'minutes')
         integer(args.max_upgrades, 0, 100_000, 'max_upgrades')
+        integer(args.wall_every, 0, 1000, 'wall_every')
         until_full = args.until_full or args.builder is not None or args.home is not None
         minutes = args.hours * 60 + args.minutes
         if minutes and not (args.walls or (until_full and args.live)):
@@ -3430,6 +3447,8 @@ def main() -> int:
             raise BotError('--max-upgrades hanya untuk --walls')
         if args.bulk_walls and not args.walls:
             raise BotError('--bulk-walls hanya untuk --walls')
+        if (args.wall_every or args.wall_resource != 'both') and not args.walls:
+            raise BotError('--wall-every/--wall-resource hanya untuk --walls')
         surrender_after = integer(SURRENDER_DEFAULT_SECONDS if args.surrender_after is None else args.surrender_after,
                                   1, SURRENDER_MAX_SECONDS, 'surrender_after')
         # Off unless asked for; --surrender-after on its own turns it on in both villages.
@@ -3501,7 +3520,8 @@ def main() -> int:
                      minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
                      surrender_after=surrender_after, surrender_at=surrender_at, ring='home' in ring, quake=args.quake,
                      surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor,
-                     bulk_walls=args.bulk_walls)
+                     bulk_walls=args.bulk_walls, wall_every=args.wall_every,
+                     wall_resources=WALL_RESOURCES if args.wall_resource == 'both' else (args.wall_resource,))
         if walls:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif until_full and args.live:

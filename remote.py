@@ -60,14 +60,15 @@ VILLAGE_CHOICES = ('home', 'builder', 'both')
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
 # Option name, CLI flag, range; zero means "no limit" and is left out, except for recoveries.
 LIMITS = (('searches', '--searches', 0, 1_000_000), ('hours', '--hours', 0, 1000),
-          ('minutes', '--minutes', 0, 60_000), ('max_upgrades', '--max-upgrades', 0, 100_000))
+          ('minutes', '--minutes', 0, 60_000), ('max_upgrades', '--max-upgrades', 0, 100_000),
+          ('wall_every', '--wall-every', 0, 1000))
 # How each attack is fought, for every task that attacks.
 ATTACK_OPTIONS = ('surrender', 'surrender_after', 'surrender_at', 'home_style', 'builder_style', 'quake',
                   'surrender_stars', 'trophy_floor')
 STYLES = ('ring', 'stack')
 TASK_OPTIONS = {
-    'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'bulk_walls', 'max_recoveries',
-              *ATTACK_OPTIONS},
+    'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'bulk_walls', 'wall_every',
+              'wall_resource', 'max_recoveries', *ATTACK_OPTIONS},
     'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', *ATTACK_OPTIONS},
     'attack': {'village', 'cycles', 'searches', *ATTACK_OPTIONS},
     'dry': {'village'},
@@ -203,6 +204,9 @@ def build_args(options: dict) -> list[str]:
             raise CommandRefused('Pilihan bulk_walls harus ya/tidak')
         if bulk:
             args.append('--bulk-walls')
+        resource = choice(options, 'wall_resource', ('gold', 'elixir', 'both'), 'both')
+        if resource != 'both':
+            args += ['--wall-resource', resource]
     else:
         dark = options.get('dark', False)
         if not isinstance(dark, bool):

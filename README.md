@@ -237,6 +237,9 @@ python bot.py --walls home --max-upgrades 20 --minutes 45 --live
 ```bash
 python bot.py --walls both --bulk-walls --live
 ```
+```bash
+python bot.py --walls home --wall-resource elixir --wall-every 5 --live
+```
 
 `--walls` takes `home`, `builder` or `both`. For each village in turn it first spends the gold and elixir already
 in storage: it opens the builder list, finds a "Tembok" row, and upgrades one wall at a time with whichever of gold or
@@ -244,6 +247,10 @@ elixir is still affordable. It always takes the lowest wall level first, and mov
 farms until gold and elixir are both full, spends them again, and repeats. It stops once no "Tembok" row is left, which means
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
 Elixir Cart first; its lower walls cost gold only, higher ones gold or elixir (gold first, like the Home Village), and only the upgrade buttons a wall actually shows are used. Builder Base walls also need a free builder: with every builder busy the game offers to free one for gems, and the bot closes that offer with X and skips the Builder Base walls for that run. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
+`--wall-resource gold` or `elixir` pays for walls with that resource only and farms only it full; a wall that the chosen
+resource cannot pay for (such as a low Builder Base wall, gold only, with `elixir`) is never upgraded. `--wall-every N`
+goes back to the walls after N attacks, or sooner once the storage is full, so walls get the loot without waiting for a
+full storage; a short round that leaves nothing affordable just farms on.
 The bot never spends gems. It taps an upgrade only when its price is shown in white, and taps Konfirmasi only when
 the dialog is a wall upgrade, its price is white, and its icon is the chosen gold or elixir. During a sale such as
 Hammer Jam the Home Village dialog changes: the button carries a "Konfirmasi" label, the new price is green and the old
@@ -282,6 +289,8 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. With `--until-full`/`--builder`/`--home` it needs `--live`. |
 | `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded. `0` means no limit. |
 | `--bulk-walls` | off | `--walls` only: upgrade many walls of the picked level with one Oke through "Tingkatkan Lebih Banyak", as many as the resource pays for, instead of one at a time. Both villages. |
+| `--wall-every N` | `0` | `--walls` only: go back to the walls after every N attacks instead of waiting for full storage. `0` waits until full. |
+| `--wall-resource gold\|elixir\|both` | `both` | `--walls` only: pay for walls with gold only, elixir only, or both (gold first). Farming then fills only that resource. Both villages. |
 | `--surrender home\|builder\|both` | off | Give up a battle in these villages that is still running `--surrender-after` seconds after the troops are deployed: taps **Menyerah**/**Akhiri Serangan**, then **Oke**. In the Builder Base it counts per stage, so giving up stage 1 skips stage 2. |
 | `--surrender-after N` | `60` | Battle seconds, 1–120. On its own (without `--surrender`) it turns surrendering on in both villages. The battle clock runs at normal speed until its last minute (when the 4x button appears), so past 120 there is little left to save. |
 | `--surrender-at P` | `50` | Home Village: surrender once the battle's **Total Kerusakan** reads P percent (0–99) twice in a row, checked during the deploy too, so the rest of the army stays home. `0` never surrenders. Works with `--surrender-after`; whichever comes first. A setup without the damage calibration farms on without it (a warning says so) unless the option is given. |
@@ -346,8 +355,8 @@ dashboard can control the PC only while `--agent` (or any other bot command) is 
 
 The dashboard (Indonesian or English, switch in the title bar) shows whether the PC is online, the bot's state and
 command, and the live log, which stays in view while the options scroll. Its form covers every command above, in
-sections: **Task**, **Targets** (villages, resources, dark elixir, walls, `--bulk-walls`, `--first`), **Limits** (attacks, searches,
-time, upgrades, recoveries), **Army** (the army templates, ring or stack per village, `--quake`) and **Surrender**
+sections: **Task**, **Targets** (villages, resources, dark elixir, walls, `--bulk-walls`, `--wall-resource`, `--first`), **Limits**
+(attacks, searches, time, upgrades, `--wall-every`, recoveries), **Army** (the army templates, ring or stack per village, `--quake`) and **Surrender**
 (damage, stars, trophy floor, time). It shows the equivalent `python bot.py ...` line; **Start** runs it
 (a running task is stopped first). Other buttons: stop bot, repeat the last command, open CoC, close CoC, restart
 LDPlayer, turn LDPlayer off; the last three stop the bot first. When the PC is off, offline or the bot is not
@@ -652,7 +661,7 @@ again.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (337 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (341 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, the dashboard link (signed commands, settings, the bot as a child

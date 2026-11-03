@@ -273,6 +273,8 @@ function readOptions() {
   if (task === 'walls') {
     options.walls = data.get('walls');
     if (data.get('bulk_walls')) options.bulk_walls = true;
+    if (data.get('wall_resource') !== 'both') options.wall_resource = data.get('wall_resource');
+    if (number('wall_every')) options.wall_every = number('wall_every');
   }
   if (task === 'farm') {
     options.builder = data.getAll('builder');
@@ -314,6 +316,7 @@ function previewArgs(options) {
   } else if (options.task === 'walls') {
     args = ['--walls', options.walls];
     if (options.bulk_walls) args.push('--bulk-walls');
+    if (options.wall_resource) args.push('--wall-resource', options.wall_resource);
   } else {
     args = [];
     for (const village of ['builder', 'home']) {
@@ -322,7 +325,7 @@ function previewArgs(options) {
     if (!args.length) args = options.dark ? ['--until-full', '--dark'] : ['--until-full'];
   }
   if (options.first) args.push('--first', options.first);
-  for (const [name, flag] of [['searches', '--searches'], ['hours', '--hours'], ['minutes', '--minutes'], ['max_upgrades', '--max-upgrades']]) {
+  for (const [name, flag] of [['searches', '--searches'], ['hours', '--hours'], ['minutes', '--minutes'], ['max_upgrades', '--max-upgrades'], ['wall_every', '--wall-every']]) {
     if (options[name]) args.push(flag, String(options[name]));
   }
   if (options.max_recoveries !== undefined) args.push('--max-recoveries', String(options.max_recoveries));

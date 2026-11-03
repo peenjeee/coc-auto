@@ -559,6 +559,20 @@ class BuildArgsTests(unittest.TestCase):
             with self.subTest(options=bad), self.assertRaises(remote.CommandRefused):
                 remote.build_args(bad)
 
+    def test_walls_can_come_back_after_some_attacks_and_pay_with_one_resource(self):
+        self.assertEqual(remote.build_args({'task': 'walls', 'walls': 'home', 'wall_every': 5,
+                                            'wall_resource': 'elixir'}),
+                         ['--walls', 'home', '--wall-resource', 'elixir', '--wall-every', '5', '--live'])
+        self.assertEqual(remote.build_args({'task': 'walls', 'walls': 'home', 'wall_every': 0,
+                                            'wall_resource': 'both'}),
+                         ['--walls', 'home', '--live'])
+        for bad in ({'task': 'walls', 'walls': 'home', 'wall_resource': 'gems'},
+                    {'task': 'walls', 'walls': 'home', 'wall_every': 1001},
+                    {'task': 'walls', 'walls': 'home', 'wall_every': '5'},
+                    {'task': 'farm', 'wall_resource': 'gold'}, {'task': 'attack', 'wall_every': 3}):
+            with self.subTest(options=bad), self.assertRaises(remote.CommandRefused):
+                remote.build_args(bad)
+
     def test_surrender_is_passed_on(self):
         self.assertEqual(remote.build_args({'task': 'farm', 'surrender': 'builder', 'surrender_after': 45}),
                          ['--until-full', '--surrender', 'builder', '--surrender-after', '45', '--live'])

@@ -79,6 +79,9 @@
             <div data-for="walls" class="checks">
               <label><input type="checkbox" name="bulk_walls" value="yes"> <span data-i18n="bulk_walls"></span></label>
             </div>
+            <label class="field-row" data-for="walls"><span data-i18n="wall_resource"></span>
+              <select name="wall_resource"><option value="both">both</option><option value="gold">gold</option><option value="elixir">elixir</option></select>
+            </label>
             <div data-for="farm" class="checks">
               <span data-i18n="builder_res"></span>
               <label><input type="checkbox" name="builder" value="gold"> gold</label>
@@ -110,6 +113,7 @@
             <label class="field-row" data-for="walls farm"><span data-i18n="hours"></span> <input name="hours" type="number" min="0" max="1000" value="0"></label>
             <label class="field-row" data-for="walls farm"><span data-i18n="minutes"></span> <input name="minutes" type="number" min="0" max="60000" value="0"></label>
             <label class="field-row" data-for="walls"><span data-i18n="max_upgrades"></span> <input name="max_upgrades" type="number" min="0" max="100000" value="0"></label>
+            <label class="field-row" data-for="walls"><span data-i18n="wall_every"></span> <input name="wall_every" type="number" min="0" max="1000" value="0"></label>
             <label class="field-row" data-for="walls farm"><span data-i18n="max_recoveries"></span> <input name="max_recoveries" type="number" min="0" max="1000" value="20"></label>
           </fieldset>
 

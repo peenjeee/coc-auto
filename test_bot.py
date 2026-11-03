@@ -808,6 +808,19 @@ class BotTests(unittest.TestCase):
             self.assertEqual(bot.main(), 0)
         self.assertEqual(runner.call_args.kwargs['max_upgrades'], 3)
 
+    def test_wall_every_and_wall_resource_reach_the_bot_and_need_walls(self):
+        with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--no-remote', '--wall-every', '5',
+                                '--wall-resource', 'elixir']), \
+                patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
+                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as runner:
+            self.assertEqual(bot.main(), 0)
+        self.assertEqual(runner.call_args.kwargs['wall_every'], 5)
+        self.assertEqual(runner.call_args.kwargs['wall_resources'], ('elixir',))
+        for argv in (['--until-full', '--wall-every', '5'], ['--until-full', '--wall-resource', 'gold'],
+                     ['--walls', 'home', '--wall-every', '1001']):
+            with self.subTest(argv=argv), patch('sys.argv', ['bot.py', *argv, '--live', '--no-remote']):
+                self.assertEqual(bot.main(), 1)
+
     def test_busy_builders_are_closed_with_x_and_stop_that_village(self):
         busy = np.random.default_rng(43).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
@@ -829,7 +842,7 @@ class BotTests(unittest.TestCase):
         runner = self.make_bot(Device(self.frames), True)
         runner.wall_order = ('builder', 'home')
         calls = []
-        runner.run_until_full = lambda searches: calls.append('farm')
+        runner.run_until_full = lambda searches, attack_limit=0: calls.append('farm')
         runner.upgrade_walls = lambda village: calls.append(village) or (
             (_ for _ in ()).throw(bot.NoFreeBuilder('sibuk')) if village == 'builder' else None)
         runner.run_walls(0)
@@ -2430,7 +2443,7 @@ class BotTests(unittest.TestCase):
         runner.wall_order = ('home', 'builder')
         calls = []
         rounds = {'home': iter([3, 2, None]), 'builder': iter([0, None])}
-        runner.run_until_full = lambda searches: calls.append(('farm', dict(runner.goals)))
+        runner.run_until_full = lambda searches, attack_limit=0: calls.append(('farm', dict(runner.goals)))
         runner.upgrade_walls = lambda village: calls.append(('walls', village)) or next(rounds[village])
         runner.run_walls(0)
         self.assertEqual(calls, [('walls', 'home'), ('farm', {'home': {'gold', 'elixir'}}),
@@ -2441,10 +2454,58 @@ class BotTests(unittest.TestCase):
     def test_walls_stop_when_full_storage_upgrades_nothing(self):
         runner = self.make_bot(Device(self.frames), True)
         runner.wall_order = ('builder',)
-        runner.run_until_full = lambda searches: None
+        runner.run_until_full = lambda searches, attack_limit=0: None
         runner.upgrade_walls = lambda village: 0
         with self.assertRaises(bot.BotError):
             runner.run_walls(0)
+
+    def test_wall_every_goes_back_to_the_walls_after_that_many_attacks(self):
+        runner = self.make_bot(Device(self.frames), True)
+        runner.goals = {'home': {'elixir'}}
+        attacks = []
+        runner.navigate = runner.refresh_if_low_memory = runner.wait = lambda *args: None
+        runner.observe = lambda: ('home', None)
+        runner.village_done = lambda village, image: False
+        runner.home_attack = lambda searches: attacks.append(1)
+        self.assertEqual(runner.run_until_full(0, attack_limit=3), 3)
+        self.assertEqual(len(attacks), 3)
+        # Storage not full after a short round, so walls nobody can pay yet are no fault; farming goes on.
+        runner.wall_order, runner.wall_every, runner.wall_resources = ('home',), 3, ('elixir',)
+        calls = []
+        rounds = iter([0, 0, 2, None])
+        runner.run_until_full = lambda searches, attack_limit=0: calls.append((attack_limit, dict(runner.goals))) or 3
+        runner.upgrade_walls = lambda village: next(rounds)
+        runner.run_walls(0)
+        self.assertEqual(calls, [(3, {'home': {'elixir'}})] * 3)
+        # A round that filled the storage before the limit and still upgrades nothing stops as before.
+        runner.walls_done, rounds = set(), iter([0, 0])
+        runner.run_until_full = lambda searches, attack_limit=0: 1
+        with self.assertRaises(bot.BotError):
+            runner.run_walls(0)
+
+    def test_wall_resource_pays_with_the_chosen_resource_only(self):
+        spec, _, _ = self.wall_spec()
+        runner = self.make_bot(Device(self.frames), True)
+        runner.config = {**runner.config, 'walls': {'home': spec}}
+        runner.wall_resources = ('elixir',)
+        runner.current_screen = lambda: 'home'
+        runner.wait = runner.find_gem_row = runner.open_build_list = runner.start_gem_watch = lambda *args: None
+        checks = []
+
+        def check_limits():
+            checks.append(1)
+            if len(checks) > 1:
+                raise bot.LimitReached('stop')
+        runner.check_limits = check_limits
+        with self.assertRaises(bot.LimitReached):
+            runner.upgrade_walls('home')
+        self.assertEqual(runner.wall_excluded, {'gold'})
+        runner.wall_buttons = lambda image, spec: [('gold', [1, 1], True), ('elixir', [2, 2], True)]
+        self.assertEqual(runner.affordable_button(None, spec), ('elixir', [2, 2]))
+        runner.wall_resources = bot.WALL_RESOURCES
+        with self.assertRaises(bot.LimitReached):
+            checks.clear() or runner.upgrade_walls('home')
+        self.assertEqual(runner.affordable_button(None, spec), ('gold', [1, 1]))
 
     def test_wall_order_and_calibration_are_checked(self):
         self.assertEqual(bot.wall_order('both', 'home'), ('home', 'builder'))
