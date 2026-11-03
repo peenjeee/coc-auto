@@ -677,8 +677,11 @@ class ADB:
         x, y = point(location, self.resolution, 'hold')
         self.inject([('down', x, y)])
 
-    def touch_up(self) -> None:
-        self.inject([('up',)])
+    def touch_up(self, *extra: str) -> None:
+        """Lift every finger the bot may hold (--ring holds RING_FINGERS) on the touch node and on extra nodes."""
+        lift = [event for slot in range(RING_FINGERS) for event in ((3, 47, slot), (3, 57, -1))]
+        for node in dict.fromkeys(node for node in (self.touch, *extra) if node):
+            self.inject([('frame', 'up_all', lift + [(1, 330, 0), (0, 0, 0)])], node)
 
     def hold(self, slot: list | None, location: list, seconds: float) -> None:
         """Optionally select a card, then keep one finger down so troops stream out."""
@@ -943,12 +946,16 @@ def red_pixels(image: np.ndarray, region: list) -> int:
     return int((((hue <= 8) | (hue >= 172)) & (saturation > 120) & (value > 120)).sum())
 
 
-def sale_pixels(image: np.ndarray, region: list) -> int:
+def sale_mask(image: np.ndarray) -> np.ndarray:
     """A sale price that is affordable is a saturated green; its button is a paler one and a short price red."""
-    hsv = cv2.cvtColor(crop(image, region), cv2.COLOR_BGR2HSV)
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    return int(((hue >= SALE_HUE[0]) & (hue <= SALE_HUE[1]) & (saturation > SALE_MIN_SATURATION)
-                & (value > SALE_MIN_VALUE)).sum())
+    return ((hue >= SALE_HUE[0]) & (hue <= SALE_HUE[1]) & (saturation > SALE_MIN_SATURATION)
+            & (value > SALE_MIN_VALUE))
+
+
+def sale_pixels(image: np.ndarray, region: list) -> int:
+    return int(sale_mask(crop(image, region)).sum())
 
 
 def find_rows(image: np.ndarray, template: np.ndarray, region: list, max_score: float,
@@ -2657,7 +2664,15 @@ class Bot:
             GEM_READ_SECONDS if self.poll else 0)
 
     def confirm_price(self, image: np.ndarray, spec: dict) -> int:
-        return read_trailing_number(crop(image, spec['confirm']['price']), self.templates(), FRACTION_MIN_SCORE)
+        """The price on Konfirmasi. In a sale it is the green new price, drawn white for the digit templates; left
+        unread, the gold reserve could not be checked and gold would be dropped for the rest of the session."""
+        confirm = spec['confirm']
+        sale = confirm.get('sale')
+        if sale and self.sale_shown(image, sale):
+            price = cv2.cvtColor(sale_mask(crop(image, sale['price'])).astype(np.uint8) * 255, cv2.COLOR_GRAY2BGR)
+        else:
+            price = crop(image, confirm['price'])
+        return read_trailing_number(price, self.templates(), FRACTION_MIN_SCORE)
 
     def keeps_reserve(self, image: np.ndarray, spec: dict, gold: int, reserve: int) -> bool:
         try:
@@ -3193,10 +3208,13 @@ class Bot:
         self.refresh_if_low_memory()
 
     def release_touch(self) -> None:
+        """Lift every finger, the zoom node's too: a stop or stall that cuts a hold or pinch short leaves fingers down,
+        and the game then reads every drag as a pinch, so the map zooms out and the builder list no longer scrolls."""
         touch_up = getattr(self.device, 'touch_up', None)
-        if callable(touch_up) and getattr(self.device, 'touch', True):
+        zoom = (self.config.get('zoom_out') or {}).get('device')
+        if callable(touch_up) and (getattr(self.device, 'touch', True) or zoom):
             try:
-                touch_up()
+                touch_up(*filter(None, [zoom]))
             except BotError:
                 pass
 
@@ -3395,6 +3413,7 @@ def main() -> int:
     if args.worker and hasattr(signal, 'SIGBREAK'):
         # The dashboard stops a worker with Ctrl+Break; end it like Ctrl+C so the bot stops its own way.
         signal.signal(signal.SIGBREAK, signal.default_int_handler)
+    runner = None
     try:
         # Check every number before anything touches the emulator.
         integer(args.cycles, 1, 100, 'cycles')
@@ -3513,6 +3532,10 @@ def main() -> int:
     except (BotError, KeyError, TypeError, cv2.error) as exc:
         LOG.error('Berhenti: %s', exc)
         return 1
+    finally:
+        # A stop in the middle of a hold or pinch kills it before its fingers are lifted.
+        if runner is not None:
+            runner.release_touch()
 
 
 if __name__ == '__main__':

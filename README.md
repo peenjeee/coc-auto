@@ -249,7 +249,8 @@ the dialog is a wall upgrade, its price is white, and its icon is the chosen gol
 Hammer Jam the Home Village dialog changes: the button carries a "Konfirmasi" label, the new price is green and the old
 one is struck through in white below it. The bot knows this layout by the label (`walls.home.confirm.sale`) and then
 counts only the green price, so a sale price the storage cannot pay (shown in red) is never confirmed even though the
-struck-through price is white; the icon must still be gold or elixir.
+struck-through price is white; the icon must still be gold or elixir. The gold reserve is checked against that green
+price too, so gold keeps paying for walls during a sale.
 
 With `--bulk-walls` the selected wall's "Tingkatkan Lebih Banyak" button upgrades many walls of its level in one go
 (`walls.<village>.bulk`). The bot adds ten walls at a time while the price stays white, then takes one off at a time
@@ -297,7 +298,9 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--new-key` | off | Make a new dashboard API key for this PC; the old one stops working. |
 
 Every command runs under the [web dashboard](#web-dashboard) link: when its task ends (or is stopped), the bot stays on
-standby for the dashboard. Leave with **Ctrl+C** at any time.
+standby for the dashboard. Leave with **Ctrl+C** at any time. However the bot stops (Ctrl+C, the dashboard's stop, or
+an error), it lifts every virtual finger it may have held, so a hold or zoom cut short does not leave the game reading
+your own drags as a pinch.
 
 ## Web dashboard
 
@@ -649,7 +652,7 @@ again.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (336 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (337 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, the dashboard link (signed commands, settings, the bot as a child

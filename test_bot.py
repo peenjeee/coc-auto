@@ -1,3 +1,4 @@
+import base64
 import copy
 import json
 from pathlib import Path
@@ -2242,6 +2243,10 @@ class BotTests(unittest.TestCase):
                 self.assertEqual(detector.detect(image), 'wall_confirm')
                 self.assertTrue(runner.confirm_safe(image, spec, resource))
                 self.assertFalse(runner.confirm_safe(image, spec, other))
+                # The green price is what the gold reserve is checked against; unread, gold was dropped for the session.
+                self.assertEqual(runner.confirm_price(image, spec), 1_000_000)
+                self.assertTrue(runner.keeps_reserve(image, spec, 2_083_661, 200_000))
+                self.assertFalse(runner.keeps_reserve(image, spec, 1_100_000, 200_000))
                 # Short of the resource the sale price turns red while the struck old price stays white.
                 self.assertGreaterEqual(bot.white_pixels(short, spec['confirm']['price']), spec['confirm']['min_white'])
                 self.assertFalse(runner.confirm_safe(short, spec, resource))
@@ -3171,6 +3176,26 @@ class BotTests(unittest.TestCase):
         bad = {**scout, 'troops': [{'slot': [20, 80], 'count': 1, 'points': [[999, 1]]}]}
         with self.assertRaises(bot.BotError):
             bot.validate_config({**config, 'screens': {**config['screens'], 'home_scout': bad}}, self.root, 'both')
+
+    def test_a_stop_lifts_every_finger_on_the_touch_and_zoom_nodes(self):
+        # A stop that cuts a --ring hold or a pinch short leaves fingers down; the game then reads drags as pinches.
+        device = bot.ADB('adb.exe', 'emulator-5554', [1280, 720], live=True, touch='/dev/input/event4')
+        runner = bot.Bot({**self.config, 'zoom_out': {'device': '/dev/input/event5'}}, self.root, device, live=True)
+        with patch('bot.subprocess.run') as run:
+            runner.release_touch()
+        prepare, *lifts = (call.args[0][4] for call in run.call_args_list)
+        self.assertEqual(lifts, ['cat /data/local/tmp/cocbot/up_all > /dev/input/event4',
+                                 'cat /data/local/tmp/cocbot/up_all > /dev/input/event5'])
+        events = base64.b64decode(prepare.split('echo ')[1].split(' |')[0])
+        lifted = [struct.unpack('<qqHHi', events[i:i + 24])[2:] for i in range(0, len(events), 24)]
+        self.assertEqual([value for _, code, value in lifted if code == 47], list(range(bot.RING_FINGERS)))
+        self.assertEqual([value for _, code, value in lifted if code == 57], [-1] * bot.RING_FINGERS)
+        with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--no-remote']), \
+                patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
+                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as stopped:
+            stopped.return_value.run_until_full_resilient.side_effect = KeyboardInterrupt
+            self.assertEqual(bot.main(), 130)
+        stopped.return_value.release_touch.assert_called_once_with()
 
     def test_adb_tap_many_uses_one_shell_call(self):
         device = bot.ADB('adb.exe', 'emulator-5554', [1280, 720], live=True)
