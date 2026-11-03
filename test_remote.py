@@ -550,6 +550,15 @@ class BuildArgsTests(unittest.TestCase):
         self.assertEqual(remote.build_args({'task': 'walls', 'walls': 'home', 'max_recoveries': 5}),
                          ['--walls', 'home', '--max-recoveries', '5', '--live'])
 
+    def test_bulk_walls_are_a_wall_task_switch(self):
+        self.assertEqual(remote.build_args({'task': 'walls', 'walls': 'both', 'bulk_walls': True}),
+                         ['--walls', 'both', '--bulk-walls', '--live'])
+        self.assertEqual(remote.build_args({'task': 'walls', 'walls': 'home', 'bulk_walls': False}),
+                         ['--walls', 'home', '--live'])
+        for bad in ({'task': 'walls', 'walls': 'home', 'bulk_walls': 'yes'}, {'task': 'farm', 'bulk_walls': True}):
+            with self.subTest(options=bad), self.assertRaises(remote.CommandRefused):
+                remote.build_args(bad)
+
     def test_surrender_is_passed_on(self):
         self.assertEqual(remote.build_args({'task': 'farm', 'surrender': 'builder', 'surrender_after': 45}),
                          ['--until-full', '--surrender', 'builder', '--surrender-after', '45', '--live'])

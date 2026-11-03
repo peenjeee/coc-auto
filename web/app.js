@@ -270,7 +270,10 @@ function readOptions() {
     return Number.isFinite(value) ? value : fallback;
   };
   const options = { task };
-  if (task === 'walls') options.walls = data.get('walls');
+  if (task === 'walls') {
+    options.walls = data.get('walls');
+    if (data.get('bulk_walls')) options.bulk_walls = true;
+  }
   if (task === 'farm') {
     options.builder = data.getAll('builder');
     options.home = data.getAll('home');
@@ -310,6 +313,7 @@ function previewArgs(options) {
     args.push('--cycles', String(options.cycles));
   } else if (options.task === 'walls') {
     args = ['--walls', options.walls];
+    if (options.bulk_walls) args.push('--bulk-walls');
   } else {
     args = [];
     for (const village of ['builder', 'home']) {

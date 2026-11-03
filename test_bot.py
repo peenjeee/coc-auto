@@ -2246,6 +2246,87 @@ class BotTests(unittest.TestCase):
                 self.assertGreaterEqual(bot.white_pixels(short, spec['confirm']['price']), spec['confirm']['min_white'])
                 self.assertFalse(runner.confirm_safe(short, spec, resource))
 
+    @staticmethod
+    def bulk_frame(name: str) -> np.ndarray:
+        image = np.zeros((720, 1280, 3), dtype=np.uint8)
+        image[440:640] = cv2.imread(str(Path(bot.__file__).parent / 'fixtures' / f'wall-bulk-{name}.png'))
+        return image
+
+    def test_bulk_upgrade_buttons_and_their_controls_are_read_from_real_screens(self):
+        config, _, _ = self.bundled()
+        runner = bot.Bot(config, Path(bot.__file__).parent, None, live=True, bulk_walls=True)
+        runner.detector.detect = lambda image: 'build_list'
+        # Price affordable, then -1, +10 and +1 enabled: -1 greys out at one wall, +10 with fewer than ten more walls
+        # of the level (the Builder Base screen), and the list-closed layout is drawn at 1.1.
+        cases = {('home', 'gold'): (True, False, True, True), ('home-short', 'elixir'): (False, True, True, True),
+                 ('home-wide', 'gold'): (True, False, True, True), ('builder', 'gold'): (True, False, False, True)}
+        for (name, resource), expected in cases.items():
+            village = 'builder' if name == 'builder' else 'home'
+            spec, image = config['walls'][village], self.bulk_frame(name)
+            with self.subTest(screen=name):
+                affordable, controls = runner.bulk_view(image, spec, village, resource)
+                self.assertEqual((affordable, controls['minus'][1], controls['plus10'][1], controls['plus1'][1]),
+                                 expected)
+                self.assertTrue(runner.bulk_left(village, image))
+                # The one-wall hammer is not there, so a bulk screen is never taken for a selected wall.
+                self.assertEqual(runner.wall_buttons(image, spec), [])
+
+    def test_the_bulk_dialog_is_not_taken_for_surrender_and_names_what_it_spends(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        detector, runner = bot.Detector(config, root), bot.Bot(config, root, None, live=True)
+        bulk = config['walls']['home']['bulk']
+        # "Yakin ingin meningkatkan tembok yang dipilih dengan … Emas? / Eliksir? / Emas Tukang?" over Batal and Oke.
+        for name, resource, other in (('gold', 'gold', 'elixir'), ('elixir', 'elixir', 'gold'),
+                                      ('builder', 'gold', 'elixir')):
+            image = np.zeros((720, 1280, 3), dtype=np.uint8)
+            image[160:560, 320:960] = cv2.imread(str(root / 'fixtures' / f'wall-bulk-dialog-{name}.png'))
+            with self.subTest(dialog=name):
+                self.assertEqual(detector.detect(image), 'wall_bulk_confirm')
+                self.assertTrue(runner.bulk_word(image, bulk, resource))
+                self.assertFalse(runner.bulk_word(image, bulk, other))
+
+    def test_bulk_walls_go_up_by_ten_then_back_one_at_a_time_to_what_is_affordable(self):
+        runner = bot.Bot(self.config, self.root, Device(self.frames), live=True, timeout=1, poll=0, bulk_walls=True)
+        spots = {'minus': [10, 1], 'plus10': [20, 1], 'plus1': [30, 1]}
+        steps = {tuple(spots['minus']): -1, tuple(spots['plus10']): 10, tuple(spots['plus1']): 1}
+
+        def run(affordable, walls, cap):
+            shown, pressed = {'count': 1}, []
+
+            def view(frame, spec, village, resource):
+                count = shown['count']
+                controls = {'minus': (spots['minus'], count > 1), 'plus10': (spots['plus10'], count + 10 <= walls),
+                            'plus1': (spots['plus1'], count + 1 <= walls)}
+                return count <= affordable, controls
+
+            def tap_many(points):
+                shown['count'] += steps[tuple(points[0])]
+                pressed.append(steps[tuple(points[0])])
+            runner.bulk_view, runner.device.tap_many = view, tap_many
+            return runner.fill_bulk({}, 'home', 'gold', cap), pressed
+        # 17 affordable of 50: two tens overshoot to 21, then one off at a time back to 17.
+        self.assertEqual(run(17, 50, 1000), (17, [10, 10, -1, -1, -1, -1]))
+        # Only three walls of this level: +10 greys out, so ones.
+        self.assertEqual(run(50, 3, 1000), (3, [1, 1]))
+        # --max-upgrades or the gold reserve stops it at five.
+        self.assertEqual(run(17, 50, 5), (5, [1, 1, 1, 1]))
+        # Not even one wall is affordable.
+        self.assertEqual(run(0, 50, 1000), (None, []))
+
+    def test_a_bulk_gold_upgrade_keeps_the_reserve_and_the_upgrade_limit(self):
+        runner = bot.Bot(self.config, self.root, None, live=True, bulk_walls=True)
+        runner.hud_gold = lambda spec: 3_250_000
+        runner.wall_price = 1_000_000
+        spec = {'gold_reserve': 200_000}
+        self.assertEqual(runner.bulk_cap(spec, 'gold'), 3)
+        runner.upgrade_limit, runner.upgrades_done = 5, 3
+        self.assertEqual(runner.bulk_cap(spec, 'gold'), 2)
+        self.assertEqual(runner.bulk_cap(spec, 'elixir'), 2)
+        # An unread price allows one wall, which goes to the one-wall upgrade.
+        runner.wall_price = float('inf')
+        self.assertEqual(runner.bulk_cap(spec, 'gold'), 1)
+
     def test_the_damage_percent_is_read_from_real_battle_screens(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent

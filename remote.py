@@ -66,7 +66,8 @@ ATTACK_OPTIONS = ('surrender', 'surrender_after', 'surrender_at', 'home_style', 
                   'surrender_stars', 'trophy_floor')
 STYLES = ('ring', 'stack')
 TASK_OPTIONS = {
-    'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'max_recoveries', *ATTACK_OPTIONS},
+    'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'bulk_walls', 'max_recoveries',
+              *ATTACK_OPTIONS},
     'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', *ATTACK_OPTIONS},
     'attack': {'village', 'cycles', 'searches', *ATTACK_OPTIONS},
     'dry': {'village'},
@@ -197,6 +198,11 @@ def build_args(options: dict) -> list[str]:
         args += ['--cycles', str(whole(options, 'cycles', 1, 100) or 1)]
     elif task == 'walls':
         args = ['--walls', choice(options, 'walls', VILLAGE_CHOICES)]
+        bulk = options.get('bulk_walls', False)
+        if not isinstance(bulk, bool):
+            raise CommandRefused('Pilihan bulk_walls harus ya/tidak')
+        if bulk:
+            args.append('--bulk-walls')
     else:
         dark = options.get('dark', False)
         if not isinstance(dark, bool):

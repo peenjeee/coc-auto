@@ -1889,6 +1889,46 @@
         ]
       }
     },
+    "wall_bulk_confirm": {
+      "anchors": [
+        {
+          "roi": [
+            442,
+            203,
+            400,
+            40
+          ],
+          "file": "calibration/wall_bulk_confirm-title-380966cba2274870b371c0f50fe4811d.png",
+          "margin": 8
+        },
+        {
+          "roi": [
+            735,
+            440,
+            90,
+            42
+          ],
+          "file": "calibration/surrender_confirm-oke-911e6e20312c4268badda4b00e334025.png"
+        }
+      ],
+      "overrides": [
+        "surrender_confirm",
+        "build_list",
+        "wall_selected",
+        "home",
+        "builder"
+      ],
+      "actions": {
+        "confirm": [
+          778,
+          462
+        ],
+        "close": [
+          499,
+          463
+        ]
+      }
+    },
     "welcome": {
       "anchors": [
         {
@@ -2600,6 +2640,57 @@
           19
         ],
         "icon_min": 40
+      },
+      "bulk": {
+        "more": {
+          "file": "calibration/wall-bulk-more-home-89e39ea14d23404b88b2dc726efe8c17.png",
+          "search": [
+            0,
+            480,
+            1280,
+            160
+          ],
+          "scales": [
+            1.0,
+            1.1
+          ],
+          "max_score": 0.05
+        },
+        "button": {
+          "file": "calibration/wall-bulk-hammer-6b8c579375a848f0bf79c662e76fbf9e.png",
+          "search": [
+            0,
+            480,
+            1280,
+            160
+          ],
+          "scales": [
+            1.0,
+            1.1
+          ],
+          "max_score": 0.03,
+          "price": [
+            -32,
+            -34,
+            116,
+            26
+          ],
+          "tap": [
+            25,
+            19
+          ],
+          "icon_min": 40
+        },
+        "words": {
+          "gold": "calibration/wall-bulk-word-emas-6e1a73d773d04d699d7f87faf947a326.png",
+          "elixir": "calibration/wall-bulk-word-eliksir-700e525181d6435ba9c65f069aba90ef.png"
+        },
+        "text": [
+          360,
+          318,
+          560,
+          44
+        ]
       }
     },
     "builder": {
@@ -2698,6 +2789,57 @@
           19
         ],
         "icon_min": 40
+      },
+      "bulk": {
+        "more": {
+          "file": "calibration/wall-bulk-more-builder-3829a70657c34a6b98bfad37f178c92d.png",
+          "search": [
+            0,
+            480,
+            1280,
+            160
+          ],
+          "scales": [
+            1.0,
+            1.1
+          ],
+          "max_score": 0.05
+        },
+        "button": {
+          "file": "calibration/wall-bulk-hammer-6b8c579375a848f0bf79c662e76fbf9e.png",
+          "search": [
+            0,
+            480,
+            1280,
+            160
+          ],
+          "scales": [
+            1.0,
+            1.1
+          ],
+          "max_score": 0.03,
+          "price": [
+            -32,
+            -34,
+            116,
+            26
+          ],
+          "tap": [
+            25,
+            19
+          ],
+          "icon_min": 40
+        },
+        "words": {
+          "gold": "calibration/wall-bulk-word-emas-6e1a73d773d04d699d7f87faf947a326.png",
+          "elixir": "calibration/wall-bulk-word-eliksir-700e525181d6435ba9c65f069aba90ef.png"
+        },
+        "text": [
+          360,
+          318,
+          560,
+          44
+        ]
       }
     }
   },

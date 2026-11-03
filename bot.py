@@ -44,6 +44,7 @@ ACTIONS = {
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',),
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
+    'wall_bulk_confirm': ('confirm', 'close'),
     'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
     'idle': ('reload',), 'builders_busy': ('close',), 'update_offer': ('update',), 'disconnected': ('retry',),
     'other_device': ('reload',), 'home_battle': ('surrender',), 'builder_battle': ('surrender',),
@@ -132,7 +133,7 @@ QUAKE_PER_POINT, QUAKE_MAX_POINTS = 4, 8
 LAUNCH_ATTEMPTS = 4
 # How long a wait sees only unknown frames before it asks whether the game is still in front.
 GAME_CHECK_SECONDS = 10
-MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm')
+MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm', 'wall_bulk_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', 'update_offer',
                     'surrender_confirm', *MENU_SCREENS)
 # The battle clock runs at 1x until its last minute, when the 4x button appears; past two minutes little is saved.
@@ -162,6 +163,11 @@ WALL_TAP_SECONDS, WALL_LIST_SETTLE_SECONDS, WALL_SCROLL_LIMIT, GEM_READ_SECONDS 
 HUD_ROW_HEIGHT, GEM_ICON_BOX, GEM_ICON_MIN_GREEN = 50, (128, -6, 38, 12), 0.25
 SETTLE_MENU_LAYERS = 4
 WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS, WALL_PRICE_SECONDS = 4, 0.4, 2
+# --bulk-walls ("Tingkatkan Lebih Banyak"): the +1, +10 and -1 buttons sit one, two and three steps left of the first
+# upgrade button, and a greyed-out one has a red label ([dx, dy, w, h] from its centre, at scale 1). A tap settles
+# briefly before the price is read again.
+BULK_STEP_PX, BULK_LABEL, BULK_LABEL_RED = 139, (-52, 12, 104, 38), 200
+BULK_MAX_TAPS, BULK_TAP_SECONDS = 60, 0.4
 WHITE_LEVEL = 200
 # An event sale (Hammer Jam) prints the wall price in this saturated green; the button behind it is paler.
 SALE_HUE, SALE_MIN_SATURATION, SALE_MIN_VALUE = (35, 65), 200, 220
@@ -930,6 +936,13 @@ def white_pixels(image: np.ndarray, region: list) -> int:
     return int(np.all(crop(image, region) > WHITE_LEVEL, axis=2).sum())
 
 
+def red_pixels(image: np.ndarray, region: list) -> int:
+    """Saturated red, as on a greyed-out button's label."""
+    hsv = cv2.cvtColor(crop(image, region), cv2.COLOR_BGR2HSV)
+    hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    return int((((hue <= 8) | (hue >= 172)) & (saturation > 120) & (value > 120)).sum())
+
+
 def sale_pixels(image: np.ndarray, region: list) -> int:
     """A sale price that is affordable is a saturated green; its button is a paler one and a short price red."""
     hsv = cv2.cvtColor(crop(image, region), cv2.COLOR_BGR2HSV)
@@ -1062,6 +1075,21 @@ def validate_walls(config: dict, root: Path, villages: tuple) -> None:
         if not icons or set(icons) - set(WALL_RESOURCES):
             raise BotError('walls confirm icons hanya gold/elixir')
         files = [row.get('file'), button.get('file'), *icons.values()]
+        if 'bulk' in spec:
+            bulk = spec['bulk']
+            more, hammer, words = bulk.get('more', {}), bulk.get('button', {}), bulk.get('words', {})
+            rectangle(more.get('search'), resolution)
+            rectangle(hammer.get('search'), resolution)
+            rectangle(bulk.get('text'), resolution)
+            for value in [*hammer.get('price', [None] * 4), *hammer.get('tap', [None] * 2)]:
+                integer(value, -200, 200, 'walls bulk button offset')
+            integer(hammer.get('icon_min'), 1, 10_000, 'walls bulk button icon_min')
+            if not words or set(words) - set(WALL_RESOURCES):
+                raise BotError('walls bulk words hanya gold/elixir')
+            for score in (more.get('max_score'), hammer.get('max_score')):
+                if not isinstance(score, float) or not 0 < score <= SEARCH_ANCHOR_MAX_SCORE:
+                    raise BotError('max_score Tingkatkan Lebih Banyak tidak valid')
+            files += [more.get('file'), hammer.get('file'), *words.values()]
         if 'sale' in confirm:
             sale = confirm['sale']
             rectangle(sale.get('label'), resolution)
@@ -1526,7 +1554,7 @@ class Bot:
                  minutes: int = 0, max_upgrades: int = 0, surrender: tuple = (),
                  surrender_after: float = SURRENDER_DEFAULT_SECONDS, surrender_at: int = 0, ring: bool = False,
                  quake: bool = False, surrender_stars: int = 0, builder_stack: bool = False,
-                 trophy_floor: int = 0) -> None:
+                 trophy_floor: int = 0, bulk_walls: bool = False) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
@@ -1541,6 +1569,7 @@ class Bot:
         self.wall_order, self.walls_done, self.walls_skipped = walls, set(), set()
         self.stop_at = time.monotonic() + minutes * 60 if minutes else None
         self.upgrade_limit, self.upgrades_done = max_upgrades or None, 0
+        self.bulk_walls = bulk_walls
         self.gems_known: int | None = None
         self.gem_shift = 0
         self.wall_excluded: set = set()
@@ -2559,7 +2588,11 @@ class Bot:
     def wall_buttons(self, image: np.ndarray, spec: dict) -> list:
         """(resource, tap, affordable) for every upgrade button on screen. The picked wall decides where its
         buttons go and whether they wrap into two rows, so they are searched for, not read at fixed spots."""
-        button = spec['button']
+        return [hit[:3] for hit in self.button_hits(image, spec, spec['button'])]
+
+    def button_hits(self, image: np.ndarray, spec: dict, button: dict) -> list:
+        """(resource, tap, affordable, scale) for every button matching button's hammer: the one-wall upgrade or,
+        with --bulk-walls, the double hammer of "Tingkatkan Lebih Banyak"."""
         template = cv2.imread(str(asset_path(self.root, button['file'])))
         x0, y0, w0, h0 = button['search']
         region = image[y0:y0 + h0, x0:x0 + w0]
@@ -2585,7 +2618,7 @@ class Bot:
                 continue
             affordable = white_pixels(image, band) >= spec['min_white'] * scale * scale
             tap = [x + round(button['tap'][0] * scale), y + round(button['tap'][1] * scale)]
-            result.append((resource, tap, affordable))
+            result.append((resource, tap, affordable, scale))
         return result
 
     def affordable_button(self, image: np.ndarray, spec: dict) -> tuple | None:
@@ -2713,6 +2746,158 @@ class Bot:
             return False
         return True
 
+    def upgrade_bulk(self, spec: dict, village: str) -> int | None:
+        """--bulk-walls: from the selected wall, "Tingkatkan Lebih Banyak" adds walls of its level and one Oke
+        upgrades them all: ten at a time while the price stays white, then one off at a time until it is white again
+        (one at a time once +10 greys out), never past --max-upgrades or the gold reserve. The number upgraded, 0 when
+        the dialog did not name the resource and nothing was spent, or None with the wall still selected when it has
+        no bulk upgrade or a resource pays for one wall only, so the one-wall upgrade runs instead."""
+        bulk = spec['bulk']
+        state, image = self.observe()
+        if state != 'wall_selected':
+            raise BotError(f'Tembok tidak terpilih: layar {state}')
+        if not self.gems_fresh:
+            self.check_gems(spec)
+        choice = self.affordable_button(image, spec)
+        if choice is None:
+            return None
+        resource = choice[0]
+        cap = self.bulk_cap(spec, resource)
+        more = bulk['more']
+        template = cv2.imread(str(asset_path(self.root, more['file'])))
+
+        def locate_more(frame: np.ndarray) -> list:
+            (x, y), _ = find_target(crop(frame, more['search']), template, more['max_score'], tuple(more['scales']))
+            return [more['search'][0] + x, more['search'][1] + y]
+        try:
+            locate_more(image)
+        except BotError:
+            return None
+        if cap < 2:
+            return None
+        self.gems_fresh = False
+        self.guarded_tap({'wall_selected'}, locate_more)
+        count = self.fill_bulk(spec, village, resource, cap)
+        if count is None:
+            raise WaitTimeout(f'Tingkatkan Lebih Banyak: {resource} tidak cukup untuk satu tembok; tidak ada input')
+
+        def locate_upgrade(frame: np.ndarray) -> list:
+            affordable, _ = self.bulk_view(frame, spec, village, resource)
+            if not affordable:
+                raise TargetMissing('Harga Tingkatkan Lebih Banyak tidak putih lagi; tidak ada input dikirim')
+            return next(hit[1] for hit in self.button_hits(frame, spec, bulk['button']) if hit[0] == resource)
+        self.wait_still(BULK_TAP_SECONDS if self.poll else 0)
+        self.guarded_tap({'build_list', village}, locate_upgrade)
+        after = {'build_list', village, 'wall_selected'}
+        self.wait({'wall_bulk_confirm'}, {'build_list', village}, WALL_TAP_SECONDS)
+        _, image = self.observe()
+        if not self.bulk_word(image, bulk, resource):
+            LOG.warning('Dialog Tingkatkan tembok tidak menyebut %s; dibatalkan tanpa Oke', resource)
+            self.action('wall_bulk_confirm', 'close')
+            self.wait(after, {'wall_bulk_confirm'}, WALL_TAP_SECONDS)
+            self.clear_bulk(spec, village)
+            self.wall_excluded.add(resource)
+            return 0
+        self.action('wall_bulk_confirm', 'confirm')
+        self.wait(after, {'wall_bulk_confirm'}, WALL_TAP_SECONDS)
+        self.check_gems(spec)
+        self.progress += 1
+        LOG.info('%s tembok di-upgrade sekaligus dengan %s', count, resource)
+        return count
+
+    def bulk_cap(self, spec: dict, resource: str) -> int:
+        """Most walls one bulk upgrade may take: what --max-upgrades leaves and, for gold, what keeps the reserve for
+        opponent searches (the picked row's price per wall against the gold on hand)."""
+        cap = self.upgrade_limit - self.upgrades_done if self.upgrade_limit is not None else BULK_MAX_TAPS * 10
+        reserve = spec.get('gold_reserve')
+        if resource == 'gold' and reserve:
+            price = self.wall_price
+            if price is None or not math.isfinite(price) or price <= 0:
+                return 1
+            try:
+                gold = self.hud_gold(spec)
+            except BotError:
+                return 1
+            cap = min(cap, int((gold - reserve) // price))
+        return cap
+
+    def bulk_view(self, frame: np.ndarray, spec: dict, village: str, resource: str) -> tuple:
+        """(affordable, controls) on the bulk screen: whether resource's price is white, and the tap point and enabled
+        state of the -1, +10 and +1 buttons. Raises while the buttons are still sliding in."""
+        state = self.detector.detect(frame)
+        if state not in {'build_list', village}:
+            raise UnexpectedScreen(f'Layar tidak diharapkan saat Tingkatkan Lebih Banyak: {state}')
+        hits = self.button_hits(frame, spec, spec['bulk']['button'])
+        price = [hit for hit in hits if hit[0] == resource]
+        if not price:
+            raise TargetMissing('Tombol Tingkatkan Lebih Banyak belum terlihat')
+        x, y = min(hit[1] for hit in hits)
+        scale = price[0][3]
+        dx, dy, w, h = BULK_LABEL
+        controls = {}
+        for name, steps in (('plus1', 1), ('plus10', 2), ('minus', 3)):
+            centre = [x - BULK_STEP_PX * steps, y]
+            label = [centre[0] + round(dx * scale), y + round(dy * scale), round(w * scale), round(h * scale)]
+            controls[name] = (centre, red_pixels(frame, label) < BULK_LABEL_RED)
+        return price[0][2], controls
+
+    def fill_bulk(self, spec: dict, village: str, resource: str, cap: int) -> int | None:
+        """Add walls on the bulk screen while resource's price stays white, up to cap; the count, or None when not
+        even one wall is affordable. A tap that has not shown yet only makes the count come out lower."""
+        count, over = 1, False
+        for _ in range(BULK_MAX_TAPS):
+            try:
+                affordable, controls = self.read_until(lambda frame: self.bulk_view(frame, spec, village, resource),
+                                                       WALL_TAP_SECONDS if self.poll else 0)
+            except BotError as exc:
+                raise WaitTimeout(f'Tingkatkan Lebih Banyak tidak terbaca ({exc}); tidak ada input lanjutan') from exc
+            if affordable and over:
+                return count
+            if affordable:
+                step = next(((controls[name][0], add) for name, add in (('plus10', 10), ('plus1', 1))
+                             if controls[name][1] and count + add <= cap), None)
+                if step is None:
+                    return count
+            else:
+                tap, enabled = controls['minus']
+                if count == 1 or not enabled:
+                    return None
+                step, over = (tap, -1), True
+            if self.live:
+                self.device.tap_many([step[0]])
+            count += step[1]
+            time.sleep(BULK_TAP_SECONDS if self.poll else 0)
+        return None if over else count
+
+    def bulk_word(self, image: np.ndarray, bulk: dict, resource: str) -> bool:
+        """The bulk dialog names what it spends ("… dengan 2000000 Emas?"): Oke only when that is the chosen resource,
+        so a gem price is never confirmed."""
+        word = cv2.imread(str(asset_path(self.root, bulk['words'][resource])))
+        try:
+            find_target(crop(image, bulk['text']), word, SEARCH_ANCHOR_MAX_SCORE)
+        except BotError:
+            return False
+        return True
+
+    def bulk_left(self, state: str, image: np.ndarray) -> bool:
+        """A bulk selection outlives the builder list and blocks the village's own buttons."""
+        spec = self.config.get('walls', {}).get(state, {})
+        return (self.bulk_walls and state in VILLAGES and 'bulk' in spec
+                and bool(self.button_hits(image, spec, spec['bulk']['button'])))
+
+    def clear_bulk(self, spec: dict, village: str) -> None:
+        """Drop a bulk selection: opening the builder list and closing it again clears it."""
+        for _ in range(SETTLE_MENU_LAYERS):
+            state, image = self.observe()
+            if state == 'build_list':
+                self.action('build_list', 'close')
+                self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
+            elif self.bulk_left(state, image):
+                self.guarded_tap({village}, spec['build'])
+                self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
+            else:
+                return
+
     def listed(self, image: np.ndarray) -> np.ndarray:
         if not self.list_open(image):
             raise UnexpectedScreen('Daftar Bangun belum terbuka')
@@ -2738,7 +2923,11 @@ class Bot:
                 self.wait_still(WALL_LIST_SETTLE_SECONDS if self.poll else 0)
                 continue
             if state not in MENU_SCREENS:
-                return
+                if not self.bulk_left(state, image):
+                    return
+                self.guarded_tap({state}, self.config['walls'][state]['build'])
+                self.read_until(self.listed, WALL_TAP_SECONDS if self.poll else 0)
+                continue
             try:
                 if state == 'wall_selected' and not self.list_open(image):
                     self.action(state, 'build')
@@ -2799,6 +2988,12 @@ class Bot:
             self.guarded_tap({'build_list', 'wall_selected'}, [spec['row']['tap_x'], y])
             self.wait({'wall_selected'}, {'build_list', village}, WALL_TAP_SECONDS)
             self.settle_selection()
+            if self.bulk_walls and 'bulk' in spec:
+                done = self.upgrade_bulk(spec, village)
+                if done is not None:
+                    upgraded += done
+                    self.upgrades_done += done
+                    continue
             if not self.upgrade_wall(spec):
                 LOG.info('Gold dan elixir %s tidak cukup lagi setelah %s upgrade tembok', village, upgraded)
                 self.close_menus()
@@ -3156,6 +3351,9 @@ def main() -> int:
     parser.add_argument('--minutes', type=int, default=0, help='Seperti --hours, dalam menit')
     parser.add_argument('--max-upgrades', type=int, default=0,
                         help='--walls: berhenti di desa setelah sekian tembok di-upgrade; 0 = tanpa batas')
+    parser.add_argument('--bulk-walls', action='store_true',
+                        help='--walls: upgrade banyak tembok selevel sekaligus lewat "Tingkatkan Lebih Banyak" '
+                             '(sebanyak yang terbayar, satu Oke), lebih cepat dari satu per satu')
     parser.add_argument('--surrender', choices=('home', 'builder', 'both'),
                         help='Menyerah otomatis di desa ini bila battle belum selesai setelah --surrender-after detik')
     parser.add_argument('--surrender-after', type=int,
@@ -3211,6 +3409,8 @@ def main() -> int:
             raise BotError('--hours/--minutes hanya untuk --until-full/--builder/--home/--walls dengan --live')
         if args.max_upgrades and not args.walls:
             raise BotError('--max-upgrades hanya untuk --walls')
+        if args.bulk_walls and not args.walls:
+            raise BotError('--bulk-walls hanya untuk --walls')
         surrender_after = integer(SURRENDER_DEFAULT_SECONDS if args.surrender_after is None else args.surrender_after,
                                   1, SURRENDER_MAX_SECONDS, 'surrender_after')
         # Off unless asked for; --surrender-after on its own turns it on in both villages.
@@ -3267,6 +3467,8 @@ def main() -> int:
             if not args.live:
                 raise BotError('--walls butuh --live')
             validate_walls(config, args.config.parent, walls)
+            if args.bulk_walls and 'wall_bulk_confirm' not in config['screens']:
+                raise BotError('--bulk-walls butuh kalibrasi: wall_bulk_confirm')
         adb = executable(config.get('adb'), 'ADB')
         # Loot is read with Tesseract only when no digit templates are configured.
         if mode != 'builder' and any(config.get('minimum', {}).values()) and not config.get('digits'):
@@ -3279,7 +3481,8 @@ def main() -> int:
         runner = Bot(config, args.config.parent, device, live=args.live, emulator=emulator, goals=goals, walls=walls,
                      minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
                      surrender_after=surrender_after, surrender_at=surrender_at, ring='home' in ring, quake=args.quake,
-                     surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor)
+                     surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor,
+                     bulk_walls=args.bulk_walls)
         if walls:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif until_full and args.live:
