@@ -2289,23 +2289,36 @@ class BotTests(unittest.TestCase):
                 # The one-wall hammer is not there, so a bulk screen is never taken for a selected wall.
                 self.assertEqual(runner.wall_buttons(image, spec), [])
 
-    def test_wall_rings_wrap_the_buttons_and_bulk_is_left_when_its_bar_has_no_controls(self):
+    def test_wall_rings_wrap_the_buttons_and_bulk_finds_its_controls_in_the_row_above(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
         runner = bot.Bot(config, root, None, live=True, bulk_walls=True)
         runner.detector.detect = lambda image: 'build_list'
-        spec, image = config['walls']['home'], self.bulk_frame('home')
-        # A bar that wraps starts its row with the bulk upgrade buttons: no -1, +10 or +1 to their left.
-        x = min(hit[1][0] for hit in runner.button_hits(image, spec, spec['bulk']['button']))
-        wrapped = np.zeros_like(image)
-        wrapped[:, :1280 - (x - 60)] = image[:, x - 60:]
-        with self.assertRaises(bot.BulkLayout):
-            runner.bulk_view(wrapped, spec, 'home', 'gold')
-        # With wall rings, "Tingkatkan Lebih Banyak" sits in the top of two button rows.
-        more = spec['bulk']['more']
-        selected = np.zeros_like(image)
-        button = cv2.imread(str(root / more['file']))
-        selected[461:461 + button.shape[0], 565:565 + button.shape[1]] = button
+        spec, more = config['walls']['home'], config['walls']['home']['bulk']['more']
+        # A wall ring adds a button; beside the open builder list the selected wall's six buttons take two rows and
+        # "Tingkatkan Lebih Banyak" ends the top one.
+        selected = np.zeros((720, 1280, 3), np.uint8)
+        selected[380:] = cv2.imread(str(root / 'fixtures' / 'wall-selected-rings.png'))
+        (x, y), _ = bot.find_target(bot.crop(selected, more['search']), cv2.imread(str(root / more['file'])),
+                                    more['max_score'], tuple(more['scales']))
+        self.assertTrue(540 <= more['search'][0] + x <= 670 and 450 <= more['search'][1] + y <= 560)
+        self.assertEqual(sorted(resource for resource, _, _ in runner.wall_buttons(selected, spec)), ['elixir', 'gold'])
+        # In bulk mode -1, +10 and +1 wrap the same way, each over an upgrade button; -1 is grey at one wall.
+        bulk = np.zeros_like(selected)
+        bulk[380:] = cv2.imread(str(root / 'fixtures' / 'wall-bulk-home-rings.png'))
+        affordable, controls = runner.bulk_view(bulk, spec, 'home', 'gold')
+        self.assertTrue(affordable)
+        self.assertEqual({name: (tuple(centre), enabled) for name, (centre, enabled) in controls.items()},
+                         {'minus': ((327, 505), False), 'plus10': ((466, 505), True), 'plus1': ((605, 505), True)})
+        self.assertTrue(runner.bulk_left('home', bulk))
+
+    def test_a_bulk_bar_with_no_controls_is_left_and_the_walls_go_up_one_at_a_time(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        runner = bot.Bot(config, root, None, live=True, bulk_walls=True)
+        spec = config['walls']['home']
+        selected = np.zeros((720, 1280, 3), np.uint8)
+        selected[380:] = cv2.imread(str(root / 'fixtures' / 'wall-selected-rings.png'))
         taps, cleared = [], []
         runner.observe = lambda: ('wall_selected', selected)
         runner.gems_fresh = True
@@ -2316,7 +2329,6 @@ class BotTests(unittest.TestCase):
         runner.clear_bulk = lambda spec, village: cleared.append(village)
         self.assertEqual(runner.upgrade_bulk(spec, 'home'), 0)
         self.assertEqual(len(taps), 1)
-        self.assertTrue(461 <= taps[0][1] <= 461 + button.shape[0])
         self.assertEqual((cleared, runner.bulk_walls), (['home'], False))
 
     def test_the_bulk_dialog_is_not_taken_for_surrender_and_names_what_it_spends(self):

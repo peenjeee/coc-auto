@@ -2648,7 +2648,7 @@
             0,
             380,
             1280,
-            260
+            340
           ],
           "scales": [
             1.0,
@@ -2662,7 +2662,7 @@
             0,
             380,
             1280,
-            260
+            340
           ],
           "scales": [
             1.0,
@@ -2795,9 +2795,9 @@
           "file": "calibration/wall-bulk-more-builder-3829a70657c34a6b98bfad37f178c92d.png",
           "search": [
             0,
-            480,
+            380,
             1280,
-            160
+            340
           ],
           "scales": [
             1.0,
@@ -2809,9 +2809,9 @@
           "file": "calibration/wall-bulk-hammer-6b8c579375a848f0bf79c662e76fbf9e.png",
           "search": [
             0,
-            480,
+            380,
             1280,
-            160
+            340
           ],
           "scales": [
             1.0,

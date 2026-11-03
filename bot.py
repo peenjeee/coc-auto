@@ -165,9 +165,10 @@ HUD_ROW_HEIGHT, GEM_ICON_BOX, GEM_ICON_MIN_GREEN = 50, (128, -6, 38, 12), 0.25
 SETTLE_MENU_LAYERS = 4
 WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS, WALL_PRICE_SECONDS = 4, 0.4, 2
 # --bulk-walls ("Tingkatkan Lebih Banyak"): the +1, +10 and -1 buttons sit one, two and three steps left of the first
-# upgrade button, and a greyed-out one has a red label ([dx, dy, w, h] from its centre, at scale 1). A tap settles
-# briefly before the price is read again.
-BULK_STEP_PX, BULK_LABEL, BULK_LABEL_RED = 139, (-52, 12, 104, 38), 200
+# upgrade button; when wall rings add a button and the row does not fit beside the open builder list, they wrap into
+# the row above, -1 over the first upgrade button. A greyed-out one has a red label ([dx, dy, w, h] from its centre,
+# at scale 1). A tap settles briefly before the price is read again.
+BULK_STEP_PX, BULK_ROW_PX, BULK_LABEL, BULK_LABEL_RED = 139, 127, (-52, 12, 104, 38), 200
 BULK_MAX_TAPS, BULK_TAP_SECONDS = 60, 0.4
 WHITE_LEVEL = 200
 # An event sale (Hammer Jam) prints the wall price in this saturated green; the button behind it is paler.
@@ -2868,12 +2869,16 @@ class Bot:
         x, y = min(hit[1] for hit in hits)
         scale = price[0][3]
         dx, dy, w, h = BULK_LABEL
+        wrapped = x - BULK_STEP_PX * 3 + round(dx * scale) < 0
         controls = {}
         for name, steps in (('plus1', 1), ('plus10', 2), ('minus', 3)):
-            centre = [x - BULK_STEP_PX * steps, y]
-            label = [centre[0] + round(dx * scale), y + round(dy * scale), round(w * scale), round(h * scale)]
-            if label[0] < 0:
-                raise BulkLayout('tombol -1, +10, +1 tidak ada di kiri tombol upgrade')
+            if wrapped:
+                centre = [x + BULK_STEP_PX * (3 - steps), y - round(BULK_ROW_PX * scale)]
+            else:
+                centre = [x - BULK_STEP_PX * steps, y]
+            label = [centre[0] + round(dx * scale), centre[1] + round(dy * scale), round(w * scale), round(h * scale)]
+            if min(label[:2]) < 0 or label[0] + label[2] > frame.shape[1]:
+                raise BulkLayout('tombol -1, +10, +1 tidak ditemukan')
             controls[name] = (centre, red_pixels(frame, label) < BULK_LABEL_RED)
         return price[0][2], controls
 
