@@ -1268,6 +1268,56 @@
             ],
             "max_score": 0.05
           }
+        ],
+        [
+          {
+            "roi": [
+              644,
+              20,
+              112,
+              11
+            ],
+            "file": "calibration/builder_stage2-countdown-9d1db97a1df94bc9943149af3127e61e.png",
+            "margin": 3
+          },
+          {
+            "file": "calibration/builder_scout-pembela-low-38c8f1589be34cf5a176388b5633f652.png",
+            "search": [
+              40,
+              5,
+              140,
+              40
+            ],
+            "scales": [
+              1.0
+            ],
+            "max_score": 0.05
+          }
+        ],
+        [
+          {
+            "roi": [
+              570,
+              16,
+              142,
+              15
+            ],
+            "file": "calibration/builder_scout-countdown-en-f9f23320ce824130a11526d01f0f1d01.png",
+            "margin": 3
+          },
+          {
+            "file": "calibration/builder_scout-defender-low-en-3f726c8e19674633bd15aeef5dead504.png",
+            "search": [
+              40,
+              5,
+              140,
+              40
+            ],
+            "scales": [
+              1.0
+            ],
+            "max_score": 0.05
+          }
         ]
       ]
     },
