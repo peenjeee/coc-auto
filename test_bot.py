@@ -803,16 +803,30 @@ class BotTests(unittest.TestCase):
     def test_a_reached_limit_is_a_normal_finish(self):
         with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--max-upgrades', '3', '--no-remote']), \
                 patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
-                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as runner:
+                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as runner, \
+                patch('bot.fit_screen', return_value=False):
             runner.return_value.run_until_full_resilient.side_effect = bot.LimitReached('Selesai')
             self.assertEqual(bot.main(), 0)
         self.assertEqual(runner.call_args.kwargs['max_upgrades'], 3)
+
+    def test_a_live_run_fits_the_ldplayer_screen_first_and_puts_it_back_when_it_leaves(self):
+        for extra, restored in ((['--no-remote'], 1), (['--worker'], 0)):
+            with self.subTest(argv=extra), patch('sys.argv', ['bot.py', '--walls', 'home', '--live', *extra]), \
+                    patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
+                    patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as runner, \
+                    patch('bot.fit_screen', return_value=True) as fit, patch('bot.restore_screen') as restore:
+                self.assertEqual(bot.main(), 0)
+            fit.assert_called_once()
+            runner.return_value.recover.assert_called_once_with()
+            # Under the dashboard the screen stays until the dashboard link is left.
+            self.assertEqual(restore.call_count, restored)
 
     def test_wall_every_and_wall_resource_reach_the_bot_and_need_walls(self):
         with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--no-remote', '--wall-every', '5',
                                 '--wall-resource', 'elixir']), \
                 patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
-                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as runner:
+                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as runner, \
+                patch('bot.fit_screen', return_value=False):
             self.assertEqual(bot.main(), 0)
         self.assertEqual(runner.call_args.kwargs['wall_every'], 5)
         self.assertEqual(runner.call_args.kwargs['wall_resources'], ('elixir',))
@@ -3356,7 +3370,8 @@ class BotTests(unittest.TestCase):
         self.assertEqual([value for _, code, value in lifted if code == 57], [-1] * bot.RING_FINGERS)
         with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--no-remote']), \
                 patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
-                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as stopped:
+                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as stopped, \
+                patch('bot.fit_screen', return_value=False):
             stopped.return_value.run_until_full_resilient.side_effect = KeyboardInterrupt
             self.assertEqual(bot.main(), 130)
         stopped.return_value.release_touch.assert_called_once_with()

@@ -15,6 +15,9 @@ class FakeEmulator:
     def running(self):
         return self.on
 
+    def vm_running(self):
+        return self.on
+
     def quit(self):
         self.calls.append('quit')
         self.on = not self.stops
@@ -91,6 +94,16 @@ class DisplayTests(unittest.TestCase):
         self.display.fit()
         self.display.restore()
         self.assertEqual(self.screen(), (1600, 900, 320, 1))
+
+    def test_the_screen_is_written_once_the_virtual_machine_has_let_go_of_its_disks(self):
+        # The window reads as stopped at once; the virtual machine holds the disks three polls longer.
+        polls = []
+        self.emulator.vm_running = lambda: len(polls) < 3
+        self.display.sleep = lambda seconds: polls.append(self.screen()[:3])
+        self.assertTrue(self.display.fit())
+        self.assertEqual(polls, [(1600, 900, 320)] * 4)  # three polls and the settle, all before the write
+        self.assertEqual(self.screen(), (1280, 720, 240, 1))
+        self.assertEqual(self.emulator.calls, ['quit', 'launch'])
 
     def test_a_screen_that_already_fits_changes_nothing(self):
         self.write_instance(1280, 720, 240)

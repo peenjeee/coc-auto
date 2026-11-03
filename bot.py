@@ -815,6 +815,15 @@ class Emulator:
     def running(self) -> bool:
         return self.run('isrunning').strip() == 'running'
 
+    def vm_running(self) -> bool:
+        """The instance's virtual machine is still up (`list2` gives its process id, -1 once it has stopped); it
+        holds the virtual disks a while after LDPlayer reads as stopped, and a launch meanwhile fails to load them."""
+        for line in self.run('list2').splitlines():
+            fields = line.split(',')
+            if len(fields) > 6 and fields[0].strip() == str(self.index):
+                return fields[6].strip() not in ('-1', '0', '')
+        return False
+
     def launch(self) -> None:
         self.run('launch')
 
@@ -3418,6 +3427,32 @@ def read_config(path: Path) -> dict:
     return config
 
 
+def fit_screen(config_path: Path) -> bool:
+    """LDPlayer on a screen other than the calibration's (its own default is 1920x1080, DPI 280) is switched to the
+    calibrated one, restarting once, so every calibrated screen works in either game language; the user's own screen
+    is kept to be put back when the bot leaves. True when it was switched."""
+    import device_control
+    display = device_control.Display(config_path)
+    try:
+        current = display.status()['current']
+        if not display.fit():
+            return False
+    except device_control.SettingRefused as exc:
+        raise BotError(f'Layar LDPlayer tidak bisa disesuaikan: {exc}') from exc
+    LOG.warning('Layar LDPlayer %sx%s DPI %s diganti ke layar kalibrasi; dikembalikan saat bot berhenti',
+                current['width'], current['height'], current['dpi'])
+    return True
+
+
+def restore_screen(config_path: Path) -> None:
+    import device_control
+    try:
+        if device_control.Display(config_path).restore():
+            LOG.info('Layar LDPlayer dikembalikan ke setelan semula')
+    except device_control.SettingRefused as exc:
+        LOG.warning('Layar LDPlayer belum dikembalikan (%s); pakai tombol di dashboard', exc)
+
+
 def configured_language(path: Path) -> str:
     """The terminal language, read straight from config.json and config.local.json before anything else so even
     the first errors use it; a file that cannot be read leaves Indonesian and is reported later on its own."""
@@ -3524,7 +3559,7 @@ def main() -> int:
     if args.worker and hasattr(signal, 'SIGBREAK'):
         # The dashboard stops a worker with Ctrl+Break; end it like Ctrl+C so the bot stops its own way.
         signal.signal(signal.SIGBREAK, signal.default_int_handler)
-    runner = None
+    runner, fitted = None, False
     try:
         # Check every number before anything touches the emulator.
         integer(args.cycles, 1, 100, 'cycles')
@@ -3617,6 +3652,9 @@ def main() -> int:
                      surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor,
                      bulk_walls=args.bulk_walls, wall_every=args.wall_every,
                      wall_resources=WALL_RESOURCES if args.wall_resource == 'both' else (args.wall_resource,))
+        if emulator and args.live and fit_screen(args.config):
+            fitted = True
+            runner.recover()
         if walls:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif until_full and args.live:
@@ -3651,6 +3689,9 @@ def main() -> int:
         # A stop in the middle of a hold or pinch kills it before its fingers are lifted.
         if runner is not None:
             runner.release_touch()
+        # Under the dashboard the screen goes back when the dashboard link is left, not after every task.
+        if fitted and args.no_remote:
+            restore_screen(args.config)
 
 
 if __name__ == '__main__':

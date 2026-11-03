@@ -94,7 +94,9 @@ class Display:
         if emulator.running():
             emulator.quit()
             for _ in range(LD_STOP_SECONDS):
-                if not emulator.running():
+                # Its virtual machine lets go of the disks after the window closes; launched earlier, it reports
+                # "Disk virtual tidak valid (InvalidMedium)".
+                if not (emulator.running() or emulator.vm_running()):
                     break
                 self.sleep(1)
             else:
