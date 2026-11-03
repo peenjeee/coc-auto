@@ -2610,11 +2610,16 @@ class Bot:
         row, templates = spec['row'], self.templates()
         _, dy, _, h = row['price']
         _, top, _, height = row['region']
-        ys = sorted({y for look in (row['file'], twin_name(self.root, row['file'])) if look
-                     for y in find_rows(image, cv2.imread(str(asset_path(self.root, look))), row['region'],
-                                        row['max_score'], row.get('scales', (1.0,)))})
+        # Only the list's own language: the English "Wall" also matches the Indonesian "Wali Besar" (Grand Warden).
+        look = row['file'] if self.list_indonesian(image) else twin_name(self.root, row['file']) or row['file']
+        ys = find_rows(image, cv2.imread(str(asset_path(self.root, look))), row['region'], row['max_score'],
+                       row.get('scales', (1.0,)))
         return [(row_price(image, row['price'], y, templates) if y + dy + h <= top + height else math.inf, y)
                 for y in ys]
+
+    def list_indonesian(self, image: np.ndarray) -> bool:
+        """The builder list's header is the calibrated, Indonesian one (an English game shows its twin)."""
+        return self.detector.matches(image, self.detector.templates['build_list'])
 
     def priced_row(self, image: np.ndarray, spec: dict, price: float) -> int | None:
         found = [y for shown, y in self.wall_rows(image, spec) if shown == price]

@@ -2389,6 +2389,19 @@ class BotTests(unittest.TestCase):
                 self.assertTrue(runner.bulk_word(image, bulk, resource))
                 self.assertFalse(runner.bulk_word(image, bulk, other))
 
+    def test_wall_rows_are_read_in_the_lists_own_language_so_the_grand_warden_is_no_wall(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        runner = bot.Bot(config, root, None, live=True)
+        # "Wali Besar" (the Grand Warden, 500 000) sits right under "Tembok x 95" and the English "Wall" fits it.
+        for name, indonesian, rows in (('build-list-wali-besar', True, [1_000_000]),
+                                       ('build-list-en-wall', False, [1_000_000])):
+            image = np.zeros((720, 1280, 3), np.uint8)
+            image[:, 936:] = cv2.imread(str(root / 'fixtures' / f'{name}.png'))
+            with self.subTest(list=name):
+                self.assertEqual(runner.list_indonesian(image), indonesian)
+                self.assertEqual([price for price, _ in runner.wall_rows(image, config['walls']['home'])], rows)
+
     def test_an_english_twin_is_tried_after_the_template_it_stands_for(self):
         rng = np.random.default_rng(53)
         (self.root / 'en').mkdir()
