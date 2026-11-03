@@ -1850,6 +1850,30 @@
           "file": "calibration/wall_confirm-time-4d3009d5d10743f68fbf875a65536313.png"
         }
       ],
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              368,
+              30,
+              384,
+              38
+            ],
+            "file": "calibration/wall_confirm-title-b20e94a565334d03be35cc39156d94c9.png",
+            "margin": 12
+          },
+          {
+            "roi": [
+              836,
+              590,
+              124,
+              20
+            ],
+            "file": "calibration/wall_confirm-sale-label-b06a8b967a17479b80b2019217102cc4.png",
+            "margin": 8
+          }
+        ]
+      ],
       "overrides": [
         "build_list",
         "wall_selected"
@@ -2519,6 +2543,22 @@
         "icons": {
           "gold": "calibration/wall-icon-gold-239c7df7d5f54b5d8e5afdbd3a0caf01.png",
           "elixir": "calibration/wall-icon-elixir-d81a618d1ebb49f095bdb41dd5459204.png"
+        },
+        "sale": {
+          "label": [
+            826,
+            582,
+            144,
+            36
+          ],
+          "file": "calibration/wall_confirm-sale-label-b06a8b967a17479b80b2019217102cc4.png",
+          "price": [
+            806,
+            612,
+            150,
+            28
+          ],
+          "min_green": 300
         }
       },
       "gold_reserve": 200000,

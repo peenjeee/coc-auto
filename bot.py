@@ -163,6 +163,8 @@ HUD_ROW_HEIGHT, GEM_ICON_BOX, GEM_ICON_MIN_GREEN = 50, (128, -6, 38, 12), 0.25
 SETTLE_MENU_LAYERS = 4
 WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS, WALL_PRICE_SECONDS = 4, 0.4, 2
 WHITE_LEVEL = 200
+# An event sale (Hammer Jam) prints the wall price in this saturated green; the button behind it is paler.
+SALE_HUE, SALE_MIN_SATURATION, SALE_MIN_VALUE = (35, 65), 200, 220
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 CART_MISS_LIMIT = 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
@@ -928,6 +930,14 @@ def white_pixels(image: np.ndarray, region: list) -> int:
     return int(np.all(crop(image, region) > WHITE_LEVEL, axis=2).sum())
 
 
+def sale_pixels(image: np.ndarray, region: list) -> int:
+    """A sale price that is affordable is a saturated green; its button is a paler one and a short price red."""
+    hsv = cv2.cvtColor(crop(image, region), cv2.COLOR_BGR2HSV)
+    hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    return int(((hue >= SALE_HUE[0]) & (hue <= SALE_HUE[1]) & (saturation > SALE_MIN_SATURATION)
+                & (value > SALE_MIN_VALUE)).sum())
+
+
 def find_rows(image: np.ndarray, template: np.ndarray, region: list, max_score: float,
               scales: tuple = (1.0,)) -> list:
     """Centre y of every row in the region that shows the template text, top row first. The row of the
@@ -1052,6 +1062,12 @@ def validate_walls(config: dict, root: Path, villages: tuple) -> None:
         if not icons or set(icons) - set(WALL_RESOURCES):
             raise BotError('walls confirm icons hanya gold/elixir')
         files = [row.get('file'), button.get('file'), *icons.values()]
+        if 'sale' in confirm:
+            sale = confirm['sale']
+            rectangle(sale.get('label'), resolution)
+            rectangle(sale.get('price'), resolution)
+            integer(sale.get('min_green'), 1, 100_000, 'walls confirm sale min_green')
+            files.append(sale.get('file'))
         for score in (button.get('max_score'),):
             if not isinstance(score, float) or not 0 < score <= SEARCH_ANCHOR_MAX_SCORE:
                 raise BotError('max_score tombol tembok tidak valid')
@@ -2617,9 +2633,15 @@ class Bot:
             return False
 
     def confirm_safe(self, image: np.ndarray, spec: dict, resource: str) -> bool:
-        """Konfirmasi is tapped only for a white price next to the chosen resource's icon, never a gem one."""
+        """Konfirmasi is tapped only for an affordable price next to the chosen resource's icon, never a gem one. In a
+        sale the button carries a 'Konfirmasi' label, the new price in green and the old one struck through in white
+        below it, so there only the green price counts; a short sale price is red."""
         confirm = spec['confirm']
-        if white_pixels(image, confirm['price']) < confirm['min_white']:
+        sale = confirm.get('sale')
+        if sale and self.sale_shown(image, sale):
+            if sale_pixels(image, sale['price']) < sale['min_green']:
+                return False
+        elif white_pixels(image, confirm['price']) < confirm['min_white']:
             return False
         icon = cv2.imread(str(asset_path(self.root, confirm['icons'][resource])))
         try:
@@ -2681,6 +2703,14 @@ class Bot:
         self.check_gems(spec)
         self.progress += 1
         LOG.info('Tembok di-upgrade dengan %s', resource)
+        return True
+
+    def sale_shown(self, image: np.ndarray, sale: dict) -> bool:
+        label = cv2.imread(str(asset_path(self.root, sale['file'])))
+        try:
+            find_target(crop(image, sale['label']), label, ANCHOR_MAX_SCORE)
+        except BotError:
+            return False
         return True
 
     def listed(self, image: np.ndarray) -> np.ndarray:

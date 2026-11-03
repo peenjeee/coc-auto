@@ -2226,6 +2226,26 @@ class BotTests(unittest.TestCase):
         self.assertTrue(runner.confirm_safe(image, config['walls']['builder'], 'elixir'))
         self.assertFalse(runner.confirm_safe(image, config['walls']['builder'], 'gold'))
 
+    def test_a_sale_wall_dialog_is_confirmed_only_for_its_green_price_next_to_the_right_icon(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        detector, runner, spec = bot.Detector(config, root), bot.Bot(config, root, None, live=True), config['walls']['home']
+        x, y, w, h = spec['confirm']['sale']['price']
+        for resource, other in (('elixir', 'gold'), ('gold', 'elixir')):
+            # Hammer Jam: a "Konfirmasi" label, the halved price in green, the old one struck through in white.
+            image = cv2.imread(str(root / 'fixtures' / f'wall-confirm-sale-{resource}.png'))
+            short = image.copy()
+            row = short[y:y + h, x:x + w]
+            hsv = cv2.cvtColor(row, cv2.COLOR_BGR2HSV)
+            row[(hsv[..., 0] >= 35) & (hsv[..., 0] <= 65) & (hsv[..., 1] > 200) & (hsv[..., 2] > 220)] = (40, 40, 230)
+            with self.subTest(resource=resource):
+                self.assertEqual(detector.detect(image), 'wall_confirm')
+                self.assertTrue(runner.confirm_safe(image, spec, resource))
+                self.assertFalse(runner.confirm_safe(image, spec, other))
+                # Short of the resource the sale price turns red while the struck old price stays white.
+                self.assertGreaterEqual(bot.white_pixels(short, spec['confirm']['price']), spec['confirm']['min_white'])
+                self.assertFalse(runner.confirm_safe(short, spec, resource))
+
     def test_the_damage_percent_is_read_from_real_battle_screens(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent

@@ -242,7 +242,11 @@ farms until gold and elixir are both full, spends them again, and repeats. It st
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
 Elixir Cart first; its lower walls cost gold only, higher ones gold or elixir (gold first, like the Home Village), and only the upgrade buttons a wall actually shows are used. Builder Base walls also need a free builder: with every builder busy the game offers to free one for gems, and the bot closes that offer with X and skips the Builder Base walls for that run. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
 The bot never spends gems. It taps an upgrade only when its price is shown in white, and taps Konfirmasi only when
-the dialog is a wall upgrade, its price is white, and its icon is the chosen gold or elixir. It reads the gem count
+the dialog is a wall upgrade, its price is white, and its icon is the chosen gold or elixir. During a sale such as
+Hammer Jam the Home Village dialog changes: the button carries a "Konfirmasi" label, the new price is green and the old
+one is struck through in white below it. The bot knows this layout by the label (`walls.home.confirm.sale`) and then
+counts only the green price, so a sale price the storage cannot pay (shown in red) is never confirmed even though the
+struck-through price is white; the icon must still be gold or elixir. It reads the gem count
 before and after every upgrade and keeps the last trusted count across recoveries. A count that drops with the same
 number of digits stops the run for good, without any recovery. A count with other digits or a higher one is treated
 as a misread: nothing is tapped and recovery reads it again. In the Home Village it also keeps a gold reserve (`walls.home.gold_reserve`, 200,000) for opponent searches, which cost gold: a gold upgrade that would dip below it is closed and that session continues with elixir. A village needs a
@@ -632,7 +636,7 @@ again.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (330 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (331 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, the dashboard link (signed commands, settings, the bot as a child
