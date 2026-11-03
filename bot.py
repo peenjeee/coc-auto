@@ -1574,6 +1574,7 @@ class Bot:
                  wall_resources: tuple = WALL_RESOURCES) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
+        self.battle_deadline: float | None = None
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
         self.trophy_floor, self.climbing, self.trophies_from = trophy_floor, False, 0.0
         self.hero_slots: list = []
@@ -1689,6 +1690,9 @@ class Bot:
         deadline = time.monotonic() + self.surrender_after if village in self.surrender else None
         damage = self.surrender_at if village == 'home' else 0
         stars = self.surrender_stars if village == 'builder' else 0
+        if deadline is not None and self.battle_deadline is not None:
+            deadline = self.battle_deadline
+        self.battle_deadline = None
         if deadline is None and not (damage or stars):
             return self.wait(targets, allowed)
         reason = f'kerusakan mencapai {damage}%' if damage else f'{stars} bintang'
@@ -1970,6 +1974,11 @@ class Bot:
 
     def deploy(self, screen_name: str, allowed: set, image: np.ndarray | None = None) -> str | None:
         screen = self.config['screens'][screen_name]
+        village = 'home' if screen_name == 'home_scout' else 'builder'
+        # --surrender-after counts battle time from the deploy on and, like the damage, is checked during it too.
+        climbing = village == 'builder' and self.climbing
+        self.battle_deadline = (time.monotonic() + self.surrender_after if village in self.surrender and not climbing
+                                else None)
         terminal = {'home_result'} if screen_name == 'home_scout' else {'builder_result'}
         if screen_name == 'builder_scout':
             terminal |= {'builder_stage2'}
@@ -2077,6 +2086,9 @@ class Bot:
                     raise
         if state not in allowed | terminal:
             raise UnexpectedScreen(f'Deploy dibatalkan: layar berubah menjadi {state}')
+        if (self.battle_deadline is not None and any(state in states for states in SURRENDER_STATES.values())
+                and time.monotonic() >= self.battle_deadline):
+            raise SurrenderReached(f'{self.surrender_after} detik battle saat deploy; sisa pasukan tidak dikerahkan')
         if state == 'home_battle' and self.surrender_at and self.damage_reached(image):
             raise SurrenderReached(f'Kerusakan mencapai {self.surrender_at}% saat deploy; sisa pasukan tidak dikerahkan')
         if (state in SURRENDER_STATES['builder'] and self.surrender_stars and not self.climbing

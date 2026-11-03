@@ -1120,6 +1120,33 @@ class BotTests(unittest.TestCase):
             runner.wait_battle('builder', {'builder_result'}, {'builder_battle'})
         self.assertEqual(device.inputs, [])
 
+    def test_the_surrender_clock_starts_with_the_deploy_and_stops_it_like_the_damage(self):
+        config, device = self.surrender_device()
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0, surrender=('home',),
+                         surrender_after=30)
+        allowed = {'home_scout', 'home_battle'}
+        runner.battle_deadline = time.monotonic() + 30
+        self.assertEqual(runner.checked_state(allowed, {'home_result'})[0], 'home_battle')
+        # A slow deploy (--ring holds) runs past the battle time: the rest of the army stays home.
+        runner.battle_deadline = time.monotonic() - 1
+        with self.assertRaises(bot.SurrenderReached):
+            runner.checked_state(allowed, {'home_result'})
+        # The wait after it keeps the deploy's clock, so the battle is given up at once, not 30 seconds later.
+        started = time.monotonic()
+        self.assertEqual(runner.wait_battle('home', {'home_result', 'home'}, allowed), 'home_result')
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual(device.inputs, [(20, 70), (100, 60)])
+        self.assertIsNone(runner.battle_deadline)
+        # The deploy starts the clock only in a village that surrenders.
+        scout = bot.Bot(self.config, self.root, Device(self.frames, 'home_scout'), live=True, timeout=0.02, poll=0,
+                        surrender=('home',), surrender_after=30)
+        scout.deploy('home_scout', {'home_scout'})
+        self.assertAlmostEqual(scout.battle_deadline, time.monotonic() + 30, delta=5)
+        builder_only = bot.Bot(self.config, self.root, Device(self.frames, 'home_scout'), live=True, timeout=0.02,
+                               poll=0, surrender=('builder',))
+        builder_only.deploy('home_scout', {'home_scout'})
+        self.assertIsNone(builder_only.battle_deadline)
+
     def test_league_window_is_closed_while_waiting_for_the_village(self):
         league = np.random.default_rng(17).integers(0, 256, (90, 160, 3), dtype=np.uint8)
         anchors = []
