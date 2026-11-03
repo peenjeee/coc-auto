@@ -2289,6 +2289,36 @@ class BotTests(unittest.TestCase):
                 # The one-wall hammer is not there, so a bulk screen is never taken for a selected wall.
                 self.assertEqual(runner.wall_buttons(image, spec), [])
 
+    def test_wall_rings_wrap_the_buttons_and_bulk_is_left_when_its_bar_has_no_controls(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        runner = bot.Bot(config, root, None, live=True, bulk_walls=True)
+        runner.detector.detect = lambda image: 'build_list'
+        spec, image = config['walls']['home'], self.bulk_frame('home')
+        # A bar that wraps starts its row with the bulk upgrade buttons: no -1, +10 or +1 to their left.
+        x = min(hit[1][0] for hit in runner.button_hits(image, spec, spec['bulk']['button']))
+        wrapped = np.zeros_like(image)
+        wrapped[:, :1280 - (x - 60)] = image[:, x - 60:]
+        with self.assertRaises(bot.BulkLayout):
+            runner.bulk_view(wrapped, spec, 'home', 'gold')
+        # With wall rings, "Tingkatkan Lebih Banyak" sits in the top of two button rows.
+        more = spec['bulk']['more']
+        selected = np.zeros_like(image)
+        button = cv2.imread(str(root / more['file']))
+        selected[461:461 + button.shape[0], 565:565 + button.shape[1]] = button
+        taps, cleared = [], []
+        runner.observe = lambda: ('wall_selected', selected)
+        runner.gems_fresh = True
+        runner.affordable_button = lambda image, spec: ('gold', [1, 1])
+        runner.bulk_cap = lambda spec, resource: 20
+        runner.guarded_tap = lambda states, locate: taps.append(locate(selected))
+        runner.fill_bulk = lambda *args: (_ for _ in ()).throw(bot.BulkLayout('wrapped'))
+        runner.clear_bulk = lambda spec, village: cleared.append(village)
+        self.assertEqual(runner.upgrade_bulk(spec, 'home'), 0)
+        self.assertEqual(len(taps), 1)
+        self.assertTrue(461 <= taps[0][1] <= 461 + button.shape[0])
+        self.assertEqual((cleared, runner.bulk_walls), (['home'], False))
+
     def test_the_bulk_dialog_is_not_taken_for_surrender_and_names_what_it_spends(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent

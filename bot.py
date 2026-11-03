@@ -233,6 +233,11 @@ class NoFreeBuilder(BotError):
     """Builder Base walls need a free builder; the game offered to free one for gems, which is only ever closed."""
 
 
+class BulkLayout(Exception):
+    """The bulk screen has no -1, +10 and +1 left of its upgrade buttons (wall rings add a button and the bar
+    wraps); no tap is guessed there."""
+
+
 class GemSpent(Exception):
     """The gem count dropped during wall upgrades; never recovered, the run stops at once."""
 
@@ -2800,7 +2805,13 @@ class Bot:
             return None
         self.gems_fresh = False
         self.guarded_tap({'wall_selected'}, locate_more)
-        count = self.fill_bulk(spec, village, resource, cap)
+        try:
+            count = self.fill_bulk(spec, village, resource, cap)
+        except BulkLayout as exc:
+            LOG.warning('"Tingkatkan Lebih Banyak" tidak dipakai lagi: %s; lanjut satu tembok per upgrade', exc)
+            self.clear_bulk(spec, village)
+            self.bulk_walls = False
+            return 0
         if count is None:
             raise WaitTimeout(f'Tingkatkan Lebih Banyak: {resource} tidak cukup untuk satu tembok; tidak ada input')
 
@@ -2861,6 +2872,8 @@ class Bot:
         for name, steps in (('plus1', 1), ('plus10', 2), ('minus', 3)):
             centre = [x - BULK_STEP_PX * steps, y]
             label = [centre[0] + round(dx * scale), y + round(dy * scale), round(w * scale), round(h * scale)]
+            if label[0] < 0:
+                raise BulkLayout('tombol -1, +10, +1 tidak ada di kiri tombol upgrade')
             controls[name] = (centre, red_pixels(frame, label) < BULK_LABEL_RED)
         return price[0][2], controls
 

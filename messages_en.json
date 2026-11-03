@@ -291,6 +291,8 @@
  "REMOTE: layar LDPlayer tidak terbaca ({})": "REMOTE: LDPlayer screen not readable ({})",
  "Resource {} tidak dikenal": "Unknown {} resource",
  "language harus id atau en": "language must be id or en",
+ "tombol -1, +10, +1 tidak ada di kiri tombol upgrade": "no -1, +10, +1 buttons left of the upgrade buttons",
+ "\"Tingkatkan Lebih Banyak\" tidak dipakai lagi: %s; lanjut satu tembok per upgrade": "\"Tingkatkan Lebih Banyak\" no longer used: %s; going on one wall per upgrade",
  "Bahasa harus id atau en": "Language must be id or en",
  "API key perangkat : {}": "Device API key    : {}",
  "  (BARU; key lama tidak berlaku lagi)": "  (NEW; the old key no longer works)",

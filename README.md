@@ -266,7 +266,10 @@ beyond `--max-upgrades` or, for gold, the gold reserve. The dialog that follows 
 dipilih dengan … Emas?") gets Oke only when it names the chosen resource (Emas, Eliksir, or their "Tukang" Builder
 Base forms), so a gem price is never confirmed; anything else is cancelled with Batal. A wall without the button, or a
 resource that pays for one wall only, takes the one-wall upgrade. The bulk selection outlives the builder list, so the
-bot clears it by opening and closing the list. It reads the gem count
+bot clears it by opening and closing the list. On an account with wall rings the selected wall's buttons wrap into two
+rows and "Tingkatkan Lebih Banyak" is found in the top one; if the bulk bar then has no -1, +10 and +1 left of its
+upgrade buttons, the bot leaves bulk mode untouched and upgrades the rest of that run one wall at a time. Wall rings
+are never used. It reads the gem count
 before and after every upgrade and keeps the last trusted count across recoveries. A count that drops with the same
 number of digits stops the run for good, without any recovery. A count with other digits or a higher one is treated
 as a misread: nothing is tapped and recovery reads it again. In the Home Village it also keeps a gold reserve (`walls.home.gold_reserve`, 200,000) for opponent searches, which cost gold: a gold upgrade that would dip below it is closed and that session continues with elixir. A village needs a
@@ -663,7 +666,7 @@ again.
 python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
 ```
 
-The suites (347 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (348 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, the dashboard link (signed commands, settings, the bot as a child
