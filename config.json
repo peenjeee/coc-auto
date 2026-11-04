@@ -848,6 +848,50 @@
             "file": "calibration/home_result-ee063b1fccee453f81c0b547b971a754.png",
             "margin": 3
           }
+        ],
+        [
+          {
+            "roi": [
+              580,
+              600,
+              160,
+              34
+            ],
+            "file": "calibration/home_result-dbb8786f17004760b699e3b1e3e571b6.png",
+            "margin": 3
+          },
+          {
+            "roi": [
+              360,
+              182,
+              60,
+              30
+            ],
+            "file": "calibration/home_result-ribbon-a0bd9bd4416a465886ef5c1addda690a.png",
+            "margin": 4
+          }
+        ],
+        [
+          {
+            "roi": [
+              576,
+              600,
+              128,
+              32
+            ],
+            "file": "calibration/home_result-loss-17958ac20a814bf0834bd4ffafd7f257.png",
+            "margin": 3
+          },
+          {
+            "roi": [
+              360,
+              182,
+              60,
+              30
+            ],
+            "file": "calibration/home_result-ribbon-a0bd9bd4416a465886ef5c1addda690a.png",
+            "margin": 4
+          }
         ]
       ]
     },

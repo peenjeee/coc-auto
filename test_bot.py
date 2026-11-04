@@ -2443,6 +2443,30 @@ class BotTests(unittest.TestCase):
         image[260:460, 250:1000] = cv2.imread(str(root / 'fixtures' / 'disconnected-en.png'))
         self.assertEqual(bot.Detector(config, root).detect(image), 'disconnected')
 
+    def test_a_win_is_known_by_its_ribbon_while_the_loot_bonus_counts_over_the_coin(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        # The league bonus counts up inside a box drawn across the gold coin; the ribbon and button stay clear.
+        strips = cv2.imread(str(root / 'fixtures' / 'result-en-bonus.png'))
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[175:220], image[595:640] = strips[:45], strips[45:]
+        self.assertEqual(bot.Detector(config, root).detect(image), 'home_result')
+
+    def test_a_lost_return_tap_on_the_result_is_tapped_again(self):
+        device = Device(self.frames, initial='home_result')
+        runner = self.make_bot(device, True)
+        real_tap, lost = device.tap, []
+
+        def flaky_tap(point):
+            if device.state == 'home_result' and not lost:
+                lost.append(point)
+                return
+            real_tap(point)
+        device.tap = flaky_tap
+        with patch('bot.TAP_RETRY_SECONDS', 0.05):
+            runner.settle()
+        self.assertEqual((device.state, len(lost)), ('home', 1))
+
     def test_an_english_twin_is_tried_after_the_template_it_stands_for(self):
         rng = np.random.default_rng(53)
         (self.root / 'en').mkdir()

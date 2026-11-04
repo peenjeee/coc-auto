@@ -2345,8 +2345,7 @@ class Bot:
                 if self.wait_battle('home', {'home_result', 'home'}, {'home_scout', 'home_battle'}) == 'home':
                     LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
                 else:
-                    self.action('home_result', 'return')
-                    self.wait({'home'}, {'home_result'}, 30)
+                    self.tap_until('home_result', 'return', {'home'}, 30)
                 self.count_broke_attack(broke and not passes)
                 return
             self.action('home_scout', 'next')
@@ -2457,8 +2456,7 @@ class Bot:
         if state == 'builder':
             LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
         else:
-            self.action('builder_result', 'return')
-            self.wait({'builder'}, {'builder_result'}, 30)
+            self.tap_until('builder_result', 'return', {'builder'}, 30)
         self.trophies_from = time.monotonic() + TROPHY_SETTLE_SECONDS
 
     def storage_max(self, village: str, key: str, spec: dict) -> int:
@@ -3418,8 +3416,7 @@ class Bot:
         busy =set(BATTLE_STATES) | {'home_scout', 'builder_scout', 'builder_stage2', *RESULT_SCREENS}
         state = self.wait(set(VILLAGES) | set(RESULT_SCREENS), busy, BATTLE_END_SECONDS if self.poll else self.timeout)
         if state in RESULT_SCREENS:
-            self.action(state, 'return')
-            self.wait(set(VILLAGES), {state}, 30)
+            self.tap_until(state, 'return', set(VILLAGES), 30)
 
     def run(self, mode: str, cycles: int, searches: int, done: int = 0) -> int:
         """--cycles: attack each village of mode cycles times; done attacks already finished before a recovery are
