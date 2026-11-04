@@ -643,7 +643,7 @@ How to change it:
 | Situation | What `--until-full`, `--walls` and `--cycles` (with `--live`) do |
 | --- | --- |
 | LDPlayer is not running | Starts it with `ldconsole launch`, waits for ADB and Android boot. |
-| CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. A wait that has seen no known screen for 10 seconds checks that CoC is still in front, so a game Android closes while it loads is reopened at once instead of after the full timeout. |
+| CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. A wait that has seen no known screen for 10 seconds checks that CoC is still in front, so a game Android closes while it loads is reopened at once instead of after the full timeout. When the game closes again before an attack or upgrade got done (Android inside LDPlayer starved of memory kills it over and over), LDPlayer is restarted instead. |
 | ADB disconnects | Waits up to 5 minutes for the device, then resumes. |
 | PC runs out of memory | Pauses, lets a running battle end, leaves the result screen, then resumes. Any other error while free memory is below 1 GB is handled the same way. |
 | PC memory runs low (LDPlayer grows over hours) | Between `--until-full`/`--walls` attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. Free memory is the lower of free RAM and free commit memory (RAM + page file): with a large page file commit memory stays plentiful while RAM runs out and the PC freezes swapping. Before launching LDPlayer again it waits up to a minute for its virtual machine to stop. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back or its screen cannot be captured. |
@@ -677,7 +677,7 @@ again.
 python -m unittest -v
 ```
 
-The suites (363 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (364 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, walls (the cheapest row in either language, the sale

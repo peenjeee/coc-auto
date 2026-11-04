@@ -217,6 +217,7 @@
  "Loot lawan tidak terbaca (%s); lewati lawan ini": "Opponent loot not readable (%s); skipping this opponent",
  "Tembok %s dilewati: %s; jalankan lagi saat ada tukang bebas": "Walls %s skipped: %s; run again when a builder is free",
  "ADB tidak kembali; mematikan LDPlayer agar dinyalakan ulang": "ADB did not come back; shutting down LDPlayer so it can be restarted",
+ "CoC terus tertutup; mematikan LDPlayer agar dinyalakan ulang": "CoC keeps closing; shutting down LDPlayer so it can be restarted",
  "Layar emulator tidak bisa diambil; mematikan LDPlayer agar dinyalakan ulang": "Emulator screen cannot be captured; shutting down LDPlayer so it can be restarted",
  "Memori PC hampir habis (%s); jeda lalu lanjut, pemulihan %s/%s": "PC memory almost exhausted (%s); pausing then continuing, recovery %s/%s",
  "Layar macet (%s); rapikan layar lalu lanjut, pemulihan %s/%s": "Screen stuck (%s); tidying the screen then continuing, recovery %s/%s",

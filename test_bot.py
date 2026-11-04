@@ -3059,6 +3059,22 @@ class BotTests(unittest.TestCase):
             self.assertFalse(runner.refresh_if_low_memory())
         self.assertEqual(emulator.events, ['quit', 'launch'])
 
+    def test_a_game_that_keeps_closing_gets_a_fresh_ldplayer(self):
+        device, emulator = self.restartable()
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=emulator)
+        calls = []
+
+        def crash(searches):
+            calls.append(1)
+            if len(calls) <= 2:
+                device.front = False
+                raise bot.UnknownScreen('Layar tidak dikenal')
+            return 7
+        runner.run_until_full = crash
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=5), 7)
+        # The first close only reopens the game; closed again with nothing done, LDPlayer starts fresh.
+        self.assertEqual(emulator.events, ['quit', 'launch'])
+
     def test_resilient_run_started_on_a_result_screen_returns_to_the_village_first(self):
         device = Device(self.frames, initial='builder_result')
         device.game_in_front = lambda: True

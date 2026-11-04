@@ -105,6 +105,8 @@ UPDATE_INSTALL_SECONDS, INSTALL_POLL_SECONDS, UPDATE_LOG_SECONDS = 1800, 15, 60
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
+# Recoveries with nothing done in between after which a closed game means LDPlayer itself has to start fresh.
+CRASH_LOOP_RECOVERIES = 2
 # Attacks in a row forced by running out of gold while searching: the loot minimum does not fit the account.
 BROKE_ATTACKS_LIMIT = 3
 MEMORY_RETRY_SECONDS, BATTLE_END_SECONDS = 30, 240
@@ -3361,6 +3363,11 @@ class Bot:
                     pending = self.settle
                     continue
                 LOG.warning('Game tertutup/terputus (%s); pemulihan %s/%s', exc, recoveries, max_recoveries)
+                # Android starved of memory inside LDPlayer kills the game again and again; reopening it does not
+                # help, a fresh LDPlayer does.
+                if self.emulator and recoveries >= CRASH_LOOP_RECOVERIES:
+                    LOG.warning('CoC terus tertutup; mematikan LDPlayer agar dinyalakan ulang')
+                    self.emulator.quit()
                 pending = self.recover
 
     def recoveries_since(self, recoveries: int, progress: int) -> tuple[int, int]:
