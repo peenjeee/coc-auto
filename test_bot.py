@@ -2877,6 +2877,15 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2), 1)
         self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
 
+    def test_a_run_lifts_the_fingers_a_killed_run_left_down_before_its_first_tap(self):
+        device = Device(self.frames)
+        device.touch_up = lambda: device.inputs.append(('up',))
+        device.game_in_front = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.run_until_full = lambda searches: device.inputs.append('run') or 1
+        runner.run_until_full_resilient(0, max_recoveries=2)
+        self.assertEqual(device.inputs[0], ('up',))
+
     def test_resilient_run_stops_on_real_errors_and_after_limit(self):
         device = Device(self.frames)
         device.game_in_front = lambda: True

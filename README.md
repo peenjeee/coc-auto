@@ -317,7 +317,7 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 Every command runs under the [web dashboard](#web-dashboard) link: when its task ends (or is stopped), the bot stays on
 standby for the dashboard. Leave with **Ctrl+C** at any time. However the bot stops (Ctrl+C, the dashboard's stop, or
 an error), it lifts every virtual finger it may have held, so a hold or zoom cut short does not leave the game reading
-your own drags as a pinch.
+your own drags as a pinch. A run also lifts them before its first tap, for a bot that was killed without that chance.
 
 ## Web dashboard
 
@@ -677,7 +677,7 @@ again.
 python -m unittest -v
 ```
 
-The suites (362 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (363 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, walls (the cheapest row in either language, the sale

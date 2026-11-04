@@ -3309,6 +3309,9 @@ class Bot:
         """Run job (until-full by default), reopening the game after a crash, closed app or ADB drop."""
         integer(max_recoveries, 0, 1000, 'max_recoveries')
         recoveries, progress = 0, self.progress
+        # A run killed in the middle of a hold leaves its fingers down, and the next run's first taps would vanish.
+        if self.live:
+            self.release_touch()
         # The recovery step runs inside the try, so a recovery that fails is retried like any other loss.
         # Started mid-battle or on a result screen, first let the battle end and return to the village.
         pending = self.settle if self.game_ready() else self.recover
