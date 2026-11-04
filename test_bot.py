@@ -3252,6 +3252,23 @@ class BotTests(unittest.TestCase):
         bot.check_adb_debugging(str(folder / 'ldconsole.exe'), 0)
         bot.check_adb_debugging(str(folder / 'ldconsole.exe'), 3)
 
+    def test_the_maintenance_break_screen_ends_the_run_from_any_wait(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        # The break screen: a yellow and black stripe across the top with "Jeda pemeliharaan" in its middle.
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[:60] = cv2.imread(str(root / 'fixtures' / 'maintenance.png'))
+        detector = bot.Detector(config, root)
+        self.assertEqual(detector.detect(image), 'maintenance')
+        device = Device(self.frames, 'home')
+        device.capture = lambda: image.copy()
+        runner = bot.Bot(config, root, device, live=True, timeout=1, poll=0)
+        with self.assertRaises(bot.MaintenanceBreak):
+            runner.wait({'home'}, set(), 1)
+        # Recovery does not retry it: the break goes up to main, which closes CoC.
+        with self.assertRaises(bot.MaintenanceBreak):
+            runner.run_until_full_resilient(0, max_recoveries=3, job=lambda searches: runner.wait({'home'}, set(), 1))
+
     def test_an_attack_the_game_refuses_for_maintenance_closes_coc_and_ends_the_run(self):
         root = Path(bot.__file__).parent
 
@@ -3269,7 +3286,7 @@ class BotTests(unittest.TestCase):
         runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
         runner.detector.detect = lambda image: 'home_army'
         device.capture = lambda: refused.copy()
-        with self.assertRaises(bot.AttackRefused):
+        with self.assertRaises(bot.MaintenanceBreak):
             runner.tap_until('home_army', 'attack', {'home_scout'}, 5, attack=True)
         # Any other menu tap that does not go through is only tapped again.
         with self.assertRaises(bot.WaitTimeout):
@@ -3278,7 +3295,7 @@ class BotTests(unittest.TestCase):
                 patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
                 patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as stopped, \
                 patch('bot.fit_screen', return_value=False):
-            stopped.return_value.run_until_full_resilient.side_effect = bot.AttackRefused('maintenance')
+            stopped.return_value.run_until_full_resilient.side_effect = bot.MaintenanceBreak('maintenance')
             self.assertEqual(bot.main(), 0)
         stopped.return_value.device.stop_game.assert_called_once_with()
 

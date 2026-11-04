@@ -136,7 +136,7 @@ LAUNCH_ATTEMPTS = 4
 GAME_CHECK_SECONDS = 10
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm', 'wall_bulk_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', 'update_offer',
-                    'surrender_confirm', *MENU_SCREENS)
+                    'surrender_confirm', 'maintenance', *MENU_SCREENS)
 # The battle clock runs at 1x until its last minute, when the 4x button appears; past two minutes little is saved.
 SURRENDER_MAX_SECONDS, SURRENDER_DEFAULT_SECONDS = 120, 60
 # Home Village battles are given up at this damage unless --surrender-at says otherwise (0 = never).
@@ -253,9 +253,9 @@ class GemSpent(Exception):
     """The gem count dropped during wall upgrades; never recovered, the run stops at once."""
 
 
-class AttackRefused(Exception):
-    """The game refuses to start an attack (Supercell's maintenance break is near or on): CoC is closed and the run
-    ends, since retrying cannot help until the break is over."""
+class MaintenanceBreak(Exception):
+    """Supercell's maintenance break: the game refuses attacks before it and shows its break screen (the yellow and
+    black stripe across the top) during it. CoC is closed and the run ends; retrying cannot help until it is over."""
 
 
 class UpdateRequired(Exception):
@@ -1748,6 +1748,8 @@ class Bot:
             unknown_since = None
             if state in targets or (give_up and give_up(state, image)):
                 return state
+            if state == 'maintenance':
+                raise MaintenanceBreak('CoC sedang jeda pemeliharaan')
             if state == 'update_offer':
                 self.update_game()
                 # The new version loads from the start, often longer than this wait had left.
@@ -1892,7 +1894,7 @@ class Bot:
 
         def refused(shown: str, image: np.ndarray) -> bool:
             if attack and shown == state and attack_refused(image):
-                raise AttackRefused('Game menolak menyerang sampai jeda pemeliharaan selesai')
+                raise MaintenanceBreak('Game menolak menyerang sampai jeda pemeliharaan selesai')
             return False
         while True:
             if taps == 0 or (taps < retries and self.current_screen() == state):
@@ -3739,7 +3741,7 @@ def main() -> int:
     except UpdateRequired as exc:
         LOG.error('Berhenti: %s', exc)
         return 5
-    except AttackRefused as exc:
+    except MaintenanceBreak as exc:
         try:
             runner.device.stop_game()
         except BotError:

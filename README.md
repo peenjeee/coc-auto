@@ -655,6 +655,7 @@ How to change it:
 | The account is opened on another device ("Perangkat lain tersambung ke desa ini") | Taps **Muat ulang** and carries on, which takes the session back from the other device. |
 | The game disconnects for inactivity ("Ada orang di sana?") | Taps "Muat ulang game" and carries on. |
 | The game refuses to attack before a maintenance break ("Menyerang dinonaktifkan sampai jeda pemeliharaan selesai") | Closes CoC and ends the run (exit code 0); start it again once the break is over. Told by the size of the red sentence over the attack menu, so it works in either game language; looked for only after an attack tap that did not start an attack. |
+| Supercell's maintenance break ("Jeda pemeliharaan" screen) | Closes CoC and ends the run (exit code 0), from any wait, recovery included; start it again once the break is over. Told by the yellow and black stripe across the top of the screen (`maintenance`), the same in any game language. |
 | A Builder Base stage 1 is won while the surrender dialog is up | The game moves on to stage 2, which can only be given up once it has loaded: Menyerah and Oke are tapped again until the battle has ended (its timer ends it at the latest). |
 | The server connection drops ("Sambungan terputus", or "Kesalahan sambungan" while loading) | Taps "Coba lagi", waiting 10 seconds between tries while the network is still down, and carries on. |
 | A game update is offered ("Pembaruan Tersedia!") | Updates the game: taps the game's update button, then the Play Store's own Update button, in the update dialog or on the game's store page (found by its text, only for Clash of Clans; install buttons and anything else in the store are never tapped), waits up to 30 minutes for the new version to install, opens CoC again and carries on. If the store shows no Update button (not signed in, no space) or the install does not finish, stops with exit code 5 and asks you to update CoC from the Play Store. A dry-run never updates. |
@@ -676,7 +677,7 @@ again.
 python -m unittest -v
 ```
 
-The suites (357 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (358 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, walls (the cheapest row in either language, the sale

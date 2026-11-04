@@ -292,6 +292,7 @@
  "Resource {} tidak dikenal": "Unknown {} resource",
  "language harus id atau en": "language must be id or en",
  "Game menolak menyerang sampai jeda pemeliharaan selesai": "The game refuses to attack until the maintenance break is over",
+ "CoC sedang jeda pemeliharaan": "CoC is in its maintenance break",
  "%s; CoC ditutup dan bot berhenti, jalankan lagi setelah pemeliharaan": "%s; CoC closed and the bot stopped, run it again after the maintenance",
  "Layar LDPlayer tidak bisa disesuaikan: {}": "LDPlayer screen could not be fitted: {}",
  "Layar LDPlayer %sx%s DPI %s diganti ke layar kalibrasi; dikembalikan saat bot berhenti": "LDPlayer screen %sx%s DPI %s switched to the calibrated screen; it is put back when the bot stops",

@@ -2326,6 +2326,30 @@
         ]
       }
     },
+    "maintenance": {
+      "anchors": [
+        {
+          "roi": [
+            160,
+            0,
+            320,
+            18
+          ],
+          "file": "calibration/maintenance-stripe-94b93b28a799451790ec9b12262002b3.png",
+          "margin": 6
+        },
+        {
+          "roi": [
+            800,
+            0,
+            340,
+            18
+          ],
+          "file": "calibration/maintenance-stripe-57d7732c381844bdbfed2ace2389e2fa.png",
+          "margin": 6
+        }
+      ]
+    },
     "update_offer": {
       "anchors": [
         {
