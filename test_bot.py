@@ -3252,6 +3252,19 @@ class BotTests(unittest.TestCase):
         bot.check_adb_debugging(str(folder / 'ldconsole.exe'), 0)
         bot.check_adb_debugging(str(folder / 'ldconsole.exe'), 3)
 
+    def test_free_memory_is_the_lower_of_free_ram_and_free_commit_memory(self):
+        # RAM nearly gone while a large page file keeps commit memory plentiful: the PC is already swapping.
+        with patch('bot.memory_status', return_value=(700, 10_000)):
+            self.assertEqual(bot.available_memory_mb(), 700)
+            self.assertTrue(bot.memory_critical())
+        with patch('bot.memory_status', return_value=(4_000, 900)):
+            self.assertEqual(bot.available_memory_mb(), 900)
+        with patch('bot.memory_status', return_value=None):
+            self.assertIsNone(bot.available_memory_mb())
+        status = bot.memory_status()
+        if status is not None:
+            self.assertTrue(all(isinstance(value, int) and value >= 0 for value in status))
+
     def test_recover_starts_stopped_emulator_then_game(self):
         device = Device(self.frames)
         device.up = False

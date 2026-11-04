@@ -833,8 +833,8 @@ class Emulator:
         self.run('quit')
 
 
-def available_memory_mb() -> int | None:
-    """Free commit memory (RAM + page file) on Windows; None where it cannot be read."""
+def memory_status() -> tuple[int, int] | None:
+    """(free RAM, free commit memory: RAM + page file) in MB on Windows; None where it cannot be read."""
     import ctypes
     if not hasattr(ctypes, 'windll'):
         return None
@@ -847,7 +847,14 @@ def available_memory_mb() -> int | None:
     status.length = ctypes.sizeof(MemoryStatus)
     if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
         return None
-    return status.avail_commit // (1024 * 1024)
+    return status.avail_phys // (1024 * 1024), status.avail_commit // (1024 * 1024)
+
+
+def available_memory_mb() -> int | None:
+    """The PC's free memory, the lower of free RAM and free commit memory. With a large page file commit memory
+    stays plentiful while RAM runs out, and the PC freezes swapping long before commit memory is short."""
+    status = memory_status()
+    return None if status is None else min(status)
 
 
 def validate_search_anchor(name: str, anchor: dict, root: Path, resolution: list) -> None:
