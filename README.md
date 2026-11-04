@@ -29,7 +29,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
 | **Walls** | `--walls` spends stored gold and elixir on walls, cheapest level first, then farms both full and repeats until every wall is maxed. It never spends gems. |
-| **Web dashboard** | Live log and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. Installable as an app. |
+| **Web dashboard** | Live log and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. Indonesian or English; the switch also sets the bot's terminal language. Installable as an app. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
 | **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. A setup that cannot work (taps that cannot land, ADB debugging off, a loot minimum no opponent meets) stops the run with what to change. |
 
@@ -120,7 +120,7 @@ C:\LDPlayer\LDPlayer14\adb.exe devices
 > The bundled calibration was built and tested with the game language set to **Bahasa Indonesia** or
 > **English** on LDPlayer at **1280×720**. Screens are recognised from on-screen text and icons, so another
 > language, resolution, UI scale, or army layout will not match out of the box.
-> If the bot stops with *"Layar tidak dikenal"* (unknown screen) or taps the wrong place,
+> If the bot stops with *"Layar tidak dikenal"* (*"Unknown screen"* with `"language": "en"`) or taps the wrong place,
 > recalibrate it for your own setup — see [Calibration](#calibration).
 
 ## First-time setup for another PC or account
@@ -133,8 +133,8 @@ not in git, so `git pull` never collides with it, and the dashboard saves its se
 
 | What | Must be | Why / how to check |
 | --- | --- | --- |
-| LDPlayer resolution | **1280×720, DPI 240**, set for you | Screens are matched pixel for pixel, and text renders differently at another size or DPI. A live run on any other screen (such as LDPlayer's default 1920×1080, DPI 280) switches the instance to 1280×720, DPI 240 first (LDPlayer restarts once, waiting until its virtual machine has let go of the disks) and puts your own screen back when the bot exits; under the dashboard it goes back when you leave it. "Fit screen" in the dashboard does the same by hand. |
-| Game language | **Bahasa Indonesia** or **English** | Many anchors are text ("Pertempuran"/"Battle", "Tembok"/"Wall", "Maks:"/"Max:"). Each template with text has an English twin under the same file name in `calibration/en/`, tried after the Indonesian one; a few English-only anchors cover labels whose box differs ("Upgrade time", "Battle starts in", "Defender", "Battle ends in"). Popups that could not be brought up on purpose (star bonus, rewards, league, idle, disconnected, update offer) are calibrated in Indonesian only. With another language every text anchor has to be recalibrated. Set it in CoC's own settings (Town Hall icon top left → Settings → Language): CoC keeps its own language, so changing Android's or LDPlayer's language does not change it. |
+| LDPlayer resolution | **1280×720, DPI 240**, set for you | Screens are matched pixel for pixel, and text renders differently at another size or DPI. A live run on any other screen (such as LDPlayer's default 1920×1080, DPI 280) switches the instance to 1280×720, DPI 240 first, when `ldconsole` is set (LDPlayer restarts once, waiting until its virtual machine has let go of the disks), and puts your own screen back when a `--no-remote` run exits; under the dashboard it goes back when you leave the dashboard link. "Fit screen" in the dashboard does the same by hand. The calibrated DPI can be changed with the optional `dpi` key (default 240). |
+| Game language | **Bahasa Indonesia** or **English** | Many anchors are text ("Pertempuran"/"Battle", "Tembok"/"Wall", "Maks:"/"Max:"). Each template with text has an English twin under the same file name in `calibration/en/`, tried after the Indonesian one; a few English-only anchors cover labels whose box differs ("Upgrade time", "Battle starts in", "Defender", "Battle ends in"). Popups that could not be brought up on purpose (star bonus, rewards, league, welcome back, idle, disconnected, other device, search failed, gem offer, all builders busy, update offer) are calibrated in Indonesian only. The Builder Base scout screen is also recognised when Android's status bar covers the top of the screen, as it can after an LDPlayer restart. With another language every text anchor has to be recalibrated. Set it in CoC's own settings (Town Hall icon top left → Settings → Language): CoC keeps its own language, so changing Android's or LDPlayer's language does not change it. |
 | `adb`, `ldconsole` | Paths in your LDPlayer install folder | e.g. `C:\LDPlayer\LDPlayer14\adb.exe` and `C:\LDPlayer\LDPlayer14\ldconsole.exe`; the folder name depends on the LDPlayer version. |
 | `ld_index`, `serial` | Your instance | `ld_index` is the instance number in LDMultiPlayer (0 for the first). `serial` is `emulator-<5554 + 2 × index>`: `emulator-5554` for index 0, `emulator-5556` for index 1. Check with `adb devices`. |
 | `touch_device`, `zoom_out.device` | The touchscreen node | Run `adb -s <serial> shell getevent -pl` and use the `/dev/input/eventN` whose block lists `ABS_MT_POSITION_X`. Set both keys to it; holds, pinches and fast taps go there. |
@@ -153,7 +153,7 @@ Then open the village and run the dry run, which sends no input:
 python bot.py
 ```
 
-It should log `Dry-run: layar=home` (or `builder`). *"Layar tidak dikenal"* means the screen does not match; recheck
+It should log `Dry-run: layar=home` (or `builder`; `Dry-run: screen=home` with `"language": "en"`). *"Layar tidak dikenal"* means the screen does not match; recheck
 resolution, DPI and language before recalibrating anything. Like every command, it then stays on standby for the
 dashboard; leave with **Ctrl+C**, or run `python bot.py --no-remote` to exit right after the check.
 
@@ -175,7 +175,8 @@ python bot.py --until-full --ring --quake --surrender-at 50 --live
 
 With skeletons instead of earthquakes, leave out `--quake`. On the web dashboard, the **army template** list fills in
 these options for each recommended army (Valkyries + earthquakes, Barbarians + skeletons, dragons, Miners +
-skeletons, Super Minions); they can still be changed by hand afterwards.
+skeletons, Super Minions), and the **Builder Base army template** list does the same there (Baby Dragons spread,
+Witches on one point, Raged Barbarians spread); they can still be changed by hand afterwards.
 
 | Command | Purpose |
 | --- | --- |
@@ -242,13 +243,15 @@ python bot.py --walls home --wall-resource elixir --wall-every 5 --live
 ```
 
 `--walls` takes `home`, `builder` or `both`. For each village in turn it first spends the gold and elixir already
-in storage: it opens the builder list, finds a "Tembok" row, and upgrades one wall at a time with whichever of gold or
-elixir is still affordable. It always takes the lowest wall level first, and moves on to the next level only when that one is used up. Each wall level costs more than the one below, so it reads the price on every "Tembok" row and picks the cheapest. Position in the list says nothing about level: the game puts affordable rows above ones the storage cannot pay for. When neither resource is affordable any more, it
+in storage: it opens the builder list, finds a "Tembok" row ("Wall" in an English game; the row template follows the
+list's own language, so the Grand Warden's "Wali Besar" is never taken for a wall), and upgrades one wall at a time
+with whichever of gold or elixir is still affordable. It always takes the lowest wall level first, and moves on to the next level only when that one is used up. Each wall level costs more than the one below, so it reads the price on every wall row and picks the cheapest. Position in the list says nothing about level: the game puts affordable rows above ones the storage cannot pay for. When neither resource is affordable any more, it
 farms until gold and elixir are both full, spends them again, and repeats. It stops once no "Tembok" row is left, which means
 every wall is at the maximum level for the current Town Hall or Builder Hall. In the Builder Base it also claims the
 Elixir Cart first; its lower walls cost gold only, higher ones gold or elixir (gold first, like the Home Village), and only the upgrade buttons a wall actually shows are used. Builder Base walls also need a free builder: with every builder busy the game offers to free one for gems, and the bot closes that offer with X and skips the Builder Base walls for that run. If storage is full and still no wall can be upgraded, the run stops instead of looping. `--first` picks the village to finish first when `both` is chosen.
 `--wall-resource gold` or `elixir` pays for walls with that resource only and farms only it full; a wall that the chosen
-resource cannot pay for (such as a low Builder Base wall, gold only, with `elixir`) is never upgraded. `--wall-every N`
+resource cannot pay for (such as a low Builder Base wall, gold only, with `elixir`) is never upgraded, and once the
+storage is full with no wall that resource can pay for, the run stops. `--wall-every N`
 goes back to the walls after N attacks, or sooner once the storage is full, so walls get the loot without waiting for a
 full storage; a short round that leaves nothing affordable just farms on.
 The bot never spends gems. It taps an upgrade only when its price is shown in white, and taps Konfirmasi only when
@@ -259,12 +262,14 @@ counts only the green price, so a sale price the storage cannot pay (shown in re
 struck-through price is white; the icon must still be gold or elixir. The gold reserve is checked against that green
 price too, so gold keeps paying for walls during a sale.
 
-With `--bulk-walls` the selected wall's "Tingkatkan Lebih Banyak" button upgrades many walls of its level in one go
-(`walls.<village>.bulk`). The bot adds ten walls at a time while the price stays white, then takes one off at a time
-until it is white again (one at a time when +10 is greyed out because fewer walls of that level are left), never
-beyond `--max-upgrades` or, for gold, the gold reserve. The dialog that follows ("Yakin ingin meningkatkan tembok yang
-dipilih dengan … Emas?") gets Oke only when it names the chosen resource (Emas, Eliksir, or their "Tukang" Builder
-Base forms), so a gem price is never confirmed; anything else is cancelled with Batal. A wall without the button, or a
+With `--bulk-walls` the selected wall's "Tingkatkan Lebih Banyak" ("Upgrade More") button upgrades many walls of its
+level in one go (`walls.<village>.bulk`). The button is found by its label, since the wall drawn on it is the selected
+wall's level. The bot adds ten walls at a time while the price stays white, then takes one off at a time until it is
+white again (one at a time when +10 is greyed out, or gone: with only a few walls of that level left the bar shows -1
+and +1 only), never beyond `--max-upgrades` or, for gold, the gold reserve. The dialog that follows ("Yakin ingin
+meningkatkan tembok yang dipilih dengan … Emas?", in English "… for … Gold?") gets Oke only when it names the chosen
+resource (Emas/Gold, Eliksir/Elixir, or their "Tukang" Builder Base forms), so a gem price is never confirmed; anything
+else is cancelled with Batal. A wall without the button, or a
 resource that pays for one wall only, takes the one-wall upgrade. The bulk selection outlives the builder list, so the
 bot clears it by opening and closing the list. With wall rings (both villages) the ring adds a button, and beside the
 open builder list the buttons wrap into two rows: "Tingkatkan Lebih Banyak" ends the top row, and in bulk mode -1,
@@ -343,8 +348,8 @@ PC that runs the bot; the key is printed in the terminal when the script starts.
 > yang menjalankan bot terhubung ke internet. Pantau lewat [coc.0xpnj.dev](https://coc.0xpnj.dev) dengan memasukkan
 > API key dari perangkat yang menjalankan bot; key itu tampil di terminal saat script dijalankan.
 
-The online dashboard installs as an app (PWA): press **install app** in its header or use the browser menu
-(Install / Add to Home screen) in Chrome or Edge, and on an iPhone use Share → Add to Home Screen in Safari. It opens
+The online dashboard installs as an app (PWA): press **install app** in its header or use the browser's own menu
+(Install, or Share → Add to Home Screen on a phone). It opens
 in its own window with the bot's icon; without a connection it still opens, and shows the PC as offline.
 
 To run everything from the web without starting a task first:
@@ -357,7 +362,8 @@ It shows the key and waits for **Start** from the dashboard. `python bot.py --ke
 dashboard can control the PC only while `--agent` (or any other bot command) is running there.
 
 The dashboard (Indonesian or English, switch in the title bar; the switch also sets the bot's terminal language,
-`language` in config) shows whether the PC is online, the bot's state and
+`language` in config, and on connecting the dashboard puts the device on the language it is shown in) shows whether
+the PC is online, the bot's state and
 command, and the live log, which stays in view while the options scroll. Its form covers every command above, in
 sections: **Task**, **Targets** (villages, resources, dark elixir, walls, `--bulk-walls`, `--wall-resource`, `--first`), **Limits**
 (attacks, searches, time, upgrades, `--wall-every`, recoveries), **Army** (the army templates, ring or stack per village, `--quake`) and **Surrender**
@@ -387,10 +393,11 @@ paths, checks the rest like any calibration, saves to `config.local.json` (the p
 `config.local.json.bak`), and the change applies at the next Start.
 
 **LDPlayer screen:** shows the instance's resolution and DPI next to the calibration (1280×720, DPI 240). "Fit
-screen" stops the bot, closes LDPlayer, writes only the resolution and DPI into its instance file
-(`vms\config\leidian<index>.config`; `ldconsole modify` is never used because it drops other settings such as ADB
-debugging) and starts LDPlayer again. Your own resolution and DPI are kept in `~/.coc-auto/display.json` and are put
-back when you leave the bot with **Ctrl+C**, or with "restore my screen". LDPlayer is restarted for a restore only
+screen" stops the bot, closes LDPlayer, waits for its virtual machine to stop, writes only the resolution, the DPI and
+ADB debugging (turned on) into its instance file (`vms\config\leidian<index>.config`; `ldconsole modify` is never used
+because it drops other settings) and starts LDPlayer again. A live run does the same by itself on any other screen.
+Your own resolution and DPI are kept in `~/.coc-auto/display.json` and are put back when you leave the dashboard link
+with **Ctrl+C**, when a `--no-remote` run ends, or with "restore my screen". LDPlayer is restarted for a restore only
 if it is running.
 
 Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
@@ -524,6 +531,7 @@ use a saved screenshot). "Taps" are the points the tool asks for.
 | `python calibrate.py --screen wall_selected` | A wall selected, upgrade buttons shown | close, build |
 | `python calibrate.py --screen wall_confirm` | Home Village wall upgrade dialog | confirm, close |
 | `python calibrate.py --screen builder_wall_confirm` | Builder Base wall upgrade dialog | confirm, close |
+| `python calibrate.py --screen wall_bulk_confirm` | Bulk upgrade dialog ("Yakin ingin meningkatkan tembok yang dipilih …"), needed by `--bulk-walls` | confirm (Oke), close (Batal) |
 
 The `--counts` values are the units on each troop card, left to right (for example `--counts 11 4` for 11
 dragons and 4 rage spells); with an `auto` card-bar plan they are only used for the first calibration. The wall
@@ -622,7 +630,8 @@ How to change it:
 | `storage.<village>.<resource>` | Fallback fill check by bar colour (`row`, `left`, `right`, `hue`, `min_saturation`), used when a village has no `capacity`. |
 | `cart_text` | Crop of the Elixir Cart "current / max" text, read with `digits`. |
 | `cart_bar` | Elixir Cart fill bar read by colour, used when there is no `cart_text`. Either key makes `cart` a goal. |
-| `walls.<village>` | `--walls` calibration: builder list tap point, "Tembok" row template and its price band (`row.price` = `[x, dy, w, h]`, `dy` from the row title's centre; `row.scales` `[1.0, 0.95]` also finds the row of the selected building, which the game draws smaller), scroll swipe, gem count areas, upgrade button template and price offsets, the confirm dialog checks, and the Home Village `gold_reserve`. |
+| `walls.<village>` | `--walls` calibration: builder list tap point, "Tembok" row template and its price band (`row.price` = `[x, dy, w, h]`, `dy` from the row title's centre; `row.scales` `[1.0, 0.95]` also finds the row of the selected building, which the game draws smaller), scroll swipe, gem count areas, upgrade button template and price offsets, the confirm dialog checks (with `confirm.sale` for the sale dialog's label and green price), the HUD gold areas (`hud_gold`) and the Home Village `gold_reserve`, and `bulk` for `--bulk-walls`: the "Tingkatkan Lebih Banyak" label (`more`), the double-hammer upgrade button (`button`), and the dialog's resource words (`words`, read in `text`). |
+| `dpi` | Optional: the DPI the calibration was made at (default 240), used when the LDPlayer screen is fitted. |
 | `digits` | Folder of digit templates (`0.png` … `9.png`, plus variants like `9-ui2.png`). |
 | `zoom_out` | Pinch settings used before switching villages or attacking. |
 | `speed_button` | Template of the battle "1x" button, tapped once to switch to 4x. |
@@ -637,7 +646,7 @@ How to change it:
 | CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. A wait that has seen no known screen for 10 seconds checks that CoC is still in front, so a game Android closes while it loads is reopened at once instead of after the full timeout. |
 | ADB disconnects | Waits up to 5 minutes for the device, then resumes. |
 | PC runs out of memory | Pauses, lets a running battle end, leaves the result screen, then resumes. Any other error while free memory is below 1 GB is handled the same way. |
-| PC memory runs low (LDPlayer grows over hours) | Between attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. Free memory is the lower of free RAM and free commit memory (RAM + page file): with a large page file commit memory stays plentiful while RAM runs out and the PC freezes swapping. LDPlayer is launched again only once its virtual machine has stopped. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back or its screen cannot be captured. |
+| PC memory runs low (LDPlayer grows over hours) | Between `--until-full`/`--walls` attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. Free memory is the lower of free RAM and free commit memory (RAM + page file): with a large page file commit memory stays plentiful while RAM runs out and the PC freezes swapping. Before launching LDPlayer again it waits up to a minute for its virtual machine to stop. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back or its screen cannot be captured. |
 | Started mid-battle, on a result screen, or on an attack menu | Waits for the battle to end and taps return, or closes the menu (when it has a `close` point), then starts farming. |
 | A menu tap is lost (e.g. right after LDPlayer boots) | Taps the same button again, up to 3 times, while that menu is still shown. The search button is retried for up to 3 minutes to wait out the attack cooldown after a game restart. |
 | A wait times out, an unrecognised screen passes, or a known screen comes up out of turn (slow matchmaking, lag, an animation, a battle that started on its own) | Lets a running battle end or closes the menu, then resumes. Counts as one recovery. |
@@ -663,14 +672,16 @@ again.
 ## Testing
 
 ```bash
-python -m unittest -v test_bot test_game_update test_remote test_relay test_ldplayer test_device_control
+python -m unittest -v
 ```
 
 The suites (356 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
-game update, recovery (`--cycles` included), the until-full loop, the dashboard link (signed commands, settings, the bot as a child
-process, the local server, and the relay against a fake relay server), and LDPlayer detection against fake tool
+game update, recovery (`--cycles` included), the until-full loop, walls (the cheapest row in either language, the sale
+dialog, bulk upgrades and their bar layouts, wall rings, `--wall-every`, `--wall-resource`), English game screens, the
+dashboard link (signed commands, settings, the bot as a child process, the local server, and the relay against a fake
+relay server), the English terminal messages, the LDPlayer screen switch, and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
 
 ## Project structure

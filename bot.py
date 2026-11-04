@@ -3557,7 +3557,7 @@ def main() -> int:
     parser.add_argument('--surrender', choices=('home', 'builder', 'both'),
                         help='Menyerah otomatis di desa ini bila battle belum selesai setelah --surrender-after detik')
     parser.add_argument('--surrender-after', type=int,
-                        help=f'Detik battle setelah deploy selesai (1..{SURRENDER_MAX_SECONDS}, default '
+                        help=f'Detik battle sejak deploy dimulai (1..{SURRENDER_MAX_SECONDS}, default '
                              f'{SURRENDER_DEFAULT_SECONDS}); tanpa --surrender berlaku untuk kedua desa')
     parser.add_argument('--surrender-at', type=int,
                         help=f'Desa asal: menyerah otomatis saat persen kerusakan mencapai angka ini (0..99, default '
