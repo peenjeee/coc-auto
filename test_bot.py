@@ -2436,6 +2436,13 @@ class BotTests(unittest.TestCase):
         image[500:560] = cv2.imread(str(root / 'fixtures' / 'battle-en-clan.png'))
         self.assertEqual(bot.Detector(config, root).detect(image), 'home_battle')
 
+    def test_the_english_connection_lost_dialog_is_the_disconnected_screen(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[260:460, 250:1000] = cv2.imread(str(root / 'fixtures' / 'disconnected-en.png'))
+        self.assertEqual(bot.Detector(config, root).detect(image), 'disconnected')
+
     def test_an_english_twin_is_tried_after_the_template_it_stands_for(self):
         rng = np.random.default_rng(53)
         (self.root / 'en').mkdir()
