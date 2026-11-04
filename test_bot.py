@@ -2443,6 +2443,13 @@ class BotTests(unittest.TestCase):
         image[260:460, 250:1000] = cv2.imread(str(root / 'fixtures' / 'disconnected-en.png'))
         self.assertEqual(bot.Detector(config, root).detect(image), 'disconnected')
 
+    def test_the_english_unable_to_attack_screen_is_the_search_failed_screen(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[370:710, 0:950] = cv2.imread(str(root / 'fixtures' / 'search-failed-en.png'))
+        self.assertEqual(bot.Detector(config, root).detect(image), 'search_failed')
+
     def test_a_win_is_known_by_its_ribbon_while_the_loot_bonus_counts_over_the_coin(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
