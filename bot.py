@@ -177,7 +177,7 @@ BULK_MAX_TAPS, BULK_TAP_SECONDS = 60, 0.4
 WHITE_LEVEL = 200
 TEXT_MASK_MIN = 0.1
 # An event sale (Hammer Jam) prints the wall price in this saturated green; the button behind it is paler.
-SALE_HUE, SALE_MIN_SATURATION, SALE_MIN_VALUE = (35, 65), 200, 220
+SALE_HUE, SALE_MIN_SATURATION, SALE_MIN_VALUE, SALE_READ_MIN_VALUE = (35, 65), 200, 220, 180
 CART_CLAIM_SECONDS, CART_OPEN_SECONDS = 2, 5
 CART_MISS_LIMIT = 5
 TOOLTIP_SHOW_SECONDS, TOOLTIP_CLEAR_SECONDS = 3, 4
@@ -1035,12 +1035,12 @@ def bulk_card(image: np.ndarray, centre: list, scale: float) -> bool:
             and red >= blue + BULK_CARD_TINT)
 
 
-def sale_mask(image: np.ndarray) -> np.ndarray:
+def sale_mask(image: np.ndarray, min_value: int = SALE_MIN_VALUE) -> np.ndarray:
     """A sale price that is affordable is a saturated green; its button is a paler one and a short price red."""
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     return ((hue >= SALE_HUE[0]) & (hue <= SALE_HUE[1]) & (saturation > SALE_MIN_SATURATION)
-            & (value > SALE_MIN_VALUE))
+            & (value > min_value))
 
 
 def sale_pixels(image: np.ndarray, region: list) -> int:
@@ -2776,7 +2776,9 @@ class Bot:
         confirm = spec['confirm']
         sale = confirm.get('sale')
         if sale and self.sale_shown(image, sale):
-            price = cv2.cvtColor(sale_mask(crop(image, sale['price'])).astype(np.uint8) * 255, cv2.COLOR_GRAY2BGR)
+            # The digits' darker shading ("5") counts too, so the whole glyph is read.
+            price = cv2.cvtColor(sale_mask(crop(image, sale['price']), SALE_READ_MIN_VALUE).astype(np.uint8) * 255,
+                                 cv2.COLOR_GRAY2BGR)
         else:
             price = crop(image, confirm['price'])
         return read_trailing_number(price, self.templates(), FRACTION_MIN_SCORE)
@@ -2885,10 +2887,11 @@ class Bot:
         resource = choice[0]
         cap = self.bulk_cap(spec, resource)
         more = bulk['more']
-        template = cv2.imread(str(asset_path(self.root, more['file'])))
 
         def locate_more(frame: np.ndarray) -> list:
-            (x, y), _ = find_target(crop(frame, more['search']), template, more['max_score'], tuple(more['scales']))
+            # Its label: the wall drawn on the button is the selected wall's level.
+            (x, y), _ = find_look(crop(frame, more['search']), self.root, more['file'], more['max_score'],
+                                  tuple(more['scales']))
             return [more['search'][0] + x, more['search'][1] + y]
         try:
             locate_more(image)

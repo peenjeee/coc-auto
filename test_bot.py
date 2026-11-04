@@ -2396,6 +2396,24 @@ class BotTests(unittest.TestCase):
                 self.assertTrue(runner.bulk_word(image, bulk, resource))
                 self.assertFalse(runner.bulk_word(image, bulk, other))
 
+    def test_upgrade_more_is_found_by_its_label_whatever_the_walls_level_and_a_long_sale_price_is_read(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        runner = bot.Bot(config, root, None, live=True)
+        more = config['walls']['home']['bulk']['more']
+        # The wall drawn on the button is the selected wall's level; level 13 and 14 walls both have the label.
+        for name in ('wall-selected-level14', 'wall-selected-rings'):
+            image = np.zeros((720, 1280, 3), np.uint8)
+            image[380:] = cv2.imread(str(root / 'fixtures' / f'{name}.png'))
+            with self.subTest(screen=name):
+                (x, y), _ = bot.find_look(bot.crop(image, more['search']), root, more['file'], more['max_score'],
+                                          tuple(more['scales']))
+                self.assertEqual((more['search'][0] + x, more['search'][1] + y), (605, 537))
+        # The green "1 500 000": its "5" is a shade darker than the other digits.
+        sale = cv2.imread(str(root / 'fixtures' / 'wall-confirm-sale-1500000.png'))
+        self.assertEqual(runner.confirm_price(sale, config['walls']['home']), 1_500_000)
+        self.assertTrue(runner.keeps_reserve(sale, config['walls']['home'], 19_000_000, 200_000))
+
     def test_wall_rows_are_read_in_the_lists_own_language_so_the_grand_warden_is_no_wall(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
