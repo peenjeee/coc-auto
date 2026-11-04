@@ -3235,7 +3235,11 @@ class Bot:
             # Looked at on every poll: an LDPlayer the last recovery quit can still read as running at first.
             if self.emulator and not self.device.connected() and not self.emulator.running():
                 LOG.warning('LDPlayer belum berjalan; menyalakan emulator')
-                # A VM that was just quit is still shutting down; launching at once leaves it unbooted.
+                # A VM that was just quit is still shutting down and holds its disks; launched before it lets go,
+                # LDPlayer fails with "Disk virtual tidak valid (InvalidMedium)".
+                stop = time.monotonic() + (EMULATOR_STOP_SECONDS if self.poll else 0)
+                while self.emulator.vm_running() and time.monotonic() < stop:
+                    time.sleep(RECOVER_POLL_SECONDS)
                 time.sleep(EMULATOR_SETTLE_SECONDS if self.poll else 0)
                 self.emulator.launch()
                 self.emulator_started = time.monotonic()

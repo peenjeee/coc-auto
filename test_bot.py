@@ -2985,6 +2985,8 @@ class BotTests(unittest.TestCase):
             events = []
             def running(self):
                 return device.up
+            def vm_running(self):
+                return device.up
             def quit(self):
                 Emulator.events.append('quit')
                 device.up, device.front = False, False
@@ -3261,16 +3263,23 @@ class BotTests(unittest.TestCase):
         device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
 
         class Emulator:
-            starts = 0
+            starts, vm_polls = 0, []
             def running(self):
                 return device.up
+            def vm_running(self):
+                # The window is gone but the virtual machine still holds its disks for two more looks.
+                Emulator.vm_polls.append(Emulator.starts)
+                return len(Emulator.vm_polls) <= 2
             def launch(self):
                 Emulator.starts += 1
                 device.up = True
         runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=Emulator())
+        runner.poll = 0.001
         runner.run_until_full = lambda searches: 2
-        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=1), 2)
+        with patch('bot.time.sleep'):
+            self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=1), 2)
         self.assertEqual(Emulator.starts, 1)
+        self.assertEqual(Emulator.vm_polls, [0, 0, 0])  # launched only once it had let go
         self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
 
     def test_recover_retries_launch_when_game_does_not_open(self):
