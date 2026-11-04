@@ -171,6 +171,8 @@ WALL_SELECT_SECONDS, WALL_LAYOUT_HOLD_SECONDS, WALL_PRICE_SECONDS = 4, 0.4, 2
 # the row above, -1 over the first upgrade button. A greyed-out one has a red label ([dx, dy, w, h] from its centre,
 # at scale 1). A tap settles briefly before the price is read again.
 BULK_STEP_PX, BULK_ROW_PX, BULK_LABEL, BULK_LABEL_RED = 139, 127, (-52, 12, 104, 38), 200
+# A button card's plain beige top-left corner ([dx, dy, w, h] from its centre, at scale 1) and its least BGR.
+BULK_CARD, BULK_CARD_MIN, BULK_CARD_TINT = (-40, -46, 14, 8), (145, 190, 205), 30
 BULK_MAX_TAPS, BULK_TAP_SECONDS = 60, 0.4
 WHITE_LEVEL = 200
 TEXT_MASK_MIN = 0.1
@@ -1017,6 +1019,20 @@ def red_pixels(image: np.ndarray, region: list) -> int:
     hsv = cv2.cvtColor(crop(image, region), cv2.COLOR_BGR2HSV)
     hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     return int((((hue <= 8) | (hue >= 172)) & (saturation > 120) & (value > 120)).sum())
+
+
+def bulk_card(image: np.ndarray, centre: list, scale: float) -> bool:
+    """A button card at centre: its corner is the cards' beige, not the map around them."""
+    dx, dy, w, h = BULK_CARD
+    x, y = centre[0] + round(dx * scale), centre[1] + round(dy * scale)
+    if x < 0 or y < 0:
+        return False
+    patch = image[y:y + round(h * scale), x:x + round(w * scale)]
+    if not patch.size:
+        return False
+    blue, green, red = patch.reshape(-1, 3).mean(axis=0)
+    return (blue >= BULK_CARD_MIN[0] and green >= BULK_CARD_MIN[1] and red >= BULK_CARD_MIN[2]
+            and red >= blue + BULK_CARD_TINT)
 
 
 def sale_mask(image: np.ndarray) -> np.ndarray:
@@ -2944,17 +2960,19 @@ class Bot:
             raise TargetMissing('Tombol Tingkatkan Lebih Banyak belum terlihat')
         x, y = min(hit[1] for hit in hits)
         scale = price[0][3]
+        # The controls are the cards in the slots left of the first upgrade button or, wrapped, over the upgrade
+        # buttons; with few walls of the level left the game drops +10 and shows -1 and +1 only.
+        left = [[x - BULK_STEP_PX * steps, y] for steps in (3, 2, 1)]
+        above = [[x + BULK_STEP_PX * steps, y - round(BULK_ROW_PX * scale)] for steps in (0, 1, 2)]
+        slots = next((cards for cards in (left, left[1:], above, above[:2])
+                      if all(bulk_card(frame, centre, scale) for centre in cards)), None)
+        if slots is None:
+            raise BulkLayout('tombol -1, +10, +1 tidak ditemukan')
+        names = ('minus', 'plus10', 'plus1') if len(slots) == 3 else ('minus', 'plus1')
         dx, dy, w, h = BULK_LABEL
-        wrapped = x - BULK_STEP_PX * 3 + round(dx * scale) < 0
-        controls = {}
-        for name, steps in (('plus1', 1), ('plus10', 2), ('minus', 3)):
-            if wrapped:
-                centre = [x + BULK_STEP_PX * (3 - steps), y - round(BULK_ROW_PX * scale)]
-            else:
-                centre = [x - BULK_STEP_PX * steps, y]
+        controls = {'plus10': (None, False)}
+        for name, centre in zip(names, slots):
             label = [centre[0] + round(dx * scale), centre[1] + round(dy * scale), round(w * scale), round(h * scale)]
-            if min(label[:2]) < 0 or label[0] + label[2] > frame.shape[1]:
-                raise BulkLayout('tombol -1, +10, +1 tidak ditemukan')
             controls[name] = (centre, red_pixels(frame, label) < BULK_LABEL_RED)
         return price[0][2], controls
 

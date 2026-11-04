@@ -2318,7 +2318,9 @@ class BotTests(unittest.TestCase):
         # Price affordable, then -1, +10 and +1 enabled: -1 greys out at one wall, +10 with fewer than ten more walls
         # of the level (the Builder Base screen), and the list-closed layout is drawn at 1.1.
         cases = {('home', 'gold'): (True, False, True, True), ('home-short', 'elixir'): (False, True, True, True),
-                 ('home-wide', 'gold'): (True, False, True, True), ('builder', 'gold'): (True, False, False, True)}
+                 ('home-wide', 'gold'): (True, False, True, True), ('builder', 'gold'): (True, False, False, True),
+                 # Three walls of the level left: the game drops +10 and shows -1 and +1 only.
+                 ('home-few', 'gold'): (True, False, False, True)}
         for (name, resource), expected in cases.items():
             village = 'builder' if name == 'builder' else 'home'
             spec, image = config['walls'][village], self.bulk_frame(name)
@@ -2326,6 +2328,11 @@ class BotTests(unittest.TestCase):
                 affordable, controls = runner.bulk_view(image, spec, village, resource)
                 self.assertEqual((affordable, controls['minus'][1], controls['plus10'][1], controls['plus1'][1]),
                                  expected)
+                # -1, +10 and +1 sit one step apart, ending one step left of the first upgrade button.
+                upgrade = min(hit[1] for hit in runner.button_hits(image, spec, spec['bulk']['button']))
+                shown = [controls[key][0][0] for key in ('minus', 'plus10', 'plus1') if controls[key][0]]
+                self.assertEqual(shown[-1], upgrade[0] - bot.BULK_STEP_PX)
+                self.assertEqual(len(shown), 2 if name == 'home-few' else 3)
                 self.assertTrue(runner.bulk_left(village, image))
                 # The one-wall hammer is not there, so a bulk screen is never taken for a selected wall.
                 self.assertEqual(runner.wall_buttons(image, spec), [])
