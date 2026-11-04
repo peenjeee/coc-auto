@@ -5,6 +5,7 @@ from pathlib import Path
 import struct
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -3065,6 +3066,19 @@ class BotTests(unittest.TestCase):
         with patch('bot.available_memory_mb', return_value=bot.LOW_MEMORY_MB - 1):
             self.assertFalse(runner.refresh_if_low_memory())
         self.assertEqual(emulator.events, ['quit', 'launch'])
+
+    def test_the_vm_counts_as_running_while_its_process_lives_after_list2_says_stopped(self):
+        stopped = '0,LDPlayer,50466224,246418094,2,26040,-1,1280,720,240\n'
+        headless = ('"C:\\Program Files\\ldplayer9box\\Ld9BoxHeadless.exe" --comment leidian{} --startvm '
+                    '20160302-aaaa-aaaa-3713-000000000000 --vrde config\n')
+
+        def run(listed):
+            return lambda command, **_: SimpleNamespace(stdout=stopped if 'list2' in command else listed)
+        emulator = bot.Emulator('ldconsole.exe', 0)
+        with patch('bot.subprocess.run', run(headless.format(0))):
+            self.assertTrue(emulator.vm_running())
+        with patch('bot.subprocess.run', run(headless.format(10))):
+            self.assertFalse(emulator.vm_running())
 
     def test_a_game_that_keeps_closing_gets_a_fresh_ldplayer(self):
         device, emulator = self.restartable()

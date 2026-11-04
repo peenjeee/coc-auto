@@ -813,6 +813,10 @@ class ADB:
         self.inject(steps, device)
 
 
+VM_PROCESSES = ("Get-CimInstance Win32_Process -Filter \"Name LIKE 'Ld%BoxHeadless.exe'\" | "
+                "ForEach-Object CommandLine")
+
+
 class Emulator:
     """LDPlayer instance control through ldconsole; used only to start a stopped emulator."""
 
@@ -834,9 +838,19 @@ class Emulator:
         holds the virtual disks a while after LDPlayer reads as stopped, and a launch meanwhile fails to load them."""
         for line in self.run('list2').splitlines():
             fields = line.split(',')
-            if len(fields) > 6 and fields[0].strip() == str(self.index):
-                return fields[6].strip() not in ('-1', '0', '')
-        return False
+            if len(fields) > 6 and fields[0].strip() == str(self.index) and fields[6].strip() not in ('-1', '0', ''):
+                return True
+        return self.vm_process()
+
+    def vm_process(self) -> bool:
+        """The VM process itself (`Ld9BoxHeadless … --comment leidianN`) is still going: `list2` already says -1
+        while it shuts down, and a launch then fails with "PowerUpFailed"."""
+        try:
+            listed = subprocess.run(['powershell', '-NoProfile', '-Command', VM_PROCESSES], capture_output=True,
+                                    text=True, timeout=60, shell=False).stdout or ''
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return f'--comment leidian{self.index} ' in listed
 
     def launch(self) -> None:
         self.run('launch')

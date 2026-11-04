@@ -646,7 +646,7 @@ How to change it:
 | CoC is not open or crashed | Opens it with `am start` (retried while the launcher settles) and waits for the village. A wait that has seen no known screen for 10 seconds checks that CoC is still in front, so a game Android closes while it loads is reopened at once instead of after the full timeout. When the game closes again before an attack or upgrade got done (Android inside LDPlayer starved of memory kills it over and over), LDPlayer is restarted instead. |
 | ADB disconnects | Waits up to 5 minutes for the device, then resumes. |
 | PC runs out of memory | Pauses, lets a running battle end, leaves the result screen, then resumes. Any other error while free memory is below 1 GB is handled the same way. |
-| PC memory runs low (LDPlayer grows over hours) | Between `--until-full`/`--walls` attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. Free memory is the lower of free RAM and free commit memory (RAM + page file): with a large page file commit memory stays plentiful while RAM runs out and the PC freezes swapping. Before launching LDPlayer again it waits up to a minute for its virtual machine to stop. A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back or its screen cannot be captured. |
+| PC memory runs low (LDPlayer grows over hours) | Between `--until-full`/`--walls` attacks, restarts LDPlayer (at most every 30 minutes) when free memory drops below 1 GB, then reopens CoC. Free memory is the lower of free RAM and free commit memory (RAM + page file): with a large page file commit memory stays plentiful while RAM runs out and the PC freezes swapping. Before launching LDPlayer again it waits up to a minute for its virtual machine to stop, its `Ld9BoxHeadless` process included: that one outlives what `ldconsole` reports, and a launch meanwhile fails with "PowerUpFailed". A failed recovery is retried, and LDPlayer is restarted when its VM never brings ADB back or its screen cannot be captured. |
 | Started mid-battle, on a result screen, or on an attack menu | Waits for the battle to end and taps return, or closes the menu (when it has a `close` point), then starts farming. |
 | A menu tap is lost (e.g. right after LDPlayer boots) | Taps the same button again, up to 3 times, while that menu is still shown; so does "Return Home" on a battle result, which a win also shows by its ribbon while the league bonus counts over the loot. The search button is retried for up to 3 minutes to wait out the attack cooldown after a game restart. |
 | A wait times out, an unrecognised screen passes, or a known screen comes up out of turn (slow matchmaking, lag, an animation, a battle that started on its own) | Lets a running battle end or closes the menu, then resumes. Counts as one recovery. |
@@ -677,7 +677,7 @@ again.
 python -m unittest -v
 ```
 
-The suites (365 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (366 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, walls (the cheapest row in either language, the sale
