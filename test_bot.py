@@ -641,7 +641,7 @@ class BotTests(unittest.TestCase):
                          surrender_stars=2, trophy_floor=2000)
         deploys, surrenders, battles = [], [], iter(['builder_stage2', 'builder_result', 'builder_stage2'])
         runner.collect_cart = lambda: None
-        runner.tap_until = lambda state, name, targets, *rest: next(iter(targets))
+        runner.tap_until = lambda state, name, targets, *rest, **options: next(iter(targets))
         runner.deploy = lambda screen, allowed, image=None: deploys.append(screen)
         runner.wait_battle = lambda village, targets, allowed: next(battles)
         runner.surrender_battle = lambda state, targets: surrenders.append(state) or 'builder_result'
@@ -3251,6 +3251,36 @@ class BotTests(unittest.TestCase):
         (folder / 'vms' / 'config' / 'leidian0.config').write_text('{"basicSettings.adbDebug": 1}', encoding='utf-8')
         bot.check_adb_debugging(str(folder / 'ldconsole.exe'), 0)
         bot.check_adb_debugging(str(folder / 'ldconsole.exe'), 3)
+
+    def test_an_attack_the_game_refuses_for_maintenance_closes_coc_and_ends_the_run(self):
+        root = Path(bot.__file__).parent
+
+        def band(name):
+            image = np.zeros((720, 1280, 3), np.uint8)
+            image[100:280] = cv2.imread(str(root / 'fixtures' / f'{name}.png'))
+            return image
+        # "Menyerang dinonaktifkan sampai jeda pemeliharaan selesai" over the army screen; the battle's own red
+        # notes and the plain army screen are no refusal.
+        self.assertTrue(bot.attack_refused(band('attack-refused')))
+        self.assertFalse(bot.attack_refused(band('attack-menu')))
+        self.assertFalse(bot.attack_refused(band('battle-red-note')))
+        device = Device(self.frames, 'home_army')
+        refused = band('attack-refused')
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        runner.detector.detect = lambda image: 'home_army'
+        device.capture = lambda: refused.copy()
+        with self.assertRaises(bot.AttackRefused):
+            runner.tap_until('home_army', 'attack', {'home_scout'}, 5, attack=True)
+        # Any other menu tap that does not go through is only tapped again.
+        with self.assertRaises(bot.WaitTimeout):
+            runner.tap_until('home_army', 'attack', {'home_scout'}, 0.01)
+        with patch('sys.argv', ['bot.py', '--walls', 'home', '--live', '--no-remote']), \
+                patch('bot.load_config'), patch('bot.validate_config'), patch('bot.validate_walls'), \
+                patch('bot.executable'), patch('bot.ADB'), patch('bot.Bot') as stopped, \
+                patch('bot.fit_screen', return_value=False):
+            stopped.return_value.run_until_full_resilient.side_effect = bot.AttackRefused('maintenance')
+            self.assertEqual(bot.main(), 0)
+        stopped.return_value.device.stop_game.assert_called_once_with()
 
     def test_free_memory_is_the_lower_of_free_ram_and_free_commit_memory(self):
         # RAM nearly gone while a large page file keeps commit memory plentiful: the PC is already swapping.

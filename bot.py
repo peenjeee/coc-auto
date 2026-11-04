@@ -175,6 +175,11 @@ BULK_STEP_PX, BULK_ROW_PX, BULK_LABEL, BULK_LABEL_RED = 139, 127, (-52, 12, 104,
 BULK_CARD, BULK_CARD_MIN, BULK_CARD_TINT = (-40, -46, 14, 8), (145, 190, 205), 30
 BULK_MAX_TAPS, BULK_TAP_SECONDS = 60, 0.4
 WHITE_LEVEL = 200
+# "Menyerang dinonaktifkan sampai jeda pemeliharaan selesai" ("Attacking is disabled until the maintenance break is
+# over"): a red sentence across the top of the attack menu. Told by its size, so any game language fits; the battle's
+# own red notes ("Semua pasukan dikerahkan") are half as big, and it is looked for only after an attack tap that did
+# not start one. [x, y, w, h], least red pixels and least width.
+ATTACK_REFUSED_BAND, ATTACK_REFUSED_RED, ATTACK_REFUSED_SPAN = (150, 140, 980, 100), 6000, 600
 TEXT_MASK_MIN = 0.1
 # An event sale (Hammer Jam) prints the wall price in this saturated green; the button behind it is paler.
 SALE_HUE, SALE_MIN_SATURATION, SALE_MIN_VALUE, SALE_READ_MIN_VALUE = (35, 65), 200, 220, 180
@@ -246,6 +251,11 @@ class BulkLayout(Exception):
 
 class GemSpent(Exception):
     """The gem count dropped during wall upgrades; never recovered, the run stops at once."""
+
+
+class AttackRefused(Exception):
+    """The game refuses to start an attack (Supercell's maintenance break is near or on): CoC is closed and the run
+    ends, since retrying cannot help until the break is over."""
 
 
 class UpdateRequired(Exception):
@@ -1026,6 +1036,15 @@ def red_pixels(image: np.ndarray, region: list) -> int:
     hsv = cv2.cvtColor(crop(image, region), cv2.COLOR_BGR2HSV)
     hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     return int((((hue <= 8) | (hue >= 172)) & (saturation > 120) & (value > 120)).sum())
+
+
+def attack_refused(image: np.ndarray) -> bool:
+    """The game's red "attacking is disabled" sentence is over the attack menu."""
+    hsv = cv2.cvtColor(crop(image, list(ATTACK_REFUSED_BAND)), cv2.COLOR_BGR2HSV)
+    hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    red = ((hue <= 8) | (hue >= 172)) & (saturation > 150) & (value > 150)
+    columns = np.flatnonzero(red.any(axis=0))
+    return int(red.sum()) >= ATTACK_REFUSED_RED and columns.size > 0 and columns[-1] - columns[0] >= ATTACK_REFUSED_SPAN
 
 
 def bulk_card(image: np.ndarray, centre: list, scale: float) -> bool:
@@ -1864,10 +1883,17 @@ class Bot:
         except BotError:
             return None
 
-    def tap_until(self, state: str, name: str, targets: set, timeout: float, retries: int = TAP_RETRIES) -> str:
-        """Tap a menu button and wait; repeat the tap while the same menu is still shown (a lost tap)."""
+    def tap_until(self, state: str, name: str, targets: set, timeout: float, retries: int = TAP_RETRIES,
+                  attack: bool = False) -> str:
+        """Tap a menu button and wait; repeat the tap while the same menu is still shown (a lost tap). An attack
+        button the game refuses (maintenance) ends the run instead of being tapped again and again."""
         deadline = time.monotonic() + timeout
         taps = 0
+
+        def refused(shown: str, image: np.ndarray) -> bool:
+            if attack and shown == state and attack_refused(image):
+                raise AttackRefused('Game menolak menyerang sampai jeda pemeliharaan selesai')
+            return False
         while True:
             if taps == 0 or (taps < retries and self.current_screen() == state):
                 if taps:
@@ -1876,7 +1902,7 @@ class Bot:
                 taps += 1
             left = deadline - time.monotonic()
             try:
-                return self.wait(targets, {state}, min(TAP_RETRY_SECONDS, max(left, 0)))
+                return self.wait(targets, {state}, min(TAP_RETRY_SECONDS, max(left, 0)), give_up=refused)
             except UnexpectedScreen:
                 raise
             except WaitTimeout:
@@ -2288,7 +2314,7 @@ class Bot:
         self.tap_until('home', 'attack', {'home_menu'}, 30)
         # After the game restarts the search button shows a short cooldown; keep tapping until it is available.
         self.tap_until('home_menu', 'find', {'home_army'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
-        self.tap_until('home_army', 'attack', {'home_scout'}, 60)
+        self.tap_until('home_army', 'attack', {'home_scout'}, 60, attack=True)
         broke = False
         for attempt in itertools.count(1):
             state, image = self.observe()
@@ -2408,7 +2434,7 @@ class Bot:
             self.collect_cart()
         self.climbing = self.below_trophy_floor()
         self.tap_until('builder', 'attack', {'builder_menu'}, 30)
-        self.tap_until('builder_menu', 'find', {'builder_scout'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
+        self.tap_until('builder_menu', 'find', {'builder_scout'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES, attack=True)
         self.stars_last = None
         try:
             # Once stage 1 has won a star its end button reads as stage 2's, so both battle screens are allowed.
@@ -3713,6 +3739,13 @@ def main() -> int:
     except UpdateRequired as exc:
         LOG.error('Berhenti: %s', exc)
         return 5
+    except AttackRefused as exc:
+        try:
+            runner.device.stop_game()
+        except BotError:
+            pass
+        LOG.warning('%s; CoC ditutup dan bot berhenti, jalankan lagi setelah pemeliharaan', exc)
+        return 0
     except LimitReached as exc:
         LOG.info('%s', exc)
         return 0
