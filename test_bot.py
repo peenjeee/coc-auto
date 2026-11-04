@@ -2427,6 +2427,15 @@ class BotTests(unittest.TestCase):
                 self.assertEqual(runner.list_indonesian(image), indonesian)
                 self.assertEqual([price for price, _ in runner.wall_rows(image, config['walls']['home'])], rows)
 
+    def test_an_english_battle_is_known_by_its_surrender_button_and_damage_label_alone(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        # The loot icons and "Battle ends in" show the map through them, so a bright base fails both; the
+        # "Surrender" button and "Overall Damage" label are solid.
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[500:560] = cv2.imread(str(root / 'fixtures' / 'battle-en-clan.png'))
+        self.assertEqual(bot.Detector(config, root).detect(image), 'home_battle')
+
     def test_an_english_twin_is_tried_after_the_template_it_stands_for(self):
         rng = np.random.default_rng(53)
         (self.root / 'en').mkdir()

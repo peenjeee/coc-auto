@@ -718,6 +718,48 @@
             ],
             "file": "calibration/builder_battle2-ef024e562f1f4316869d262b9a1cfd8b.png"
           }
+        ],
+        [
+          {
+            "roi": [
+              30,
+              522,
+              125,
+              28
+            ],
+            "file": "calibration/home_battle-surrender.png"
+          },
+          {
+            "roi": [
+              1088,
+              505,
+              158,
+              14
+            ],
+            "file": "calibration/home_battle-04cb775b34c641309899d4cbef7660aa.png",
+            "margin": 4
+          }
+        ],
+        [
+          {
+            "roi": [
+              30,
+              514,
+              125,
+              44
+            ],
+            "file": "calibration/home_battle-end-71b27219916e4f79acede92a5277bf24.png"
+          },
+          {
+            "roi": [
+              1088,
+              505,
+              158,
+              14
+            ],
+            "file": "calibration/home_battle-04cb775b34c641309899d4cbef7660aa.png",
+            "margin": 4
+          }
         ]
       ],
       "actions": {
