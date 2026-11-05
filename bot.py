@@ -2357,7 +2357,8 @@ class Bot:
                     return state
                 stable = image if changed else None
             time.sleep(self.poll)
-        raise BotError('Lawan belum berubah/stabil; hentikan pencarian')
+        # A stall with the game still open (slow matchmaking, a lost Next tap): recovery settles it.
+        raise WaitTimeout('Lawan belum berubah/stabil; hentikan pencarian')
 
     def scout_loot(self, image: np.ndarray) -> tuple:
         """(loot, frame) from a scout frame; a passing cloud or banner can make a single read fail."""

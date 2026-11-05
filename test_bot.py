@@ -1467,7 +1467,8 @@ class BotTests(unittest.TestCase):
         self.assertEqual(state, 'home_scout')
         unchanged = self.frames['home_scout']
         self.assertEqual(runner.wait_new_scout(unchanged), 'home_scout')
-        with self.assertRaises(bot.BotError):
+        # A stall, not a stop: the resilient run recovers from it like any other screen that did not come.
+        with self.assertRaises(bot.WaitTimeout):
             runner.wait_new_scout(device.capture())
 
     @staticmethod
@@ -2945,6 +2946,25 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.DeviceError):
             runner.run_until_full_resilient(0, max_recoveries=2)
         self.assertEqual(len(attempts), 3)
+
+    def test_resilient_run_settles_an_opponent_that_never_changes_and_keeps_farming(self):
+        device = Device(self.frames)
+        device.game_in_front = lambda: True
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        settled, runs = [], []
+
+        def search(searches):
+            runs.append(searches)
+            if len(runs) == 1:
+                raise bot.WaitTimeout('Lawan belum berubah/stabil; hentikan pencarian')
+            return 'full'
+
+        runner.run_until_full = search
+        runner.settle = lambda: settled.append(1)
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=5), 'full')
+        # One settle at the start of the run, one for the stall.
+        self.assertEqual((len(runs), len(settled)), (2, 2))
 
     def test_resilient_run_retries_after_out_of_memory_and_leaves_result_screen(self):
         device = Device(self.frames, initial='home_result')
