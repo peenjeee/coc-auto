@@ -2,10 +2,14 @@ import ast
 import io
 import json
 import logging
+import os
 from pathlib import Path
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import bot
 import messages
@@ -53,12 +57,89 @@ class MessagesTests(unittest.TestCase):
         written = code_messages()
         self.assertEqual({text: written[text] for text in set(written) - set(self.english)}, {},
                          'add these messages to messages_en.json')
-        self.assertEqual(sorted(set(self.english) - set(written)), [], 'these are no longer in the code')
+        # Assigned fragments, return messages and setup problems are also catalog entries.
+        # They need not appear as the first argument of a logging call.
+        self.assertEqual((ROOT / 'web/messages_en.json').read_bytes(), messages.CATALOG.read_bytes(),
+                         'run python messages.py to update the dashboard catalog')
         for indonesian, english in self.english.items():
             with self.subTest(message=indonesian):
                 self.assertEqual(english.count('{}'), indonesian.count('{}'))
                 if '{}' not in indonesian:
                     self.assertEqual(PRINTF.findall(english), PRINTF.findall(indonesian))
+
+    def test_assembled_messages_and_severity_prefixes_are_fully_english(self):
+        messages.use('en')
+        examples = {
+            'INFO: Menyerah: kerusakan mencapai 50%': 'INFO: Surrender: damage reached 50%',
+            'INFO: Menyerah: 2 bintang': 'INFO: Surrender: 2 stars',
+            'INFO: Menyerah: setelah 60 detik battle': 'INFO: Surrender: after 60 battle seconds',
+            'INFO: Trofi desa malam 1000 < 2000: serang sampai selesai':
+                'INFO: Builder Base trophies 1000 < 2000: fight to the end',
+            'INFO: Tombol upgrade tembok: gold putih, elixir merah':
+                'INFO: Wall upgrade button: gold white, elixir red',
+            'Selesai: batas waktu tercapai; bot berhenti di desa':
+                'Done: time limit reached; bot stops in the village',
+            'Selesai: 3 tembok sudah di-upgrade; bot berhenti di desa':
+                'Done: 3 walls upgraded; bot stops in the village',
+            'REMOTE: Perintah ditolak: Pilihan cycles harus angka 1..100':
+                'REMOTE: Command rejected: Option cycles must be a number 1..100',
+            'REMOTE: menjalankan python bot.py --mode home': 'REMOTE: running python bot.py --mode home',
+            'INFO: Isi Gerobak Eliksir: 42%': 'INFO: Elixir Cart fill: 42%',
+            'Deteksi LDPlayer: Resolusi layar LDPlayer tidak terbaca; koneksi putus':
+                'LDPlayer detection: LDPlayer screen resolution could not be read; connection lost',
+        }
+        for source, english in examples.items():
+            with self.subTest(source=source):
+                self.assertEqual(messages.translate(source), english)
+        for source in ('INFO: unknown device detail', r'C:\LDPlayer\LDPlayer9\adb.exe',
+                       'emulator-5554', 'coc_0123456789abcdefghijklmnop', '--surrender-at 50'):
+            self.assertEqual(messages.translate(source), source)
+
+    def test_indonesian_fragments_outside_logging_calls_are_registered(self):
+        # Catch the assigned/returned fragments, problem lists, CLI help and window labels
+        # that the logging-call inventory cannot see. Docstrings and protocol checks are excluded.
+        words = re.compile(r'\b(tidak|belum|gagal|pilih|simpan|penuh|desa|ditolak|selesai|batal|harus|'
+                           r'pasukan|koneksi|tingkatkan|berhenti|perlu|kerusakan|bintang|setelah|putih|merah|'
+                           r'bahasa|dijalankan|dibuka|ditutup|dimuat|dimatikan|dinyalakan|pengaturan|deteksi|'
+                           r'kotak|tanpa|hanya|saja|angka|tembok|sudah)\b', re.I)
+        missing = {}
+        for path in ROOT.glob('*.py'):
+            if path.name.startswith('test_'):
+                continue
+            tree = ast.parse(path.read_text(encoding='utf-8'))
+            parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+            docs = {node.body[0].value for node in ast.walk(tree)
+                    if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                    and node.body and isinstance(node.body[0], ast.Expr)
+                    and isinstance(node.body[0].value, ast.Constant)}
+            for node in ast.walk(tree):
+                if node in docs or isinstance(parents.get(node), ast.JoinedStr):
+                    continue
+                text = template(node)
+                if text and words.search(text) and text not in self.english and text != 'Perintah ditolak':
+                    missing[text] = f'{path.name}:{node.lineno}'
+        self.assertEqual(missing, {})
+
+    def test_worker_output_stays_canonical_under_either_preference(self):
+        with patch.dict(os.environ, {'COC_CANONICAL_LOG': '1'}):
+            for language in messages.LANGUAGES:
+                messages.use(language)
+                self.assertEqual(messages.translate('Menyerah: %s'), 'Menyerah: %s')
+
+    def test_help_uses_the_config_before_argparse_exits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'custom.json'
+            path.write_text(json.dumps({'language': 'id'}))
+            path.with_name('custom.local.json').write_text(json.dumps({'language': 'en'}))
+            for script, expected in (('bot.py', 'dry run without taps by default'),
+                                     ('calibrate.py', 'Manual CoC calibration; no emulator input')):
+                for flag in (['--config', str(path)], ['--config=' + str(path)]):
+                    result = subprocess.run([sys.executable, str(ROOT / script), *flag, '--help'],
+                                            capture_output=True, text=True, timeout=20)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(expected, result.stdout)
+                    self.assertNotIn('tanpa', result.stdout)
+                    self.assertNotIn('Tingkatkan', result.stdout)
 
     def test_messages_stay_indonesian_unless_english_is_chosen(self):
         for language in ('id', 'fr', None):

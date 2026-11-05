@@ -9,6 +9,7 @@ from websockets.asyncio.server import serve
 
 import relay
 import remote
+import messages
 from test_remote import KEY, FakeDevice, signed, until
 
 
@@ -112,6 +113,20 @@ class RelayTests(unittest.TestCase):
         ack = self.server.sent('ack')[0]
         self.assertEqual((ack['nonce'], ack['ok']), ('relay-1', True))
         self.assertEqual(self.device.calls, ['open_coc'])
+
+    def test_english_refusals_and_canonical_logs_reach_the_online_dashboard(self):
+        self.addCleanup(messages.use, 'id')
+        messages.use('en')
+        body, sig = signed('start', {'task': 'attack', 'cycles': 101}, nonce='language-refusal')
+        self.server.broadcast(self.topic, 'cmd', {'body': body, 'sig': sig})
+        self.assertTrue(until(lambda: self.server.sent('ack')))
+        ack = self.server.sent('ack')[0]
+        self.assertEqual(ack['message'], 'Command rejected: Option cycles must be a number 1..100')
+        self.assertEqual(ack['source_message'], 'Perintah ditolak: Pilihan cycles harus angka 1..100')
+        expected = 'REMOTE: ' + ack['source_message']
+        self.assertTrue(until(lambda: any(expected in payload['lines'] for payload in self.server.sent('log'))))
+        lines = [line for payload in self.server.sent('log') for line in payload['lines']]
+        self.assertIn('REMOTE: ' + ack['source_message'], lines)
 
     def test_a_command_with_a_wrong_signature_gets_no_answer(self):
         body, sig = signed('kill_ld', nonce='relay-2', key='coc_someone_else_entirely_0000000000')

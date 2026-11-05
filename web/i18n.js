@@ -1,4 +1,4 @@
-// Dashboard text in Indonesian and English. Device log lines stay as the terminal prints them.
+// Dashboard text in Indonesian and English. Canonical device messages use messages.js.
 const TEXT = {
   id: {
     key_prompt: 'Masukkan API key perangkat (muncul di terminal saat bot dijalankan)',
@@ -119,7 +119,7 @@ const TEXT = {
     display_saved: 'Sudah sesuai. Layar semula kamu tersimpan dan dikembalikan saat bot ditutup.',
     display_differs: 'Belum sesuai: bot tidak akan mengenali layar game.',
     display_unknown: 'Layar LDPlayer belum terbaca (cek path ldconsole.exe).',
-    language_note: 'Bahasa game: pilih Bahasa Indonesia di pengaturan CoC sendiri (Pengaturan → Bahasa). Mengganti bahasa LDPlayer atau Android tidak mengubah bahasa CoC.',
+    language_note: 'Bahasa game: Bahasa Indonesia atau English, di pengaturan CoC sendiri (Pengaturan → Bahasa). Bahasa dashboard dan terminal tidak mengubah bahasa game. Mengganti bahasa LDPlayer atau Android juga tidak mengubah bahasa CoC.',
     sending: 'mengirim {action}…',
     connected: 'Perangkat tersambung.',
     waiting_device: 'Menunggu perangkat…',
@@ -146,7 +146,7 @@ const TEXT = {
     code_deploy_saved: 'Titik deploy disimpan; berlaku saat Start berikutnya.',
     code_settings_loaded: 'Pengaturan dimuat dari perangkat.',
     code_minimum_saved: 'Minimal loot disimpan; berlaku saat Start berikutnya.',
-    code_language_saved: 'Bahasa terminal disimpan; bot memakainya saat Start berikutnya.',
+    code_language_saved: 'Bahasa tampilan disimpan; log langsung memakainya.',
     code_setup_detected: 'Deteksi LDPlayer selesai; cek hasilnya lalu simpan.',
     code_setup_saved: 'Pengaturan LDPlayer disimpan; berlaku saat Start berikutnya.',
     code_display_fitted: 'Layar LDPlayer diubah ke kalibrasi bot; LDPlayer dinyalakan ulang.',
@@ -273,7 +273,7 @@ const TEXT = {
     display_saved: 'Matches. Your previous screen is kept and comes back when the bot is closed.',
     display_differs: 'Does not match: the bot will not recognise the game screens.',
     display_unknown: 'LDPlayer screen not read yet (check the ldconsole.exe path).',
-    language_note: 'Game language: pick Bahasa Indonesia in CoC\'s own settings (Settings → Language). Changing the LDPlayer or Android language does not change CoC.',
+    language_note: 'Game language: Indonesian or English, set in CoC\'s own settings (Settings → Language). Dashboard and terminal language does not change the game language. Changing the LDPlayer or Android language does not change CoC either.',
     sending: 'sending {action}…',
     connected: 'Device connected.',
     waiting_device: 'Waiting for the device…',
@@ -300,7 +300,7 @@ const TEXT = {
     code_deploy_saved: 'Deploy points saved; they apply at the next Start.',
     code_settings_loaded: 'Settings loaded from the device.',
     code_minimum_saved: 'Minimum loot saved; it applies at the next Start.',
-    code_language_saved: 'Terminal language saved; the bot uses it from the next Start.',
+    code_language_saved: 'Display language saved; logs use it immediately.',
     code_setup_detected: 'LDPlayer detection done; check the result, then save.',
     code_setup_saved: 'LDPlayer settings saved; they apply at the next Start.',
     code_display_fitted: 'LDPlayer switched to the bot calibration screen and restarted.',

@@ -37,14 +37,14 @@ def save_config(path: Path, config: dict) -> None:
 
 def choose_roi(image: np.ndarray, label: str) -> list:
     LOG.info('%s: drag kotak, Enter/Space simpan; C batal', label)
-    window = f'ROI: {label}'
+    window = f'ROI: {messages.translate(label)}'
     value = list(cv2.selectROI(window, image, showCrosshair=True, fromCenter=False))
     cv2.destroyWindow(window)
     return rectangle(value, list(image.shape[1::-1]))
 
 
 def choose_point(image: np.ndarray, label: str) -> list:
-    window = f'Klik: {label} (Esc batal)'
+    window = messages.translate(f'Klik: {label} (Esc batal)')
     selected = []
 
     def click(event: int, x: int, y: int, flags: int, param: object) -> None:
@@ -123,24 +123,25 @@ def learn_digits(samples: list, loot: dict, folder: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description='Kalibrasi manual CoC; tidak ada input emulator')
+    messages.initialize_cli(Path(__file__).resolve().parent / 'config.json')
+    parser = argparse.ArgumentParser(description=messages.translate('Kalibrasi manual CoC; tidak ada input emulator'))
     parser.add_argument('--config', type=Path, default=Path(__file__).resolve().parent / 'config.json')
-    parser.add_argument('--init', action='store_true', help='Buat config baru; tidak overwrite')
+    parser.add_argument('--init', action='store_true', help=messages.translate('Buat config baru; tidak overwrite'))
     parser.add_argument('--adb', default=r'C:\LDPlayer\LDPlayer14\adb.exe')
-    parser.add_argument('--serial', help='Serial dari adb devices; jangan menebak')
+    parser.add_argument('--serial', help=messages.translate('Serial dari adb devices; jangan menebak'))
     parser.add_argument('--tesseract', default=r'C:\Program Files\Tesseract-OCR\tesseract.exe')
     parser.add_argument('--gold', type=int, default=0)
     parser.add_argument('--elixir', type=int, default=0)
     parser.add_argument('--dark', type=int, default=0)
-    parser.add_argument('--capture', type=Path, help='Simpan PNG baru, tanpa overwrite')
+    parser.add_argument('--capture', type=Path, help=messages.translate('Simpan PNG baru, tanpa overwrite'))
     parser.add_argument('--screen', choices=KNOWN_SCREENS)
-    parser.add_argument('--image', type=Path, help='Kalibrasi dari screenshot lokal, tanpa ADB')
+    parser.add_argument('--image', type=Path, help=messages.translate('Kalibrasi dari screenshot lokal, tanpa ADB'))
     parser.add_argument('--counts', type=int, nargs='+', default=[])
     parser.add_argument('--replace', action='store_true',
-                        help='Kalibrasi ulang anchor dan titik tap layar yang sudah ada; kunci lain tetap')
-    parser.add_argument('--learn-digits', nargs='+', metavar='PNG:EMAS:ELIXIR',
-                        help='Bangun template angka loot dari screenshot scout berlabel')
-    parser.add_argument('--digits-dir', default='calibration/digits', help='Folder template angka baru')
+                        help=messages.translate('Kalibrasi ulang anchor dan titik tap layar yang sudah ada; kunci lain tetap'))
+    parser.add_argument('--learn-digits', nargs='+', metavar=messages.translate('PNG:EMAS:ELIXIR'),
+                        help=messages.translate('Bangun template angka loot dari screenshot scout berlabel'))
+    parser.add_argument('--digits-dir', default='calibration/digits', help=messages.translate('Folder template angka baru'))
     return parser.parse_args()
 
 
