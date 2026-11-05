@@ -22,14 +22,14 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | Area | What it does |
 | --- | --- |
 | **One command** | `python bot.py --until-full --live` starts LDPlayer if it is off, opens CoC, and farms. |
-| **Self-recovery** | Restarts a stopped LDPlayer (`ldconsole`), waits for ADB after a disconnect, and reopens CoC after a crash. |
+| **Self-recovery** | Restarts a stopped LDPlayer (`ldconsole`), waits for ADB after a disconnect, and reopens CoC after a crash. A stuck screen that tidying does not clear (search clouds that never go) restarts CoC, then LDPlayer. LDPlayer is restarted between attacks once its VM reaches 10 GB, and a run turns off its ASTC texture decoding, which doubles that growth. |
 | **Home Village** | Searches opponents with a minimum gold / elixir / dark-elixir filter (unlimited searches by default). |
 | **Deploy plan** | Reads the card bar on the scout screen, so it follows whatever army is trained: holds each troop card at the deploy point until it is empty, drops the siege machine, then the Grand Warden (found by its green ground/air toggle) and the other heroes, each followed by its ability, and throws the spells in rounds of front, left and right, each round further into the base so no two spells share a spot. |
 | **Builder Base** | Reads the card bar too: drops the Battle Machine or Battle Copter and fires its ability, spreads one troop card per point around the base (one tap per unit for multi-unit camps such as Raged Barbarians), fires the troop abilities five seconds later and the hero's again whenever its meter is full, handles stage 2 (a stage 1 won while the surrender dialog is up has its stage 2 given up too), keeps fighting to the end while trophies are under `--trophy-floor`, and claims the **Elixir Cart** before every attack. |
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
-| **Popups** | Star bonus, reward chest and reward card, and the "defence layout blocked" warning are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
+| **Popups** | Star bonus, reward chest and reward card, the "defence layout blocked" warning, the inactivity and "another device" reloads, a lost connection, the game update offer and Google Play's "Rate this app" sheet are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
 | **Walls** | `--walls` spends stored gold and elixir on walls, cheapest level first, then farms both full and repeats until every wall is maxed. It never spends gems. |
-| **Web dashboard** | Live log and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. Indonesian or English; the switch also sets the bot's terminal language. Installable as an app. |
+| **Web dashboard** | Live log, a live view of the LDPlayer screen and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. Indonesian or English; the switch also sets the bot's terminal language. Installable as an app. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
 | **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. A setup that cannot work (taps that cannot land, ADB debugging off, a loot minimum no opponent meets) stops the run with what to change. |
 
@@ -330,15 +330,18 @@ dashboard (open the address it prints in a browser). Enter the key there to foll
 - **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The PC connects out to an online relay channel
   named after a hash of the key, so no router port has to be opened.
 
-![Web dashboard on a PC: device status, the task options in sections and the live log of three Builder Base attacks](docs/dashboard-desktop.jpg)
+![Web dashboard on a PC: the bot's status, run setup, live view and activity log](docs/dashboard-desktop.jpg)
 
 <p>
-  <img src="docs/dashboard-mobile.jpg" alt="Dashboard on a phone: status and task options" width="260">
-  <img src="docs/dashboard-settings.jpg" alt="Device settings: minimum opponent loot and the LDPlayer screen" width="260">
+  <img src="docs/dashboard-mobile.jpg" alt="Dashboard on a phone: status and run setup" width="260">
+  <img src="docs/dashboard-settings.jpg" alt="Device settings: the LDPlayer screen and paths" width="260">
   <img src="docs/dashboard-deploy.jpg" alt="Deploy pins over a real attack screen" width="260">
 </p>
 
-▶️ [Dashboard walkthrough video (MP4)](docs/dashboard.mp4), recorded before the Clash-style look; the flow is the same:
+The pictures are the dashboard's own preview, with sample data: add `?preview=1` to its address to look around
+without a device.
+
+▶️ [Dashboard walkthrough video (MP4)](docs/dashboard.mp4), recorded before the current look; the flow is the same:
 one Builder Base attack started from the dashboard, LDPlayer auto-detect, the screen and language notes, and deploy
 pins on all three maps.
 
@@ -364,12 +367,15 @@ It shows the key and waits for **Start** from the dashboard. `python bot.py --ke
 dashboard can control the PC only while `--agent` (or any other bot command) is running there.
 
 The dashboard (Indonesian or English, switch in the title bar; the switch also sets the bot's terminal language,
-`language` in config, and on connecting the dashboard puts the device on the language it is shown in) shows whether
-the PC is online, the bot's state and
-command, and the live log, which stays in view while the options scroll. Its form covers every command above, in
-sections: **Task**, **Targets** (villages, resources, dark elixir, walls, `--bulk-walls`, `--wall-resource`, `--first`), **Limits**
-(attacks, searches, time, upgrades, `--wall-every`, recoveries), **Army** (the army templates, ring or stack per village, `--quake`) and **Surrender**
-(damage, stars, trophy floor, time). It shows the equivalent `python bot.py ...` line; **Start** runs it
+`language` in config, and on connecting the dashboard puts the device on the language it is shown in) has three
+pages. **Overview** shows whether the PC is online, the bot's state, run time, task and recoveries, the run setup,
+a **Live view** of the LDPlayer screen and the **Activity** log. The live view is captured only while the page is
+open and in view, every second on the local dashboard and every 3 seconds online (each frame crosses the relay);
+every frame replaces the last and none is stored. **Deployment** and **Device settings** are below. The run setup
+covers every command above: the task, villages, resources to spend or fill, the Home Village loot minimum and
+`--first`, then **Run limits** (`--bulk-walls`, attacks, searches, time, upgrades, `--wall-every`, recoveries),
+**Army & deployment** (the army templates, ring or stack per village, `--quake`) and **Battle behavior**
+(surrender: damage, stars, trophy floor, time). It shows the equivalent `python bot.py ...` line; **Start** runs it
 (a running task is stopped first). Other buttons: stop bot, repeat the last command, open CoC, close CoC, restart
 LDPlayer, turn LDPlayer off; the last three stop the bot first. When the PC is off, offline or the bot is not
 running, the dashboard says so instead of sending, and a command that gets no answer within 10 seconds is reported.
@@ -688,14 +694,16 @@ python -m unittest -v
 The Python suites use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
-game update, recovery (`--cycles` included), the until-full loop, walls (the cheapest row in either language, the sale
+game update, recovery (`--cycles` included, and the CoC then LDPlayer restarts for a screen that stays stuck), the
+LDPlayer memory restart and its ASTC setting, the until-full loop, walls (the cheapest row in either language, the sale
 dialog, bulk upgrades and their bar layouts, wall rings, `--wall-every`, `--wall-resource`), English game screens, the
 dashboard link (signed commands, settings, the bot as a child process, the local server, and the relay against a fake
 relay server), the English terminal messages, the LDPlayer screen switch, and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
 
 After editing `messages_en.json`, run `python messages.py` to synchronize the dashboard's catalog. The Python
-tests verify both copies match. Run the dependency-free dashboard localization tests with `node --test test_web.mjs`.
+tests verify both copies match. Run the dependency-free dashboard tests (localization and the live view poller) with
+`node --test test_web.mjs test_visible_poller.mjs`.
 
 ## Project structure
 
@@ -704,18 +712,21 @@ bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
 remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
 messages.py            terminal messages in English when config "language" is "en" (texts in messages_en.json)
 relay.py               online relay for the dashboard
-ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging)
+ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging, ASTC)
 game_update.py         Play Store Update button and installed game version, for the automatic game update
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
 web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own relay client, ID/EN text, app manifest, service worker, icons and its font (fonts/)
 calibrate.py           calibration CLI (screenshots only, never taps)
 test_bot.py            offline unit tests
+test_cloud_recovery.py stuck-screen recovery against a virtual clock (CoC, then LDPlayer restarts)
 test_game_update.py    Play Store screen and game version reading tests
 test_remote.py         dashboard link tests (key, signatures, options, child process, local server)
 test_relay.py          relay tests against a fake relay server
 test_ldplayer.py       LDPlayer detection tests against fake tool output
 test_device_control.py screen switch tests
 test_messages.py       every terminal message has its English text; translation of the log
+test_web.mjs           dashboard text in both languages (node --test)
+test_visible_poller.mjs live view polling only while the page is in view (node --test)
 fixtures/              real screen crops and Play Store screens the tests read
 requirements.txt       Python dependencies (OpenCV, NumPy, websockets)
 netlify.toml           online dashboard hosting: published folder and security headers
