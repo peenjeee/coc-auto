@@ -115,6 +115,8 @@ CRASH_LOOP_RECOVERIES = 2
 BROKE_ATTACKS_LIMIT = 3
 MEMORY_RETRY_SECONDS, BATTLE_END_SECONDS = 30, 240
 LOW_MEMORY_MB, EMULATOR_STOP_SECONDS, EMULATOR_REFRESH_SECONDS = 1000, 60, 1800
+# LDPlayer's VM (Ld9BoxHeadless) grows its private memory by about half a GB a minute while the bot runs, to 20+ GB.
+VM_MEMORY_LIMIT_MB = 10_000
 TAP_RETRIES, TAP_RETRY_SECONDS = 3, 10
 FIND_COOLDOWN_SECONDS, FIND_RETRIES = 180, 18
 EMULATOR_SETTLE_SECONDS = 20
@@ -825,7 +827,7 @@ class ADB:
 
 
 VM_PROCESSES = ("Get-CimInstance Win32_Process -Filter \"Name LIKE 'Ld%BoxHeadless.exe'\" | "
-                "ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }")
+                "ForEach-Object { \"$($_.ProcessId) $($_.PrivatePageCount) $($_.CommandLine)\" }")
 
 
 class Emulator:
@@ -853,15 +855,22 @@ class Emulator:
                 return True
         return self.vm_process()
 
-    def vm_pids(self) -> list:
-        """The VM processes of this instance (`Ld9BoxHeadless … --comment leidianN`)."""
+    def vm_lines(self) -> list:
+        """[process id, private bytes, command line…] of each VM process of this instance
+        (`Ld9BoxHeadless … --comment leidianN`)."""
         try:
             listed = subprocess.run(['powershell', '-NoProfile', '-Command', VM_PROCESSES], capture_output=True,
                                     text=True, timeout=60, shell=False).stdout or ''
         except (OSError, subprocess.SubprocessError):
             return []
-        return [int(line.split()[0]) for line in listed.splitlines()
+        return [line.split() for line in listed.splitlines()
                 if f'--comment leidian{self.index} ' in line and line.split()[0].isdigit()]
+
+    def vm_pids(self) -> list:
+        return [int(fields[0]) for fields in self.vm_lines()]
+
+    def vm_private_mb(self) -> int:
+        return sum(int(fields[1]) for fields in self.vm_lines() if fields[1].isdigit()) // (1024 * 1024)
 
     def vm_process(self) -> bool:
         """The VM process itself is still going: `list2` already says -1 while it shuts down, and a launch then fails
@@ -3451,9 +3460,14 @@ class Bot:
         if self.emulator_started is not None and time.monotonic() - self.emulator_started < EMULATOR_REFRESH_SECONDS:
             return False
         free = available_memory_mb()
-        if free is None or free >= LOW_MEMORY_MB:
+        # The VM's own memory says it first: free memory runs out only once the VM has taken it.
+        vm = self.emulator.vm_private_mb()
+        if vm >= VM_MEMORY_LIMIT_MB:
+            LOG.warning('Memori VM LDPlayer %s MB dan terus membengkak; restart LDPlayer untuk membebaskan memori', vm)
+        elif free is not None and free < LOW_MEMORY_MB:
+            LOG.warning('Memori PC tinggal %s MB; restart LDPlayer untuk membebaskan memori', free)
+        else:
             return False
-        LOG.warning('Memori PC tinggal %s MB; restart LDPlayer untuk membebaskan memori', free)
         self.emulator.quit()
         deadline = time.monotonic() + (EMULATOR_STOP_SECONDS if self.poll else 0)
         while self.emulator.running() and time.monotonic() < deadline:

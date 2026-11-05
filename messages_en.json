@@ -405,5 +405,6 @@
  "merah": "red",
  "PNG:EMAS:ELIXIR": "PNG:GOLD:ELIXIR",
  "Screenshot could not be encoded": "Screenshot could not be encoded",
- "VM LDPlayer lama macet dan tidak bisa dimatikan; restart PC lalu jalankan bot lagi": "The old LDPlayer VM is stuck and cannot be ended; restart the PC, then run the bot again"
+ "VM LDPlayer lama macet dan tidak bisa dimatikan; restart PC lalu jalankan bot lagi": "The old LDPlayer VM is stuck and cannot be ended; restart the PC, then run the bot again",
+ "Memori VM LDPlayer %s MB dan terus membengkak; restart LDPlayer untuk membebaskan memori": "LDPlayer VM memory at %s MB and still growing; restarting LDPlayer to free memory"
 }

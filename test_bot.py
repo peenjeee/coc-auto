@@ -3076,11 +3076,13 @@ class BotTests(unittest.TestCase):
         device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
 
         class Emulator:
-            events = []
+            events, private = [], 0
             def running(self):
                 return device.up
             def vm_running(self):
                 return device.up
+            def vm_private_mb(self):
+                return Emulator.private
             def quit(self):
                 Emulator.events.append('quit')
                 device.up, device.front = False, False
@@ -3104,16 +3106,28 @@ class BotTests(unittest.TestCase):
             self.assertFalse(runner.refresh_if_low_memory())
         self.assertEqual(emulator.events, ['quit', 'launch'])
 
+    def test_a_vm_grown_past_its_limit_restarts_emulator_while_the_pc_still_has_memory(self):
+        device, emulator = self.restartable()
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=emulator)
+        runner.emulator_started -= bot.EMULATOR_REFRESH_SECONDS + 1
+        type(emulator).private = bot.VM_MEMORY_LIMIT_MB - 1
+        with patch('bot.available_memory_mb', return_value=8_000):
+            self.assertFalse(runner.refresh_if_low_memory())
+            type(emulator).private = bot.VM_MEMORY_LIMIT_MB
+            self.assertTrue(runner.refresh_if_low_memory())
+        self.assertEqual(emulator.events, ['quit', 'launch'])
+
     def test_the_vm_counts_as_running_while_its_process_lives_after_list2_says_stopped(self):
         stopped = '0,LDPlayer,50466224,246418094,2,26040,-1,1280,720,240\n'
-        headless = ('28500 "C:\\Program Files\\ldplayer9box\\Ld9BoxHeadless.exe" --comment leidian{} --startvm '
-                    '20160302-aaaa-aaaa-3713-000000000000 --vrde config\n')
+        headless = ('28500 25033703424 "C:\\Program Files\\ldplayer9box\\Ld9BoxHeadless.exe" --comment leidian{} '
+                    '--startvm 20160302-aaaa-aaaa-3713-000000000000 --vrde config\n')
 
         def run(listed):
             return lambda command, **_: SimpleNamespace(stdout=stopped if 'list2' in command else listed)
         emulator = bot.Emulator('ldconsole.exe', 0)
         with patch('bot.subprocess.run', run(headless.format(0))):
             self.assertTrue(emulator.vm_running())
+            self.assertEqual(emulator.vm_private_mb(), 23874)
         with patch('bot.subprocess.run', run(headless.format(10))):
             self.assertFalse(emulator.vm_running())
 
