@@ -357,13 +357,13 @@ Object.assign(TEXT.en, {
   requirements_title: 'Requirement:',
   requirements_game_label: 'Game language:',
   requirements_game: "Bahasa Indonesia is recommended in CoC’s own settings (Settings → Language). English is supported too but not fully stable yet. Changing the LDPlayer or Android language does not change CoC.",
-  requirements_ldplayer: 'Change language to Indonesian as well.',
+  requirements_ldplayer: 'Use a 1280×720 resolution (DPI 240). If it is different, the bot switches it automatically when a run starts.',
   requirements_acknowledge: 'Acknowledge',
 });
 Object.assign(TEXT.id, {
   requirements_title: 'Persyaratan:',
   requirements_game_label: 'Bahasa game:',
   requirements_game: 'Disarankan Bahasa Indonesia di pengaturan CoC sendiri (Pengaturan → Bahasa). Bahasa Inggris juga didukung tapi belum sepenuhnya stabil. Mengubah bahasa LDPlayer atau Android tidak mengubah bahasa CoC.',
-  requirements_ldplayer: 'Ubah bahasa ke Bahasa Indonesia juga.',
+  requirements_ldplayer: 'Pakai resolusi 1280×720 (DPI 240). Kalau berbeda, bot mengubahnya otomatis saat mulai berjalan.',
   requirements_acknowledge: 'Saya mengerti',
 });
