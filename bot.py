@@ -2814,7 +2814,8 @@ class Bot:
         except BotError:
             buttons = self.wall_buttons(self.device.capture(), spec)
             LOG.info('Tombol upgrade tembok: %s', ', '.join(
-                f'{resource} {"putih" if affordable else "merah"}' for resource, _, affordable in buttons) or 'tidak ada')
+                messages.translate(f'{resource} putih') if affordable else messages.translate(f'{resource} merah')
+                for resource, _, affordable in buttons) or messages.translate('tidak ada'))
             return False
 
     def hud_gold(self, spec: dict) -> int:

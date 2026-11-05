@@ -340,5 +340,8 @@
  "Resolusi layar LDPlayer tidak terbaca": "LDPlayer screen resolution unreadable",
  "Tidak ada instance LDPlayer yang menyala; nyalakan LDPlayer lalu deteksi lagi": "No LDPlayer instance is running; start LDPlayer, then detect again",
  "{} belum tersambung ke adb; tunggu LDPlayer selesai menyala lalu deteksi lagi": "{} not connected to adb yet; wait for LDPlayer to finish starting, then detect again",
- "{} gagal: {}": "{} failed: {}"
+ "{} gagal: {}": "{} failed: {}",
+ "{} putih": "{} white",
+ "{} merah": "{} red",
+ "tidak ada": "none"
 }
