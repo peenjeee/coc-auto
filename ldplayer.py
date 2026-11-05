@@ -23,6 +23,9 @@ AXIS = re.compile(r'ABS_MT_POSITION_([XY])\s*:.*?max (\d+)')
 CALIBRATED_DPI = 240
 RESOLUTION_KEY, DPI_KEY = 'advancedSettings.resolution', 'advancedSettings.resolutionDpi'
 ADB_DEBUG_KEY = 'basicSettings.adbDebug'
+# LDPlayer decodes ASTC textures for the GPU; with it on its VM (Ld9BoxHeadless) grows twice as fast while CoC
+# battles and keeps speeding up, to 10 GB in half an hour. CoC looks the same with it off.
+ASTC_KEY = 'basicSettings.astc'
 ADB_DEBUG_HINT = ('ADB debugging LDPlayer mati: Pengaturan LDPlayer > Lainnya > Debug ADB > Buka koneksi lokal (atau '
                   'tombol "sesuaikan layar" di dashboard), lalu nyalakan ulang LDPlayer')
 
@@ -157,14 +160,30 @@ def adb_debug(path: Path) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def write_display(path: Path, display: dict, adb_debug: int | None = None) -> None:
-    """Change only the screen (and ADB debugging, when given) and keep every other setting, in LDPlayer's own
-    layout (4-space JSON, CRLF). `ldconsole modify` is never used: it rewrites the whole file and drops settings."""
+def astc_on(path: Path) -> bool:
+    return json.loads(path.read_text(encoding='utf-8')).get(ASTC_KEY) is True
+
+
+def fits(path: Path, display: dict) -> bool:
+    """The instance starts on the bot's screen, with ADB debugging open and ASTC decoding off."""
+    return read_display(path) == display and adb_debug(path) != 0 and not astc_on(path)
+
+
+def fit(path: Path, display: dict) -> None:
+    write_display(path, display, adb_debug=1, astc=False)
+
+
+def write_display(path: Path, display: dict, adb_debug: int | None = None, astc: bool | None = None) -> None:
+    """Change only the screen (and ADB debugging and ASTC decoding, when given) and keep every other setting, in
+    LDPlayer's own layout (4-space JSON, CRLF). `ldconsole modify` is never used: it rewrites the whole file and
+    drops settings."""
     config = json.loads(path.read_text(encoding='utf-8'))
     config[RESOLUTION_KEY] = {**config.get(RESOLUTION_KEY, {}), 'width': display['width'], 'height': display['height']}
     config[DPI_KEY] = display['dpi']
     if adb_debug is not None:
         config[ADB_DEBUG_KEY] = adb_debug
+    if astc is not None:
+        config[ASTC_KEY] = astc
     temporary = path.with_name(path.name + '.tmp')
     temporary.write_bytes(json.dumps(config, indent=4, ensure_ascii=False).replace('\n', '\r\n').encode('utf-8'))
     os.replace(temporary, path)

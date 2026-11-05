@@ -886,14 +886,14 @@ class Emulator:
                 pass
 
     def refit(self, display: dict) -> bool:
-        """An LDPlayer that crashed as it closed can start again on its defaults (another screen, ADB debugging off):
-        the bot could neither reach it nor read its screen. Put back while it is off, since it reads its config when
-        it starts. True when it had to be put back."""
+        """An LDPlayer that crashed as it closed can start again on its defaults (another screen, ADB debugging off,
+        ASTC decoding on): the bot could neither reach it nor read its screen. Put back while it is off, since it
+        reads its config when it starts. True when it had to be put back."""
         path = ldplayer.instance_config(self.console, self.index)
         try:
-            if not path.is_file() or (ldplayer.read_display(path) == display and ldplayer.adb_debug(path) != 0):
+            if not path.is_file() or ldplayer.fits(path, display):
                 return False
-            ldplayer.write_display(path, display, adb_debug=1)
+            ldplayer.fit(path, display)
         except (OSError, ValueError):
             return False  # Another LDPlayer layout: recovery reports a missing ADB its own way.
         return True
@@ -3362,7 +3362,8 @@ class Bot:
                 width, height = self.config['resolution']
                 if self.emulator.refit({'width': width, 'height': height,
                                         'dpi': self.config.get('dpi', ldplayer.CALIBRATED_DPI)}):
-                    LOG.warning('Setelan LDPlayer kembali ke bawaan; layar kalibrasi dan Debug ADB dipasang lagi')
+                    LOG.warning('Setelan LDPlayer kembali ke bawaan; layar kalibrasi, Debug ADB dan ASTC mati dipasang '
+                                'lagi')
                 self.emulator.launch()
                 self.emulator_started = time.monotonic()
                 deadline = time.monotonic() + RECOVER_ADB_SECONDS
@@ -3598,13 +3599,17 @@ def fit_screen(config_path: Path) -> bool:
     import device_control
     display = device_control.Display(config_path)
     try:
-        current = display.status()['current']
+        status = display.status()
         if not display.fit():
             return False
     except device_control.SettingRefused as exc:
         raise BotError(f'Layar LDPlayer tidak bisa disesuaikan: {exc}') from exc
-    LOG.warning('Layar LDPlayer %sx%s DPI %s diganti ke layar kalibrasi; dikembalikan saat bot berhenti',
-                current['width'], current['height'], current['dpi'])
+    current = status['current']
+    if current == status['target']:
+        LOG.warning('Setelan LDPlayer disesuaikan: Debug ADB nyala, tekstur ASTC mati (bikin memori VM bocor)')
+    else:
+        LOG.warning('Layar LDPlayer %sx%s DPI %s diganti ke layar kalibrasi; dikembalikan saat bot berhenti',
+                    current['width'], current['height'], current['dpi'])
     return True
 
 

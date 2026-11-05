@@ -155,6 +155,16 @@ class DisplayFileTests(unittest.TestCase):
         self.path.write_text('{}', encoding='utf-8')
         self.assertIsNone(ldplayer.adb_debug(self.path))
 
+    def test_fitting_turns_astc_decoding_off_with_adb_open_on_the_screen(self):
+        screen = {'width': 1280, 'height': 720, 'dpi': 240}
+        self.path.write_bytes(INSTANCE.replace('"basicSettings.adbDebug": 1', '"basicSettings.astc": true').encode())
+        self.assertTrue(ldplayer.astc_on(self.path))
+        self.assertFalse(ldplayer.fits(self.path, screen))
+        ldplayer.fit(self.path, screen)
+        self.assertEqual((ldplayer.read_display(self.path), ldplayer.adb_debug(self.path), ldplayer.astc_on(self.path)),
+                         (screen, 1, False))
+        self.assertTrue(ldplayer.fits(self.path, screen))
+
     def test_a_config_without_screen_keys_is_refused(self):
         self.path.write_text('{"basicSettings.adbDebug": 1}', encoding='utf-8')
         with self.assertRaises(ValueError):

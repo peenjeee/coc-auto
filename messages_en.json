@@ -407,5 +407,6 @@
  "Screenshot could not be encoded": "Screenshot could not be encoded",
  "VM LDPlayer lama macet dan tidak bisa dimatikan; restart PC lalu jalankan bot lagi": "The old LDPlayer VM is stuck and cannot be ended; restart the PC, then run the bot again",
  "Memori VM LDPlayer %s MB dan terus membengkak; restart LDPlayer untuk membebaskan memori": "LDPlayer VM memory at %s MB and still growing; restarting LDPlayer to free memory",
- "Setelan LDPlayer kembali ke bawaan; layar kalibrasi dan Debug ADB dipasang lagi": "LDPlayer settings went back to their defaults; the calibrated screen and ADB debugging are set again"
+ "Setelan LDPlayer kembali ke bawaan; layar kalibrasi, Debug ADB dan ASTC mati dipasang lagi": "LDPlayer settings went back to their defaults; the calibrated screen, ADB debugging and ASTC off are set again",
+ "Setelan LDPlayer disesuaikan: Debug ADB nyala, tekstur ASTC mati (bikin memori VM bocor)": "LDPlayer settings adjusted: ADB debugging on, ASTC textures off (they make the VM leak memory)"
 }

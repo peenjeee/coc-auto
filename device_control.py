@@ -63,14 +63,15 @@ class Display:
 
     def fit(self) -> bool:
         """False when the screen already fits; otherwise LDPlayer is restarted on the calibrated screen. ADB
-        debugging is opened on the way, since the bot cannot reach LDPlayer without it; a restore leaves it open."""
+        debugging is opened on the way, since the bot cannot reach LDPlayer without it, and ASTC decoding turned off,
+        since it makes LDPlayer's VM leak memory; a restore leaves both so."""
         emulator, path, target = self.instance()
-        current = ldplayer.read_display(path)
-        if current == target and ldplayer.adb_debug(path) != 0:
+        if ldplayer.fits(path, target):
             return False
+        current = ldplayer.read_display(path)
         if self.saved() is None and current != target:
             keep(self.store, {'path': str(path), 'display': current})
-        self.rewrite(emulator, path, target, relaunch=True, adb_debug=1)
+        self.rewrite(emulator, path, target, relaunch=True, fit=True)
         return True
 
     def restore(self) -> bool:
@@ -90,7 +91,7 @@ class Display:
         self.store.unlink()
         return True
 
-    def rewrite(self, emulator, path: Path, display: dict, relaunch: bool, adb_debug: int | None = None) -> None:
+    def rewrite(self, emulator, path: Path, display: dict, relaunch: bool, fit: bool = False) -> None:
         if emulator.running():
             emulator.quit()
             for _ in range(LD_STOP_SECONDS):
@@ -102,7 +103,7 @@ class Display:
             else:
                 raise SettingRefused('LDPlayer tidak berhenti; tutup manual lalu coba lagi')
             self.sleep(LD_SETTLE_SECONDS)  # LDPlayer writes its own config as it closes
-        ldplayer.write_display(path, display, adb_debug)
+        (ldplayer.fit if fit else ldplayer.write_display)(path, display)
         if relaunch:
             emulator.launch()
 

@@ -105,6 +105,16 @@ class DisplayTests(unittest.TestCase):
         self.assertEqual(self.screen(), (1280, 720, 240, 1))
         self.assertEqual(self.emulator.calls, ['quit', 'launch'])
 
+    def test_fitting_turns_astc_decoding_off_on_a_screen_that_already_fits(self):
+        self.write_instance(1280, 720, 240)
+        self.instance.write_text(self.instance.read_text(encoding='utf-8').replace(
+            '"basicSettings.adbDebug": 1', '"basicSettings.adbDebug": 1, "basicSettings.astc": true'), encoding='utf-8')
+        self.assertTrue(self.display.fit())
+        self.assertFalse(json.loads(self.instance.read_text(encoding='utf-8'))['basicSettings.astc'])
+        self.assertEqual(self.emulator.calls, ['quit', 'launch'])
+        self.assertFalse(self.store.exists())
+        self.assertFalse(self.display.fit())
+
     def test_a_screen_that_already_fits_changes_nothing(self):
         self.write_instance(1280, 720, 240)
         self.assertFalse(self.display.fit())

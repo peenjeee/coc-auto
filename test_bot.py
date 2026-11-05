@@ -3176,12 +3176,13 @@ class BotTests(unittest.TestCase):
         path.parent.mkdir(parents=True)
         path.write_text(json.dumps({'advancedSettings.resolution': {'width': 1600, 'height': 900},
                                     'advancedSettings.resolutionDpi': 240, 'basicSettings.adbDebug': 0,
-                                    'advancedSettings.fps': 120}), encoding='utf-8')
+                                    'basicSettings.astc': True, 'advancedSettings.fps': 120}), encoding='utf-8')
         calibrated = {'width': 1280, 'height': 720, 'dpi': 240}
         emulator = bot.Emulator(str(folder / 'ldconsole.exe'), 0)
         self.assertTrue(emulator.refit(calibrated))
         self.assertEqual(bot.ldplayer.read_display(path), calibrated)
         self.assertEqual(bot.ldplayer.adb_debug(path), 1)
+        self.assertFalse(bot.ldplayer.astc_on(path))
         self.assertEqual(json.loads(path.read_text(encoding='utf-8'))['advancedSettings.fps'], 120)
         self.assertFalse(emulator.refit(calibrated))
         self.assertFalse(bot.Emulator(str(folder / 'ldconsole.exe'), 3).refit(calibrated))
