@@ -119,7 +119,7 @@ const TEXT = {
     display_saved: 'Sudah sesuai. Layar semula kamu tersimpan dan dikembalikan saat bot ditutup.',
     display_differs: 'Belum sesuai: bot tidak akan mengenali layar game.',
     display_unknown: 'Layar LDPlayer belum terbaca (cek path ldconsole.exe).',
-    language_note: 'Bahasa game: Bahasa Indonesia (disarankan) atau English (didukung, belum sepenuhnya stabil), di pengaturan CoC sendiri (Pengaturan → Bahasa). Bahasa dashboard dan terminal tidak mengubah bahasa game. Mengganti bahasa LDPlayer atau Android juga tidak mengubah bahasa CoC.',
+    language_note: 'Bahasa game: Bahasa Indonesia atau English (beberapa popup langka belum dikenali), di pengaturan CoC sendiri (Pengaturan → Bahasa). Bahasa dashboard dan terminal tidak mengubah bahasa game. Mengganti bahasa LDPlayer atau Android juga tidak mengubah bahasa CoC.',
     sending: 'mengirim {action}…',
     connected: 'Perangkat tersambung.',
     waiting_device: 'Menunggu perangkat…',
@@ -273,7 +273,7 @@ const TEXT = {
     display_saved: 'Matches. Your previous screen is kept and comes back when the bot is closed.',
     display_differs: 'Does not match: the bot will not recognise the game screens.',
     display_unknown: 'LDPlayer screen not read yet (check the ldconsole.exe path).',
-    language_note: 'Game language: Indonesian (recommended) or English (supported, not fully stable yet), set in CoC\'s own settings (Settings → Language). Dashboard and terminal language does not change the game language. Changing the LDPlayer or Android language does not change CoC either.',
+    language_note: 'Game language: Indonesian or English (a few rare popups not recognised yet), set in CoC\'s own settings (Settings → Language). Dashboard and terminal language does not change the game language. Changing the LDPlayer or Android language does not change CoC either.',
     sending: 'sending {action}…',
     connected: 'Device connected.',
     waiting_device: 'Waiting for the device…',
@@ -356,14 +356,14 @@ Object.assign(TEXT.id, {minimum_invalid: 'Masukkan bilangan bulat dari 0 sampai 
 Object.assign(TEXT.en, {
   requirements_title: 'Requirement:',
   requirements_game_label: 'Game language:',
-  requirements_game: "Bahasa Indonesia is recommended in CoC’s own settings (Settings → Language). English is supported too but not fully stable yet. Changing the LDPlayer or Android language does not change CoC.",
+  requirements_game: "Bahasa Indonesia or English in CoC’s own settings (Settings → Language). English works; only a few rare popups are not recognised yet. Changing the LDPlayer or Android language does not change CoC.",
   requirements_ldplayer: 'Use a 1280×720 resolution (DPI 240). If it is different, the bot switches it automatically when a run starts.',
   requirements_acknowledge: 'Acknowledge',
 });
 Object.assign(TEXT.id, {
   requirements_title: 'Persyaratan:',
   requirements_game_label: 'Bahasa game:',
-  requirements_game: 'Disarankan Bahasa Indonesia di pengaturan CoC sendiri (Pengaturan → Bahasa). Bahasa Inggris juga didukung tapi belum sepenuhnya stabil. Mengubah bahasa LDPlayer atau Android tidak mengubah bahasa CoC.',
+  requirements_game: 'Bahasa Indonesia atau English di pengaturan CoC sendiri (Pengaturan → Bahasa). Bahasa Inggris sudah berjalan; hanya beberapa popup langka yang belum dikenali. Mengubah bahasa LDPlayer atau Android tidak mengubah bahasa CoC.',
   requirements_ldplayer: 'Pakai resolusi 1280×720 (DPI 240). Kalau berbeda, bot mengubahnya otomatis saat mulai berjalan.',
   requirements_acknowledge: 'Saya mengerti',
 });
