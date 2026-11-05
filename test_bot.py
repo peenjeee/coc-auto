@@ -109,6 +109,8 @@ class BotTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
+        # main() picks the language of the machine's config.local.json; the next test starts in Indonesian again.
+        self.addCleanup(bot.messages.use, 'id')
         self.root = Path(self.temp.name)
         self.config, self.frames = profile(self.root)
 

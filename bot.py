@@ -1821,14 +1821,15 @@ class Bot:
         self.battle_deadline = None
         if deadline is None and not (damage or stars):
             return self.wait(targets, allowed)
-        reason = f'kerusakan mencapai {damage}%' if damage else f'{stars} bintang'
+        reason = (messages.translate(f'kerusakan mencapai {damage}%') if damage
+                  else messages.translate(f'{stars} bintang'))
 
         def give_up(state: str, image: np.ndarray) -> bool:
             nonlocal reason
             if state not in SURRENDER_STATES[village]:
                 return False
             if deadline is not None and time.monotonic() >= deadline:
-                reason = f'setelah {self.surrender_after} detik battle'
+                reason = messages.translate(f'setelah {self.surrender_after} detik battle')
                 return True
             if damage:
                 return state == 'home_battle' and self.damage_reached(image)
@@ -2612,9 +2613,9 @@ class Bot:
     def check_limits(self) -> None:
         """Called only between attacks and upgrades, so a limit never cuts a battle or an upgrade short."""
         if self.upgrade_limit is not None and self.upgrades_done >= self.upgrade_limit:
-            reason = f'{self.upgrades_done} tembok sudah di-upgrade'
+            reason = messages.translate(f'{self.upgrades_done} tembok sudah di-upgrade')
         elif self.stop_at is not None and time.monotonic() >= self.stop_at:
-            reason = 'batas waktu tercapai'
+            reason = messages.translate('batas waktu tercapai')
         else:
             return
         self.close_menus()
@@ -3188,7 +3189,7 @@ class Bot:
                     continue
             if not self.upgrade_wall(spec):
                 LOG.info('%s %s tidak cukup lagi setelah %s upgrade tembok',
-                         ' dan '.join(self.wall_resources).capitalize(), village, upgraded)
+                         '/'.join(self.wall_resources).capitalize(), village, upgraded)
                 self.close_menus()
                 return upgraded
             upgraded += 1
@@ -3489,7 +3490,7 @@ def check_adb_debugging(console: str, index: int) -> None:
     except (OSError, ValueError):
         return  # Another LDPlayer layout: recovery reports a missing ADB its own way.
     if enabled == 0:
-        raise SetupError(ldplayer.ADB_DEBUG_HINT)
+        raise SetupError(ldplayer.adb_debug_hint())
 
 
 def local_config_path(path: Path) -> Path:

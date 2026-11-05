@@ -320,6 +320,7 @@ class SettingsTests(unittest.TestCase):
         result = supervisor.command(*signed('set_language', {'language': 'en'}))
         self.assertEqual((result['ok'], result['code'], result['data']['language']), (True, 'language_saved', 'en'))
         self.assertEqual(self.stored()['language'], 'en')
+        self.assertEqual(result['message'], 'Terminal language saved; the bot log switches too')
         self.assertEqual(messages.translate('REMOTE: menghentikan bot'), 'REMOTE: stopping bot')
         for language in ('fr', None, 1, ['en']):
             with self.subTest(language=language), self.assertRaises(remote.CommandRefused):

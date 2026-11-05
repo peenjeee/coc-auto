@@ -615,7 +615,7 @@ How to change it:
 | `adb`, `serial`, `resolution` | ADB executable, device serial, and screen size. |
 | `ldconsole`, `ld_index` | LDPlayer console and instance index, used to start a stopped emulator. |
 | `touch_device` | Raw touch input device, e.g. `/dev/input/event4`. |
-| `language` | Terminal and dashboard log language: `id` (default) or `en`. The dashboard's ID/EN switch saves it in `config.local.json`; a running bot switches at its next Start. |
+| `language` | Terminal and dashboard log language: `id` (default) or `en`. The dashboard's ID/EN switch saves it in `config.local.json` and switches the log at once: lines of a bot started in the other language are translated as they come in, and the bot itself uses it from its next Start. |
 | `tesseract` | Tesseract executable; used for loot only when `digits` is not set. |
 | `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
 | `remote` | Web dashboard: online relay address and key, local `port` (8765), and the `dashboard` address printed in the terminal. |
@@ -677,7 +677,7 @@ again.
 python -m unittest -v
 ```
 
-The suites (368 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (369 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, walls (the cheapest row in either language, the sale

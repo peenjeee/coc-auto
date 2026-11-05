@@ -76,6 +76,17 @@ class MessagesTests(unittest.TestCase):
         self.assertEqual(messages.translate('INFO: something unknown'), 'INFO: something unknown')
         self.assertEqual(messages.translate(42), 42)
 
+    def test_a_line_from_a_bot_still_running_in_indonesian_is_shown_in_english(self):
+        # The dashboard switched to English while the bot runs: its lines come filled in and with their level.
+        line = 'WARNING: CoC tidak terbuka; membuka game (percobaan 2)'
+        messages.use('id')
+        self.assertEqual(messages.translate(line), line)
+        messages.use('en')
+        self.assertEqual(messages.translate(line),
+                         'WARNING: ' + self.english['CoC tidak terbuka; membuka game (percobaan %s)'] % 2)
+        surrender = self.english['Menyerah: %s'] % self.english['kerusakan mencapai {}%'].replace('{}', '50')
+        self.assertEqual(messages.translate('INFO: Menyerah: kerusakan mencapai 50%'), 'INFO: ' + surrender)
+
     def test_the_log_and_the_errors_in_it_are_printed_in_the_chosen_language(self):
         stream = io.StringIO()
         handler = logging.StreamHandler(stream)
