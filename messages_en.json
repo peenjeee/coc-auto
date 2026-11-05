@@ -403,5 +403,6 @@
  "Bahasa tampilan disimpan; log langsung memakainya": "Display language saved; logs use it immediately",
  "putih": "white",
  "merah": "red",
- "PNG:EMAS:ELIXIR": "PNG:GOLD:ELIXIR"
+ "PNG:EMAS:ELIXIR": "PNG:GOLD:ELIXIR",
+ "Screenshot could not be encoded": "Screenshot could not be encoded"
 }

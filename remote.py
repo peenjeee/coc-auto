@@ -34,7 +34,14 @@ HISTORY_LINES = 400
 STOP_SECONDS = 20
 STREAM_PING_SECONDS = 15
 MAX_COMMAND_BYTES = 64 * 1024
-STATIC_FILES = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js',
+STATIC_FILES = {'/visible-poller.js': 'visible-poller.js', '/select.js': 'select.js', '/icons/resources/elixir_cart.png': 'icons/resources/elixir_cart.png',
+                '/icons/resources/builder_gold.webp': 'icons/resources/builder_gold.webp',
+                '/icons/resources/builder_elixir.webp': 'icons/resources/builder_elixir.webp',
+                '/icons/resources/gold.png': 'icons/resources/gold.png',
+                '/icons/resources/elixir.png': 'icons/resources/elixir.png',
+                '/icons/resources/dark_elixir.png': 'icons/resources/dark_elixir.png',
+                '/fonts/lilita-one-latin.woff2': 'fonts/lilita-one-latin.woff2',
+                '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js',
                 '/messages.js': 'messages.js', '/messages_en.json': 'messages_en.json',
                 '/realtime.js': 'realtime.js', '/deploy.js': 'deploy.js', '/settings.js': 'settings.js',
                 '/style.css': 'style.css',
@@ -43,7 +50,7 @@ STATIC_FILES = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.
                 '/icons/icon-192.png': 'icons/icon-192.png', '/icons/icon-512.png': 'icons/icon-512.png',
                 '/icons/icon-maskable-512.png': 'icons/icon-maskable-512.png',
                 '/icons/apple-touch-icon.png': 'icons/apple-touch-icon.png'}
-CONTENT_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+CONTENT_TYPES = {'.webp': 'image/webp', '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
                  '.json': 'application/json; charset=utf-8',
                  '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
                  '.png': 'image/png', '.webmanifest': 'application/manifest+json'}
@@ -57,7 +64,7 @@ COMMAND_MAX_AGE_SECONDS = 120
 # Settings action -> its answer code; every one answers with the settings as they are now (or what was found).
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
                     'set_setup': 'setup_saved', 'set_language': 'language_saved'}
-ACTIONS = ('start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
+ACTIONS = ('get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
            'fit_display', 'restore_display', *SETTINGS_ACTIONS)
 VILLAGE_CHOICES = ('home', 'builder', 'both')
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
@@ -504,11 +511,16 @@ class Supervisor:
 
     def command(self, body: object, sig: object) -> dict:
         """Carry out a signed dashboard command: {'ok', 'code', 'message'} plus 'data' for what it read."""
+        command = None
         try:
             with self.nonce_lock:
                 command = open_command(self.key, body, sig, self.seen, self.started)
-            with self.control:
+            if command['action'] == 'get_screen':
+                # A slow screenshot must not hold the lock needed to stop the worker.
                 code, message, data = self.carry_out(command['action'], command['args'])
+            else:
+                with self.control:
+                    code, message, data = self.carry_out(command['action'], command['args'])
             result = {'ok': True, 'code': code, 'message': message}
             if data is not None:
                 result['data'] = data
@@ -521,12 +533,26 @@ class Supervisor:
                       'message': text if text.startswith('Perintah ditolak') else f'Perintah ditolak: {text}'}
         except Exception as exc:  # A failed adb/ldconsole call is reported to the dashboard, never fatal here.
             result = {'ok': False, 'code': 'failed', 'message': f'Gagal: {exc}'}
-        self.log(f'REMOTE: {result["message"]}')
+        if command is None or command['action'] != 'get_screen':
+            self.log(f'REMOTE: {result["message"]}')
         result["source_message"] = result["message"]
         result["message"] = messages.translate(result["message"])
         return result
 
     def carry_out(self, action: str, options: dict) -> tuple[str, str, dict | None]:
+        if action == 'get_screen':
+            import cv2
+            frame = self.device.adb().capture()
+            # Preserve the entire framebuffer and its aspect ratio.
+            height, width = frame.shape[:2]
+            scale = min(640 / width, 360 / height, 1)
+            small = cv2.resize(frame, (max(1, round(width * scale)), max(1, round(height * scale))),
+                               interpolation=cv2.INTER_AREA)
+            ok, encoded = cv2.imencode('.jpg', small, [cv2.IMWRITE_JPEG_QUALITY, SNAPSHOT_QUALITY])
+            if not ok:
+                raise CommandRefused('Screenshot could not be encoded')
+            return 'screen_loaded', '', {'image': 'data:image/jpeg;base64,' + base64.b64encode(encoded).decode(),
+                                          'captured_at': time.time()}
         if action == 'start':
             args = build_args(options)
             self.start(args)

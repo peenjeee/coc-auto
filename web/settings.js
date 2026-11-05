@@ -16,11 +16,35 @@ function fill(form, values, names) {
   }
 }
 
+/** Group whole-number loot amounts without moving the caret past the digit being edited. */
+function formatLoot(input) {
+  const original = input.value;
+  const raw = original.replaceAll(',', '');
+  const valid = raw === '' || (/^\d+$/.test(raw) && Number(raw) <= 999999999);
+  input.setCustomValidity(valid ? '' : t('minimum_invalid'));
+  if (!valid || !raw) return;
+  const digitsBeforeCaret = original.slice(0, input.selectionStart ?? original.length).replaceAll(',', '').length;
+  const formatted = raw.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  input.value = formatted;
+  if (document.activeElement === input) {
+    let caret = 0, digits = 0;
+    while (caret < formatted.length && digits < digitsBeforeCaret) {
+      if (formatted[caret] !== ',') digits++;
+      caret++;
+    }
+    input.setSelectionRange(caret, caret);
+  }
+}
+
 export class SettingsPanel {
   /** @param {(action: string, args?: Record<string, unknown>) => void} send */
   constructor(send) {
     this.found = null;
     this.display = null;
+    for (const name of MINIMUM) {
+      const input = $('minimum-form').elements.namedItem(name);
+      input.addEventListener('input', () => formatLoot(input));
+    }
     $('settings-load').addEventListener('click', () => send('get_settings'));
     $('setup-detect').addEventListener('click', () => send('detect_setup'));
     $('minimum-form').addEventListener('submit', (submitted) => {
@@ -36,7 +60,7 @@ export class SettingsPanel {
   /** @returns {Record<string, number>} whole numbers; anything else is refused by the device */
   minimum() {
     const form = $('minimum-form').elements;
-    return Object.fromEntries(MINIMUM.map((name) => [name, Number.parseInt(form.namedItem(name).value || '0', 10)]));
+    return Object.fromEntries(MINIMUM.map((name) => [name, Number(form.namedItem(name).value.replaceAll(',', '') || '0')]));
   }
 
   setup() {
@@ -49,6 +73,7 @@ export class SettingsPanel {
   load(data) {
     if (!data || typeof data !== 'object') return;
     fill($('minimum-form'), data.minimum, MINIMUM);
+    for (const name of MINIMUM) formatLoot($('minimum-form').elements.namedItem(name));
     fill($('setup-form'), data.setup, SETUP);
     this.showDisplay(data.display);
   }
@@ -59,12 +84,17 @@ export class SettingsPanel {
     this.renderDisplay();
   }
 
+  displayMatches() {
+    const display = this.display;
+    return Boolean(display && ['width', 'height', 'dpi'].every((name) => display.current[name] === display.target[name]));
+  }
+
   renderDisplay() {
     const display = this.display;
     const text = (screen) => `${screen.width}x${screen.height} DPI ${screen.dpi}`;
     $('display-now').textContent = display ? text(display.current) : '-';
     $('display-target').textContent = display ? text(display.target) : '-';
-    const fits = display && ['width', 'height', 'dpi'].every((name) => display.current[name] === display.target[name]);
+    const fits = this.displayMatches();
     const note = $('display-note');
     if (!display) note.textContent = t('display_unknown');
     else if (!fits) note.textContent = t('display_differs');

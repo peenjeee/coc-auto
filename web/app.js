@@ -6,12 +6,16 @@ import { applyLanguage, t } from './i18n.js';
 import { translate } from './messages.js';
 import { RealtimeChannel } from './realtime.js';
 import { DeployEditor } from './deploy.js';
-import { SettingsPanel } from './settings.js';
+import { SettingsPanel } from './settings.js?v=3';
+import { setupSelects, refreshSelects } from './select.js';
+import { VisiblePoller } from './visible-poller.js?v=2';
 
+const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
 const OFFLINE_AFTER_MS = 40000; // the device repeats its signed state every 15 s
 const MAX_SKEW_SECONDS = 300;
 const MAX_LINES = 2000;
+const STORE_REQUIREMENTS = 'coc-requirements-acknowledged-v1';
 const STORE_KEY = 'coc-remote-key';
 // v2: surrender at 50% became the default; choices saved before it held 0 there.
 const STORE_OPTIONS = 'coc-remote-options-v2';
@@ -33,6 +37,7 @@ let settings = null;
 let settingsAsked = false;
 let currentNotice = null;
 let connectionProblem = null;
+let initialDisplayChecked = false;
 
 /** localStorage that never throws (private windows, blocked storage). */
 const stored = {
@@ -93,11 +98,13 @@ function addLines(lines) {
   }
   view.append(fragment);
   while (view.childElementCount > MAX_LINES) view.firstElementChild.remove();
+  $('log-count').textContent = String(view.childElementCount);
   if ($('follow').checked) view.scrollTop = view.scrollHeight;
 }
 
 function clearLines() {
   $('log').textContent = '';
+  $('log-count').textContent = '0';
 }
 
 function notify(message, kind = 'info') {
@@ -127,6 +134,7 @@ function setOnline(isOnline, reason) {
   badge.className = `badge ${isOnline ? 'online' : 'offline'}`;
   if (!isOnline && (changed || reason)) {
     $('bot-state').textContent = '-';
+    $('screen-status').textContent = t('offline');
     notify(reason || (() => t('offline_text')), 'error');
   } else if (isOnline && changed) {
     notify(() => t('connected'), 'ok');
@@ -139,12 +147,14 @@ function setOnline(isOnline, reason) {
       }, 0);
     }
   }
+  screenPoller.sync();
 }
 
 /** @param {{state?: string, args?: string[], host?: string} | undefined} state */
 function showState(state) {
   if (!state || typeof state !== 'object') return;
   lastState = state;
+  updateRunMetrics();
   $('host').textContent = typeof state.host === 'string' ? state.host : '-';
   $('bot-state').textContent = t(state.state === 'running' ? 'running' : 'standby');
   $('bot-args').textContent = Array.isArray(state.args) && state.args.length ? `python bot.py ${state.args.join(' ')}` : '-';
@@ -169,6 +179,10 @@ function handleResult(result, quiet = false) {
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
+    if (result.code === 'settings_loaded' && !initialDisplayChecked) {
+      initialDisplayChecked = true;
+      if (!settings.displayMatches()) switchView('settings');
+    }
     // The device's terminal speaks the dashboard's language; one still on the other is switched once.
     const shown = document.documentElement.lang;
     if (result.code === 'settings_loaded' && result.data.language && result.data.language !== shown) {
@@ -306,7 +320,8 @@ function readOptions() {
     if (data.get('dark') && !options.builder.length && !options.home.length) options.dark = true;
   }
   if (task === 'walls' || task === 'farm') {
-    options.first = data.get('first');
+    const selected = data.get('target_village') || 'home';
+    options.first = selected === 'both' ? data.get('first') : selected;
     for (const name of ['hours', 'minutes']) if (number(name)) options[name] = number(name);
     options.max_recoveries = number('max_recoveries', 20);
   }
@@ -393,13 +408,15 @@ function applyTemplate() {
 }
 
 function refreshOptions() {
+  syncVillageControls();
   // "Include dark elixir" belongs to the plain fill-until-full; picked resources say it themselves.
   const form = $('options');
-  form.elements.namedItem('dark').disabled = Boolean(form.querySelector('input[name="builder"]:checked, input[name="home"]:checked'));
+
   const options = readOptions();
   for (const element of document.querySelectorAll('[data-for]')) {
     element.hidden = !element.dataset.for.split(' ').includes(options.task);
   }
+  syncVillageControls();
   $('preview').textContent = `$ python bot.py ${previewArgs(options).join(' ')}`;
   const saved = {};
   for (const element of $('options').elements) {
@@ -411,6 +428,7 @@ function refreshOptions() {
     }
   }
   stored.set(STORE_OPTIONS, JSON.stringify(saved));
+  refreshSelects();
 }
 
 function restoreOptions() {
@@ -426,6 +444,7 @@ function restoreOptions() {
 
 function setBusy(busy) {
   for (const button of document.querySelectorAll('#options button, #deploy-load, #deploy-save, .settings button')) button.disabled = busy;
+  refreshSelects();
 }
 
 /** Send a signed command; quiet ones (loading on connect) only speak up when they fail. */
@@ -462,9 +481,11 @@ async function connect(rawKey) {
   await useKey(key);
   const channel = await channelOf(key);
   if (link) link.close();
+  resetScreen();
   clearLines();
   online = false;
   settingsAsked = false;
+  initialDisplayChecked = false;
   try {
     link = LOCAL ? await LocalLink.open(channel) : await RelayLink.open(channel);
   } catch (error) {
@@ -492,6 +513,8 @@ function changeLanguage(language) {
   for (const row of $('log').children) row.textContent = translate(row.sourceMessage);
   renderNotice();
   renderConnectionProblem();
+  if (typeof activeView !== 'undefined') switchView(activeView);
+  refreshSelects();
 }
 
 /** Installable app: the browser offers it once the page qualifies; the button appears only then. */
@@ -518,6 +541,9 @@ function setUpInstall() {
 
 function init() {
   setUpInstall();
+  setupWorkspace();
+  setupRequirements();
+  setupSelects();
   editor = new DeployEditor((screen, deploy, points) => send('set_deploy', { screen, deploy, points }));
   settings = new SettingsPanel(send);
   changeLanguage();
@@ -551,6 +577,7 @@ function init() {
   $('forget').addEventListener('click', () => {
     if (link) link.close();
     link = null;
+    resetScreen();
     hmacKey = null;
     stored.set(STORE_KEY, null);
     $('key').value = '';
@@ -558,6 +585,7 @@ function init() {
     $('connect').hidden = false;
   });
   $('clear').addEventListener('click', clearLines);
+  if (DEMO) { openDemo(); return; }
   const saved = stored.get(STORE_KEY);
   if (saved) {
     $('key').value = saved;
@@ -565,4 +593,207 @@ function init() {
   }
 }
 
+
+
+const DEMO_DEPLOY = {"resolution": [1280, 720], "screens": {"home_scout": {"kind": "spells", "deploy": [125, 346], "points": [[380, 346], [290, 271], [290, 421], [500, 346], [410, 271], [410, 421], [620, 346], [530, 271], [530, 421], [740, 346], [650, 271], [650, 421]], "bar": [0, 598, 1280, 106]}, "home_ring": {"kind": "ring", "deploy": [125, 346], "points": [[141, 299], [243, 232], [356, 156], [470, 82], [810, 82], [924, 156], [1037, 232], [1139, 299], [1139, 391], [1037, 458], [924, 534], [243, 458], [141, 391]], "bar": [0, 598, 1280, 106]}, "home_spell_spread": {"kind": "spell_spread", "deploy": [125, 346], "points": [[640, 330], [490, 321], [521, 301], [555, 278], [589, 256], [691, 256], [725, 278], [759, 301], [795, 321], [795, 348], [759, 368], [725, 391], [640, 399], [521, 368], [490, 348]], "bar": [0, 598, 1280, 106]}, "home_quake": {"kind": "quake", "deploy": [125, 346], "points": [[640, 150], [960, 330], [640, 520], [320, 330]], "bar": [0, 598, 1280, 106]}, "builder_scout": {"kind": "points", "deploy": [150, 370], "points": [[345, 120], [850, 140], [1027, 264], [1000, 500], [380, 513], [238, 340]], "bar": [0, 588, 1280, 120]}, "builder_stage2": {"kind": "points", "deploy": [73, 299], "points": [[396, 92], [830, 51], [926, 134], [921, 457], [263, 359], [254, 205], [982, 308], [413, 489]], "bar": [0, 588, 1280, 120]}}};
+
+let activeView = 'overview';
+
+function switchView(view) {
+  activeView = view;
+  for (const button of document.querySelectorAll('[data-view]')) {
+    const selected = button.dataset.view === view;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll('.page-panel')) panel.hidden = panel.id !== `view-${view}`;
+  $('device-controls').hidden = view !== 'settings';
+  const key = view === 'deploy' ? 'deployment' : view === 'settings' ? 'settings' : 'overview';
+  $('page-title').textContent = t(`${key}_title`);
+  $('page-description').textContent = t(`${key}_description`);
+  screenPoller.sync();
+}
+function updateRunMetrics() {
+  if (!lastState) return;
+  const args = Array.isArray(lastState.args) ? lastState.args : [];
+  const running = lastState.state === 'running';
+  const seconds = running && lastState.since ? Math.max(0, Math.floor(Date.now()/1000-lastState.since)) : 0;
+  $('run-duration').textContent = running ? `${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}` : '—';
+  const task = args.includes('--walls') ? 'task_walls' : args.includes('--until-full') || args.includes('--home') || args.includes('--builder') ? 'task_farm' : args.includes('--live') ? 'task_attack' : 'task_dry';
+  $('current-task').textContent = args.length ? t(task) : '—';
+  $('start').querySelector('[data-i18n]').textContent = t(running ? 'restart_run' : 'start');
+  const villageIndex = args.indexOf('--walls');
+  const target = villageIndex >= 0 ? args[villageIndex + 1] : args.includes('--until-full') ? 'both' : args.includes('--home') && !args.includes('--builder') ? 'home' : args.includes('--builder') && !args.includes('--home') ? 'builder' : args.includes('--mode') ? args[args.indexOf('--mode') + 1] : 'both';
+  $('task-village').textContent = running ? (target === 'home' ? t('home_village') : target === 'builder' ? t('builder_village') : `${t('home_village')} + ${t('builder_village')}`) : t('metric_task_note');
+  const index = args.indexOf('--max-recoveries');
+  const budget = index >= 0 ? args[index+1] : '20';
+  let recovery = 0;
+  for (const row of $('log').children) {
+    const match = row.textContent.match(/(?:recovery|pemulihan) (\d+)\/(\d+)/i);
+    if (match) recovery = Number(match[1]);
+    if (/(?:Attack finished|Serangan selesai|Wall upgraded|Tembok di-upgrade)/i.test(row.textContent)) recovery = 0;
+  }
+  $('recovery-value').textContent = running ? `${recovery} / ${budget}` : '—';
+}
+let screenInViewport = false;
+let screenPageActive = true;
+// Online every frame crosses the Supabase relay, so it refreshes less often than the local dashboard.
+const screenPoller = new VisiblePoller({visible: shouldCaptureScreen, request: refreshScreen, interval: LOCAL ? 1000 : 3000});
+function shouldCaptureScreen() {
+  return !DEMO && online && link !== null && !document.hidden && screenPageActive &&
+    activeView === 'overview' && !$('dashboard').hidden && screenInViewport;
+}
+let screenPending = false;
+let screenGeneration = 0;
+async function refreshScreen() {
+  if (screenPending || !shouldCaptureScreen()) return;
+  if (DEMO) { $('screen-status').textContent = t('screen_source'); return; }
+  screenPending = true;
+  const currentLink = link;
+  const generation = screenGeneration;
+  const nonce = crypto.randomUUID();
+  const body = JSON.stringify({action:'get_screen', args:{}, ts:Date.now()/1000, nonce});
+  try {
+    const result = await currentLink.send(body, await sign(body), nonce);
+    if (currentLink !== link || generation !== screenGeneration) return;
+    if (!result.ok || !result.data?.image?.startsWith('data:image/jpeg;base64,')) throw new Error('capture unavailable');
+    const image = $('device-shot');
+    image.onload = () => { image.hidden = false; $('screen-empty').hidden = true; };
+    image.src = result.data.image;
+    $('screen-status').textContent = t('screen_live');
+    $('screen-updated').textContent = t('screen_updated', {time: new Date(result.data.captured_at * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})});
+  } catch {
+    if (currentLink === link) $('screen-status').textContent = t('screen_unavailable');
+  } finally { screenPending = false; }
+}
+function resetScreen() {
+  screenGeneration++;
+  $('device-shot').hidden = true;
+  $('device-shot').removeAttribute('src');
+  $('screen-empty').hidden = false;
+  $('screen-status').textContent = t('screen_source');
+  $('screen-updated').textContent = t('screen_auto');
+  screenPoller.sync();
+}
+function syncVillageControls() {
+  const form = $('options');
+  const task = form.elements.namedItem('task').value;
+  const targetGroup = form.elements.namedItem('target_village');
+  const target = targetGroup.value || 'home';
+  if (!targetGroup.value) targetGroup.value = target;
+  const payment = form.elements.namedItem('wall_resource');
+  if (!payment.value) payment.value = 'both';
+  for (const image of form.querySelectorAll('[data-wall-currency]')) {
+    const name = image.dataset.wallCurrency;
+    image.src = `icons/resources/${target === 'builder' ? `builder_${name}.webp` : `${name}.png`}`;
+  }
+  for (const image of form.querySelectorAll('.builder-resource-variant')) image.hidden = target !== 'both';
+  form.elements.namedItem('walls').value = target;
+  form.elements.namedItem('village').value = target;
+  for (const village of ['home', 'builder']) {
+    const enabled = task === 'farm' && (target === 'both' || target === village);
+    const group = form.querySelector(`[data-village-resources="${village}"]`);
+    group.hidden = !enabled;
+    const inputs = [...group.querySelectorAll('input')];
+    for (const input of inputs) { input.disabled = !enabled; input.setCustomValidity(''); }
+    if (enabled && !inputs.some(input => input.checked)) inputs[0].setCustomValidity(t('choose_resource'));
+  }
+  for (const label of form.querySelectorAll('.resource-village-label')) label.hidden = target !== 'both';
+  form.querySelector('.first-village').hidden = target !== 'both' || !['farm','walls'].includes(task);
+  const minimum = $('minimum-fields');
+  minimum.hidden = target === 'builder' || task === 'dry';
+  const next = task === 'farm' ? form.querySelector('[data-village-resources="builder"]') : form.querySelector('.first-village');
+  if (minimum.parentElement !== next.parentElement || minimum.nextElementSibling !== next) next.before(minimum);
+}
+function setupRequirements() {
+  const banner = $('requirements-banner');
+  banner.hidden = stored.get(STORE_REQUIREMENTS) === 'yes';
+  $('requirements-acknowledge').addEventListener('click', () => {
+    stored.set(STORE_REQUIREMENTS, 'yes');
+    banner.hidden = true;
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key === STORE_REQUIREMENTS || event.key === null) {
+      banner.hidden = stored.get(STORE_REQUIREMENTS) === 'yes';
+    }
+  });
+}
+function setupWorkspace() {
+  document.documentElement.dataset.theme = 'clash';
+  for (const button of document.querySelectorAll('[data-view]')) {
+    button.addEventListener('click', () => switchView(button.dataset.view));
+    button.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+      event.preventDefault();
+      const buttons = [...document.querySelectorAll('[data-view]')];
+      const index = buttons.indexOf(button);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length-1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length)%buttons.length;
+      switchView(buttons[next].dataset.view); buttons[next].focus();
+    });
+  }
+  for (const button of document.querySelectorAll('[data-open-view]')) button.addEventListener('click', () => switchView(button.dataset.openView));
+  $('screen-refresh').addEventListener('click', refreshScreen);
+  document.addEventListener('visibilitychange', () => screenPoller.sync());
+  window.addEventListener('pagehide', () => { screenPageActive = false; screenPoller.sync(); });
+  window.addEventListener('pageshow', () => { screenPageActive = true; screenPoller.sync(); });
+  const observer = new IntersectionObserver(([entry]) => {
+    screenInViewport = entry.isIntersecting;
+    screenPoller.sync();
+  });
+  observer.observe(document.querySelector('.device-screen'));
+  setInterval(updateRunMetrics, 1000);
+}
+class DemoLink {
+  constructor() {
+    this.state = {state:'running', args:['--walls','home','--first','builder','--max-recoveries','20','--live'], host:'LDPlayer 01', since:Date.now()/1000-1147};
+    this.minimum = {gold:1000000,elixir:1000000,dark:0};
+  }
+  async send(body) {
+    const {action,args} = JSON.parse(body);
+    let code = 'settings_loaded', data;
+    if (action === 'start') {this.state = {...this.state,state:'running',args:previewArgs(args),since:Date.now()/1000};code='started';addLines(['REMOTE: Run started.']);}
+    else if (action === 'stop') {this.state.state='idle';code='stopped';addLines(['REMOTE: Run stopped.']);}
+    else if (action === 'restart') {this.state.state='running';this.state.since=Date.now()/1000;code='restarted';}
+    else if (action === 'get_deploy') {data=structuredClone(DEMO_DEPLOY);code='deploy_loaded';}
+    else if (action === 'set_deploy') {DEMO_DEPLOY.screens[args.screen].deploy=args.deploy;DEMO_DEPLOY.screens[args.screen].points=args.points;code='deploy_saved';}
+    else if (action === 'set_minimum') {this.minimum=args.minimum;code='minimum_saved';}
+    else if (action === 'set_setup') code='setup_saved';
+    else if (action === 'set_language') code='language_saved';
+    else if (action === 'detect_setup') {code='setup_detected';data={folders:['Demo LDPlayer installation'],instances:[{index:0,name:'Demo device',running:true}],resolution:[1280,720],problems:[]};}
+    else if (action === 'open_coc') code='coc_opened';
+    else if (action === 'close_coc') {this.state.state='idle';code='coc_closed';}
+    else if (action === 'kill_ld') {this.state.state='idle';code='ld_off';}
+    else if (action === 'restart_ld') {this.state.state='idle';code='ld_restarted';}
+    else if (action === 'fit_display' || action === 'restore_display') {this.state.state='idle';code=action==='fit_display'?'display_ok':'display_unchanged';data=this.display();}
+    if (SETTINGS_ANSWERS.includes(code)) data={minimum:this.minimum,setup:{adb:'C:\\LDPlayer\\adb.exe',ldconsole:'C:\\LDPlayer\\ldconsole.exe',serial:'emulator-5554',ld_index:0,touch_device:'/dev/input/event4'},language:document.documentElement.lang,display:this.display()};
+    return {ok:true,code,state:this.state,data};
+  }
+  display() {return {current:{width:1280,height:720,dpi:240},target:{width:1280,height:720,dpi:240},saved:false};}
+  close() {}
+}
+async function openDemo() {
+  await useKey('coc_local_preview_not_a_real_device_key');
+  link = new DemoLink(); settingsAsked = true;
+  $('connect').hidden=true; $('dashboard').hidden=false;
+  $('forget').hidden=true;
+  $('options').elements.namedItem('task').value='walls';
+  $('options').elements.namedItem('target_village').value='home';
+  for (const checkbox of $('options').querySelectorAll('input[name=home],input[name=builder]')) checkbox.checked=['gold','elixir'].includes(checkbox.value);
+  refreshOptions();
+  setOnline(true); showState(link.state); $('notice').hidden=true;
+  addLines([
+    'REMOTE: Connected to LDPlayer 01',
+    'INFO: Wall upgraded with gold',
+    'INFO: Wall upgraded with elixir',
+    'INFO: Storage below target. Starting Home Village farming.',
+    "INFO: Loot read: {'gold': 1323687, 'elixir': 1323687}",
+    'INFO: Deploy plan from bar: 8 cards',
+    'INFO: Surrender: damage reached 50%',
+    'INFO: Attack finished: home (20)',
+    'INFO: Searching for the next opponent…'
+  ]);
+  editor.load(structuredClone(DEMO_DEPLOY));
+  handleResult(await link.send(JSON.stringify({action:'get_settings',args:{}})),true);
+}
 init();

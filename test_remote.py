@@ -9,6 +9,8 @@ import threading
 import time
 from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock
+import base64
 
 import messages
 import remote
@@ -65,6 +67,38 @@ class SupervisorTests(unittest.TestCase):
 
     def lines(self):
         return [data for kind, data in self.seen if kind == 'line']
+
+    def test_live_screen_is_signed_read_only_and_preserves_the_frame(self):
+        import cv2
+        import numpy as np
+        frame = np.full((720, 1280, 3), (30, 80, 180), dtype=np.uint8)
+        adb = Mock()
+        adb.capture.return_value = frame
+        self.device.adb = Mock(return_value=adb)
+        self.supervisor.stop = Mock()
+        invalid = self.supervisor.command(*signed('get_screen', key='wrong-key'))
+        self.assertEqual(invalid['code'], 'unsigned')
+        self.device.adb.assert_not_called()
+        before = time.time()
+        result = self.supervisor.command(*signed('get_screen'))
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['code'], 'screen_loaded')
+        self.assertGreaterEqual(result['data']['captured_at'], before)
+        raw = base64.b64decode(result['data']['image'].split(',', 1)[1])
+        decoded = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        self.assertEqual(decoded.shape, (360, 640, 3))
+        self.assertTrue(np.allclose(decoded[0, 0], frame[0, 0], atol=3))
+        self.supervisor.stop.assert_not_called()
+        self.assertEqual(self.lines(), [])
+
+    def test_unavailable_screen_does_not_stop_worker_or_flood_log(self):
+        self.device.adb = Mock(side_effect=RuntimeError('ADB unavailable'))
+        self.supervisor.stop = Mock()
+        result = self.supervisor.command(*signed('get_screen'))
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['code'], 'failed')
+        self.supervisor.stop.assert_not_called()
+        self.assertEqual(self.lines(), [])
 
     def test_the_bot_runs_as_a_child_and_its_log_reaches_the_dashboard(self):
         self.supervisor.start(['--walls', 'home', '--live'])

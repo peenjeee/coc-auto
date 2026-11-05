@@ -59,7 +59,8 @@ test('the same retained history renders in either selected language', () => {
 
 test('dashboard keys, HTML references and interpolation parameters match', async () => {
   const source = await fs.readFile(new URL('web/i18n.js', root), 'utf8');
-  const text = Function(source.slice(0, source.indexOf('const STORE_LANG')) + '\nreturn TEXT;')();
+  // The whole module, so texts added with Object.assign further down are checked too.
+  const text = Function(source.replaceAll('export function', 'function') + '\nreturn TEXT;')();
   assert.deepEqual(Object.keys(text.id).sort(), Object.keys(text.en).sort());
   for (const key of Object.keys(text.id)) {
     assert.deepEqual((text.id[key].match(/\{\w+\}/g) || []).sort(),

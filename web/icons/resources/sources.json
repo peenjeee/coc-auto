@@ -1,0 +1,12 @@
+{
+  "artwork": "Clash of Clans game art by Supercell",
+  "source_repository": "https://github.com/ClashKingInc/ClashKingAssets",
+  "assets": {
+    "gold": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/main/assets/bot/icons/gold.png",
+    "elixir": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/main/assets/bot/icons/elixir.png",
+    "dark_elixir": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/main/assets/bot/icons/dark_elixir.png",
+    "builder_gold": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/main/assets/resources/builder_gold.webp",
+    "builder_elixir": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/main/assets/resources/builder_elixir.webp"
+  },
+  "elixir_cart.png": "https://clashofclans.wiki.gg/es/images/Elixir_Cart_info.png?ae7e2e"
+}
