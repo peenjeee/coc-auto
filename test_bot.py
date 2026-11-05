@@ -3096,7 +3096,10 @@ class BotTests(unittest.TestCase):
         device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
 
         class Emulator:
-            events, private = [], 0
+            events, private, refits = [], 0, []
+            def refit(self, display):
+                Emulator.refits.append((display, tuple(Emulator.events)))
+                return False
             def running(self):
                 return device.up
             def vm_running(self):
@@ -3136,6 +3139,30 @@ class BotTests(unittest.TestCase):
             type(emulator).private = bot.VM_MEMORY_LIMIT_MB
             self.assertTrue(runner.refresh_if_low_memory())
         self.assertEqual(emulator.events, ['quit', 'launch'])
+
+    def test_ldplayer_back_on_its_defaults_gets_the_calibrated_screen_and_adb_before_it_starts(self):
+        folder = self.root / 'LDPlayer9'
+        path = folder / 'vms' / 'config' / 'leidian0.config'
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({'advancedSettings.resolution': {'width': 1600, 'height': 900},
+                                    'advancedSettings.resolutionDpi': 240, 'basicSettings.adbDebug': 0,
+                                    'advancedSettings.fps': 120}), encoding='utf-8')
+        calibrated = {'width': 1280, 'height': 720, 'dpi': 240}
+        emulator = bot.Emulator(str(folder / 'ldconsole.exe'), 0)
+        self.assertTrue(emulator.refit(calibrated))
+        self.assertEqual(bot.ldplayer.read_display(path), calibrated)
+        self.assertEqual(bot.ldplayer.adb_debug(path), 1)
+        self.assertEqual(json.loads(path.read_text(encoding='utf-8'))['advancedSettings.fps'], 120)
+        self.assertFalse(emulator.refit(calibrated))
+        self.assertFalse(bot.Emulator(str(folder / 'ldconsole.exe'), 3).refit(calibrated))
+        # Recovery puts it back while LDPlayer is still off.
+        device, fake = self.restartable()
+        device.up = device.front = False
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=fake)
+        runner.recover()
+        width, height = self.config['resolution']
+        self.assertEqual(fake.refits, [({'width': width, 'height': height, 'dpi': 240}, ())])
+        self.assertEqual(fake.events, ['launch'])
 
     def test_the_vm_counts_as_running_while_its_process_lives_after_list2_says_stopped(self):
         stopped = '0,LDPlayer,50466224,246418094,2,26040,-1,1280,720,240\n'
@@ -3506,6 +3533,8 @@ class BotTests(unittest.TestCase):
                 # The window is gone but the virtual machine still holds its disks for two more looks.
                 Emulator.vm_polls.append(Emulator.starts)
                 return len(Emulator.vm_polls) <= 2
+            def refit(self, display):
+                return False
             def launch(self):
                 Emulator.starts += 1
                 device.up = True

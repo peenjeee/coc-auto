@@ -885,6 +885,19 @@ class Emulator:
             except (OSError, subprocess.SubprocessError):
                 pass
 
+    def refit(self, display: dict) -> bool:
+        """An LDPlayer that crashed as it closed can start again on its defaults (another screen, ADB debugging off):
+        the bot could neither reach it nor read its screen. Put back while it is off, since it reads its config when
+        it starts. True when it had to be put back."""
+        path = ldplayer.instance_config(self.console, self.index)
+        try:
+            if not path.is_file() or (ldplayer.read_display(path) == display and ldplayer.adb_debug(path) != 0):
+                return False
+            ldplayer.write_display(path, display, adb_debug=1)
+        except (OSError, ValueError):
+            return False  # Another LDPlayer layout: recovery reports a missing ADB its own way.
+        return True
+
     def launch(self) -> None:
         self.run('launch')
 
@@ -3338,6 +3351,10 @@ class Bot:
                         raise SetupError('VM LDPlayer lama macet dan tidak bisa dimatikan; restart PC lalu jalankan '
                                          'bot lagi')
                 time.sleep(EMULATOR_SETTLE_SECONDS if self.poll else 0)
+                width, height = self.config['resolution']
+                if self.emulator.refit({'width': width, 'height': height,
+                                        'dpi': self.config.get('dpi', ldplayer.CALIBRATED_DPI)}):
+                    LOG.warning('Setelan LDPlayer kembali ke bawaan; layar kalibrasi dan Debug ADB dipasang lagi')
                 self.emulator.launch()
                 self.emulator_started = time.monotonic()
                 deadline = time.monotonic() + RECOVER_ADB_SECONDS
