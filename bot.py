@@ -2370,7 +2370,8 @@ class Bot:
                     return state
                 stable = image if changed else None
             time.sleep(self.poll)
-        # A stall with the game still open (slow matchmaking, a lost Next tap): recovery settles it.
+        # A lost Next tap or a base that keeps moving: home_attack attacks the base on screen; slow matchmaking is a
+        # stall that recovery settles.
         raise WaitTimeout('Lawan belum berubah/stabil; hentikan pencarian')
 
     def scout_loot(self, image: np.ndarray) -> tuple:
@@ -2384,7 +2385,7 @@ class Bot:
         # After the game restarts the search button shows a short cooldown; keep tapping until it is available.
         self.tap_until('home_menu', 'find', {'home_army'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
         self.tap_until('home_army', 'attack', {'home_scout'}, 60, attack=True)
-        broke = False
+        broke = stuck = False
         for attempt in itertools.count(1):
             state, image = self.observe()
             if state != 'home_scout':
@@ -2403,7 +2404,7 @@ class Bot:
                 LOG.warning('Batas %s pencarian tercapai; serang lawan yang sedang tampil', searches)
             # Without gold for another search, or at the search limit, the base on screen is attacked instead of
             # stopping; its loot refills the gold.
-            if passes or broke or attempt == searches:
+            if passes or broke or stuck or attempt == searches:
                 self.damage_last = None
                 try:
                     self.deploy('home_scout', {'home_scout', 'home_battle'}, image)
@@ -2421,6 +2422,13 @@ class Bot:
             except OutOfGold as exc:
                 LOG.warning('%s; serang lawan yang sedang tampil', exc)
                 broke = True
+            except WaitTimeout as exc:
+                # Left alone, the scout timer would start a battle with no troops; still on the search clouds,
+                # recovery takes it.
+                if self.current_screen() != 'home_scout':
+                    raise
+                LOG.warning('%s; serang lawan yang sedang tampil', exc)
+                stuck = True
 
     def game_ready(self) -> bool:
         """LDPlayer answers over ADB and CoC is in front; a device without these checks counts as ready."""

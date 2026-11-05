@@ -2808,6 +2808,22 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs.count((140, 60)), 1)
         self.assertIn((40, 40), device.inputs)
 
+    def test_an_opponent_that_never_changes_after_next_is_attacked_instead_of_left_to_the_scout_timer(self):
+        device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 3)
+        runner = self.make_bot(device, True)
+
+        def stuck(image):
+            raise bot.WaitTimeout('Lawan belum berubah/stabil; hentikan pencarian')
+        runner.wait_new_scout = stuck
+        runner.home_attack(0)
+        self.assertEqual(device.inputs.count((140, 60)), 1)
+        self.assertIn((40, 40), device.inputs)
+        self.assertEqual(runner.broke_attacks, 0)  # not an out-of-gold attack
+        # Still on the search clouds: nothing to attack, so recovery takes it.
+        runner.current_screen = lambda: None
+        with self.assertRaises(bot.WaitTimeout):
+            runner.home_attack(0)
+
     def test_running_out_of_gold_while_searching_again_and_again_stops_with_the_reason(self):
         device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 20)
         runner = self.make_bot(device, True)
