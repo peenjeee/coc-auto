@@ -3337,7 +3337,7 @@ class Bot:
         except DeviceError:
             return None  # uiautomator gives up while the screen keeps moving, e.g. the download progress.
 
-    def recover(self) -> None:
+    def recover(self, launch_attempts: int = LAUNCH_ATTEMPTS) -> None:
         """Wait for ADB, start the game if it is not in front, and wait for a village screen."""
         deadline = time.monotonic() + RECOVER_ADB_SECONDS
         while not (self.device.connected() and self.device.booted()):
@@ -3373,7 +3373,7 @@ class Bot:
                     self.emulator.quit()
                 raise DeviceError('ADB tidak kembali; pemulihan dihentikan')
             time.sleep(RECOVER_POLL_SECONDS if self.poll else 0)
-        for attempt in range(LAUNCH_ATTEMPTS):
+        for attempt in range(launch_attempts):
             if not self.device.game_in_front():
                 LOG.warning('CoC tidak terbuka; membuka game (percobaan %s)', attempt + 1)
                 self.device.launch(GAME_ACTIVITY)
@@ -3389,15 +3389,28 @@ class Bot:
                     self.emulator.quit()
                 raise
             except BotError:
-                if self.device.game_in_front() and attempt + 1 == LAUNCH_ATTEMPTS:
+                if self.device.game_in_front() and attempt + 1 == launch_attempts:
                     raise
         raise DeviceError('CoC tidak bisa dibuka; pemulihan dihentikan')
+
+    def restart_after_stall(self, emulator: bool = False) -> None:
+        """Escalate a failed settle without tapping an unknown screen or hiding retries inside recover()."""
+        if not self.live:
+            raise WaitTimeout('Layar tetap macet; restart dinonaktifkan dalam dry-run')
+        if emulator and self.emulator:
+            self.emulator.quit()
+        else:
+            self.device.stop_game()
+        # One launch/settle attempt belongs to one controller recovery. If it times out, the controller
+        # decides the next escalation and charges it to the existing no-progress budget.
+        self.recover(launch_attempts=1)
 
     def run_until_full_resilient(self, searches: int, max_recoveries: int = MAX_RECOVERIES,
                                  job: Callable | None = None) -> int:
         """Run job (until-full by default), reopening the game after a crash, closed app or ADB drop."""
         integer(max_recoveries, 0, 1000, 'max_recoveries')
         recoveries, progress = 0, self.progress
+        stall_failures = 0
         # A run killed in the middle of a hold leaves its fingers down, and the next run's first taps would vanish.
         if self.live:
             self.release_touch()
@@ -3406,9 +3419,10 @@ class Bot:
         pending = self.settle if self.game_ready() else self.recover
         while True:
             try:
-                if pending:
-                    step, pending = pending, None
+                step, pending = pending, None
+                if step:
                     step()
+                step = None  # A later failure is in the job, not in the recovery step.
                 self.check_touch()
                 return (job or self.run_until_full)(searches)
             except (MemoryError, cv2.error) as exc:
@@ -3422,6 +3436,8 @@ class Bot:
                 self.release_touch()
                 pending = self.settle_after_memory
             except BotError as exc:
+                if self.progress != progress:
+                    stall_failures = 0
                 recoveries, progress = self.recoveries_since(recoveries, progress)
                 lost = isinstance(exc, DeviceError)
                 if not lost:
@@ -3445,10 +3461,23 @@ class Bot:
                     pending = self.settle_after_memory
                     continue
                 if stalled:
-                    LOG.warning('Layar macet (%s); rapikan layar lalu lanjut, pemulihan %s/%s',
-                                exc, recoveries, max_recoveries)
-                    pending = self.settle
+                    # A fresh job timeout still gets the gentle cleanup. Only a cleanup/restart that
+                    # itself fails escalates, so separate recoverable stalls do not restart a healthy game.
+                    stall_failures = stall_failures + 1 if step is not None else 0
+                    if stall_failures == 0:
+                        LOG.warning('Layar macet (%s); rapikan layar lalu lanjut, pemulihan %s/%s',
+                                    exc, recoveries, max_recoveries)
+                        pending = self.settle
+                    elif stall_failures == 1 or self.emulator is None:
+                        LOG.warning('Pemulihan layar masih macet (%s); restart CoC, pemulihan %s/%s',
+                                    exc, recoveries, max_recoveries)
+                        pending = self.restart_after_stall
+                    else:
+                        LOG.warning('Restart CoC belum memulihkan layar (%s); restart LDPlayer, pemulihan %s/%s',
+                                    exc, recoveries, max_recoveries)
+                        pending = lambda: self.restart_after_stall(emulator=True)
                     continue
+                stall_failures = 0
                 LOG.warning('Game tertutup/terputus (%s); pemulihan %s/%s', exc, recoveries, max_recoveries)
                 # Android starved of memory inside LDPlayer kills the game again and again; reopening it does not
                 # help, a fresh LDPlayer does.

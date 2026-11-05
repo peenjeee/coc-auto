@@ -407,5 +407,8 @@
  "Screenshot could not be encoded": "Screenshot could not be encoded",
  "VM LDPlayer lama macet dan tidak bisa dimatikan; restart PC lalu jalankan bot lagi": "The old LDPlayer VM is stuck and cannot be ended; restart the PC, then run the bot again",
  "Memori VM LDPlayer %s MB dan terus membengkak; restart LDPlayer untuk membebaskan memori": "LDPlayer VM memory at %s MB and still growing; restarting LDPlayer to free memory",
- "Setelan LDPlayer kembali ke bawaan; layar kalibrasi dan Debug ADB dipasang lagi": "LDPlayer settings went back to their defaults; the calibrated screen and ADB debugging are set again"
+ "Setelan LDPlayer kembali ke bawaan; layar kalibrasi dan Debug ADB dipasang lagi": "LDPlayer settings went back to their defaults; the calibrated screen and ADB debugging are set again",
+ "Layar tetap macet; restart dinonaktifkan dalam dry-run": "Screen remains stuck; restarting is disabled in dry-run",
+ "Pemulihan layar masih macet (%s); restart CoC, pemulihan %s/%s": "Screen recovery is still stuck (%s); restarting CoC, recovery %s/%s",
+ "Restart CoC belum memulihkan layar (%s); restart LDPlayer, pemulihan %s/%s": "CoC restart did not recover the screen (%s); restarting LDPlayer, recovery %s/%s"
 }
