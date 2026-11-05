@@ -1844,11 +1844,13 @@ class Bot:
         once it has loaded, so the taps go on until the battle has ended. Its timer ends it at the latest."""
         builder = {*SURRENDER_STATES['builder'], 'builder_stage2'}
         stages = builder if state in builder else set()
+        # The Home Village battle shows for a moment while the dialog fades out, before the result comes up.
+        fading = frozenset({state} - builder)
         timeout = TAP_RETRY_SECONDS * TAP_RETRIES
         while True:
             state = self.tap_until(state, 'surrender', {'surrender_confirm'} | targets | stages - {state}, timeout)
             if state == 'surrender_confirm':
-                state = self.tap_until('surrender_confirm', 'confirm', targets | stages, timeout)
+                state = self.tap_until('surrender_confirm', 'confirm', targets | stages, timeout, passing=fading)
             if state in targets:
                 return state
             LOG.info('Tahap 1 selesai saat menyerah; tahap 2 juga diserahkan')
@@ -1902,9 +1904,10 @@ class Bot:
             return None
 
     def tap_until(self, state: str, name: str, targets: set, timeout: float, retries: int = TAP_RETRIES,
-                  attack: bool = False) -> str:
+                  attack: bool = False, passing: frozenset = frozenset()) -> str:
         """Tap a menu button and wait; repeat the tap while the same menu is still shown (a lost tap). An attack
-        button the game refuses (maintenance) ends the run instead of being tapped again and again."""
+        button the game refuses (maintenance) ends the run instead of being tapped again and again. passing: screens
+        that may show on the way, like the battle behind a dialog that fades out."""
         deadline = time.monotonic() + timeout
         taps = 0
 
@@ -1920,7 +1923,7 @@ class Bot:
                 taps += 1
             left = deadline - time.monotonic()
             try:
-                return self.wait(targets, {state}, min(TAP_RETRY_SECONDS, max(left, 0)), give_up=refused)
+                return self.wait(targets, {state, *passing}, min(TAP_RETRY_SECONDS, max(left, 0)), give_up=refused)
             except UnexpectedScreen:
                 raise
             except WaitTimeout:

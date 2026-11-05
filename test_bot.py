@@ -1088,6 +1088,26 @@ class BotTests(unittest.TestCase):
         device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', moves[tuple(point)]))
         return config, device
 
+    def test_the_battle_showing_while_the_end_battle_dialog_fades_is_no_stall(self):
+        config, device = self.surrender_device()
+        runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0)
+        real_capture, confirmed = device.capture, []
+
+        def tap(point):
+            device.inputs.append(tuple(point))
+            device.state = {(20, 70): 'surrender_confirm', (100, 60): 'home_battle'}[tuple(point)]
+            confirmed.extend([tuple(point)] if tuple(point) == (100, 60) else [])
+
+        def capture():
+            # One frame of the battle behind the fading dialog, then the result.
+            image = real_capture()
+            if confirmed and device.state == 'home_battle':
+                device.state = 'home_result'
+            return image
+        device.tap, device.capture = tap, capture
+        self.assertEqual(runner.surrender_battle('home_battle', {'home_result', 'home'}), 'home_result')
+        self.assertEqual(device.inputs, [(20, 70), (100, 60)])
+
     def test_surrender_at_a_damage_percent_needs_two_readings_over_it(self):
         config, device = self.surrender_device()
         runner = bot.Bot(config, self.root, device, live=True, timeout=1, poll=0, surrender_at=50)

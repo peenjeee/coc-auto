@@ -677,7 +677,7 @@ again.
 python -m unittest -v
 ```
 
-The suites (366 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The suites (367 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, walls (the cheapest row in either language, the sale
