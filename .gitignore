@@ -18,3 +18,5 @@ config.json.tmp
 config.local.json
 config.local.json.bak
 config.local.json.tmp
+
+!web/icons/resources/*.png

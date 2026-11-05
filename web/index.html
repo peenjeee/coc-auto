@@ -1,124 +1,87 @@
 <!doctype html>
-<html lang="id">
+<html lang="en" data-theme="clash">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>coc bot farm and wall auto</title>
-  <meta name="description" content="Live log and control for the coc-auto Clash of Clans farming and wall bot.">
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <meta name="theme-color" content="#3a9ee8">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="coc bot">
-  <link rel="stylesheet" href="style.css">
-  <script type="module" src="app.js"></script>
-</head>
-<body>
-  <header class="site">
-    <a class="brand" href="./">
-      <img src="favicon.svg" alt="" width="44" height="44">
-      <h1><b>coc bot</b> <span>farm and wall auto</span></h1>
-    </a>
-    <span class="site-actions">
-      <button id="install" class="gold" type="button" hidden data-i18n="install"></button>
-      <a class="button" href="https://github.com/peenjeee/coc-auto" target="_blank" rel="noopener noreferrer">
-        <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        <span data-i18n="repo"></span>
-      </a>
-    </span>
-  </header>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoC Auto · Village workspace</title>
+<meta name="description" content="Your Clash of Clans automation workspace. Manage farming, wall upgrades, deployment, and your device.">
+<meta name="theme-color" content="#45a8ee">
+<link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css?v=requirements"><script type="module" src="app.js?v=viewer-timer-fix"></script>
+</head><body>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="site-header"><div class="header-inner">
+<a class="brand" href="./" aria-label="CoC Auto home"><span class="brand-mark"><img src="favicon.svg" alt="" width="48" height="48"></span><span>coc<span class="brand-light">auto</span></span></a>
+<span class="header-slash">/</span><span class="workspace-badge">Personal</span>
+<div class="header-actions"><span id="mode" class="mode"></span><button id="install" type="button" hidden data-i18n="install"></button><a class="icon-button help-link" href="https://github.com/peenjeee/coc-auto#readme" target="_blank" rel="noopener noreferrer" aria-label="Documentation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 8a2.5 2.5 0 1 1 4 2c-1.5 1-1.5 1.5-1.5 3m0 3h.01"/></svg></a><div class="lang" role="group" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="id">ID</button></div><span class="avatar" aria-label="Personal workspace">C</span></div>
+</div></header>
+<nav class="workspace-nav" aria-label="Workspace"><div class="nav-inner" role="tablist" aria-label="Dashboard sections">
+<button id="tab-overview" role="tab" aria-selected="true" aria-controls="view-overview" data-view="overview" class="nav-tab active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span data-i18n="nav_overview"></span></button>
+<button id="tab-deploy" role="tab" aria-selected="false" aria-controls="view-deploy" data-view="deploy" class="nav-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg><span data-i18n="nav_deploy"></span></button>
+<button id="tab-settings" role="tab" aria-selected="false" aria-controls="view-settings" data-view="settings" class="nav-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg><span data-i18n="nav_settings"></span></button>
+<a class="source-link" href="https://github.com/peenjeee/coc-auto" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+</div></nav>
+<main id="main-content" class="main-shell">
+<section id="connect" class="connect-layout"><div class="connect-intro"><span class="eyebrow" data-i18n="connect_eyebrow"></span><h1 data-i18n="connect_title"></h1><p data-i18n="connect_description"></p><div class="connection-visual" aria-hidden="true"><span class="visual-node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 7 5 5-5 5m8 0h6"/></svg></span><span class="visual-line"></span><span class="visual-node center-node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></svg></span><span class="visual-line"></span><span class="visual-node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h16v10H4zM2 10l10-7 10 7M9 20v-6h6v6"/></svg></span></div><span class="visual-caption" data-i18n="connect_caption"></span></div>
+<div class="panel connect-card"><div class="connect-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></svg></div><h2 data-i18n="key_prompt"></h2><p class="hint" data-i18n="key_description"></p><form id="key-form"><label for="key" data-i18n="device_key"></label><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="coc_••••••••••••••••" required><button type="submit" class="primary connect-button"><span data-i18n="connect"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button></form><p id="connect-error" class="error" role="alert" hidden></p><div class="connect-divider"><span data-i18n="or"></span></div><a class="demo-button" href="?preview=1"><span data-i18n="explore_demo"></span><span aria-hidden="true">↗</span></a></div></section>
+<section id="dashboard" hidden>
+<section id="requirements-banner" class="requirements-banner" aria-labelledby="requirements-title" hidden>
+<div><h2 id="requirements-title" data-i18n="requirements_title"></h2>
+<ul><li><strong data-i18n="requirements_game_label"></strong> <span data-i18n="requirements_game"></span></li><li><strong>LDPlayer:</strong> <span data-i18n="requirements_ldplayer"></span></li></ul></div>
+<button id="requirements-acknowledge" type="button" class="secondary" data-i18n="requirements_acknowledge"></button>
+</section>
 
-  <main class="board">
-    <header class="titlebar">
-      <span class="plaque">coc-auto</span>
-      <span id="mode" class="mode"></span>
-      <span class="lang segmented" role="group" aria-label="language">
-        <button type="button" data-lang="id">ID</button><button type="button" data-lang="en">EN</button>
-      </span>
-    </header>
+<div class="page-heading"><div><div class="heading-eyebrow"><span id="online" class="badge offline"></span><span class="heading-dot">/</span><span id="host">—</span></div><h1 id="page-title" data-i18n="overview_title"></h1><p id="page-description" hidden data-i18n="overview_description"></p></div><button id="forget" class="secondary" type="button" data-i18n="change_key"></button></div>
+<p id="notice" class="notice" role="status" hidden></p>
+<section id="view-overview" class="page-panel" role="tabpanel" aria-labelledby="tab-overview">
+<div class="metrics"><div class="metric"><span data-i18n="metric_status"></span><strong id="bot-state">—</strong></div><div class="metric"><span data-i18n="metric_runtime"></span><strong id="run-duration" class="mono">—</strong></div><div class="metric"><span data-i18n="metric_task"></span><strong id="current-task">—</strong><small id="task-village" data-i18n="metric_task_note"></small></div><div class="metric"><span data-i18n="metric_recovery"></span><strong id="recovery-value" class="mono">—</strong></div></div>
+<div class="overview-grid"><form id="options" class="panel options"><div class="panel-heading"><div><h2 data-i18n="options_prompt"></h2></div><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg></span></div>
+<fieldset class="section task-section"><div class="tasks"><label class="task-option"><input type="radio" name="task" value="walls" checked><span class="task-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v13H3zM3 12h18M8 6v6m8-6v6m-4 0v7"/></svg></span><span class="task-label"><span data-i18n="task_walls"></span></span><span class="radio-mark"></span></label><label class="task-option"><input type="radio" name="task" value="farm" ><span class="task-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h16v10H4zM2 10l10-7 10 7M9 20v-6h6v6"/></svg></span><span class="task-label"><span data-i18n="task_farm"></span></span><span class="radio-mark"></span></label><label class="task-option"><input type="radio" name="task" value="attack" ><span class="task-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 3 15 15-2 2L3 5V3h2Zm9 14 5-5M4 20l4-4M16 6l3-3h2v2l-3 3"/></svg></span><span class="task-label"><span data-i18n="task_attack"></span></span><span class="radio-mark"></span></label><label class="task-option"><input type="radio" name="task" value="dry" ><span class="task-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 7 5 5-5 5m8 0h6"/></svg></span><span class="task-label"><span data-i18n="task_dry"></span></span><span class="radio-mark"></span></label></div></fieldset><fieldset class="section target-section">
+<legend data-i18n="choose_village"></legend>
+<div class="village-picker" role="group" aria-label="Village">
+<label><input type="radio" name="target_village" value="home" checked><span class="village-symbol home-symbol" aria-hidden="true">⌂</span><span data-i18n="home_village"></span></label>
+<label><input type="radio" name="target_village" value="builder"><span class="village-symbol builder-symbol" aria-hidden="true">⚒</span><span data-i18n="builder_village"></span></label>
+<label><input type="radio" name="target_village" value="both"><span class="village-symbol" aria-hidden="true">⇄</span><span data-i18n="both_villages"></span></label>
+</div>
+<select name="walls" hidden aria-hidden="true" tabindex="-1"><option value="home">home</option><option value="builder">builder</option><option value="both">both</option></select>
+<select name="village" hidden aria-hidden="true" tabindex="-1"><option value="home">home</option><option value="builder">builder</option><option value="both">both</option></select>
+<div data-for="walls" class="resource-field">
+<span class="field-caption" data-i18n="spend_resources"></span>
+<div class="resource-picker" role="group" aria-label="Wall payment">
+<label><input type="radio" name="wall_resource" value="both" checked><span class="resource-pair" aria-hidden="true"><img src="icons/resources/gold.png" data-wall-currency="gold" alt="" width="20" height="20"><img class="builder-resource-variant" src="icons/resources/builder_gold.webp" alt="" width="20" height="20" hidden><img src="icons/resources/elixir.png" data-wall-currency="elixir" alt="" width="20" height="20"><img class="builder-resource-variant" src="icons/resources/builder_elixir.webp" alt="" width="20" height="20" hidden></span><span data-i18n="both_resources"></span></label>
+<label><input type="radio" name="wall_resource" value="gold"><img class="resource-icon" src="icons/resources/gold.png" data-wall-currency="gold" alt="" width="22" height="22"><img class="builder-resource-variant" src="icons/resources/builder_gold.webp" alt="" width="20" height="20" hidden><span data-i18n="resource_gold"></span></label>
+<label><input type="radio" name="wall_resource" value="elixir"><img class="resource-icon" src="icons/resources/elixir.png" data-wall-currency="elixir" alt="" width="22" height="22"><img class="builder-resource-variant" src="icons/resources/builder_elixir.webp" alt="" width="20" height="20" hidden><span data-i18n="resource_elixir"></span></label>
+</div></div>
+<div data-for="farm" class="farm-resources">
+<div data-village-resources="home" class="resource-field">
+<span class="field-caption"><span data-i18n="fill_resources"></span><span class="resource-village-label" data-i18n="home_village"></span></span>
+<div class="resource-picker checkable" role="group" aria-label="Home Village resources">
+<label><input type="checkbox" name="home" value="gold" checked><img class="resource-icon" src="icons/resources/gold.png" alt="" width="22" height="22"><span data-i18n="resource_gold"></span></label>
+<label><input type="checkbox" name="home" value="elixir" checked><img class="resource-icon" src="icons/resources/elixir.png" alt="" width="22" height="22"><span data-i18n="resource_elixir"></span></label>
+<label><input type="checkbox" name="home" value="dark"><img class="resource-icon" src="icons/resources/dark_elixir.png" alt="" width="22" height="22"><span data-i18n="resource_dark"></span></label>
+</div></div>
+<div data-village-resources="builder" class="resource-field">
+<span class="field-caption"><span data-i18n="fill_resources"></span><span class="resource-village-label" data-i18n="builder_village"></span></span>
+<div class="resource-picker checkable" role="group" aria-label="Builder Base resources">
+<label><input type="checkbox" name="builder" value="gold" checked><img class="resource-icon" src="icons/resources/builder_gold.webp" alt="" width="22" height="22"><span data-i18n="resource_gold"></span></label>
+<label><input type="checkbox" name="builder" value="elixir" checked><img class="resource-icon" src="icons/resources/builder_elixir.webp" alt="" width="22" height="22"><span data-i18n="resource_elixir"></span></label>
+<label><input type="checkbox" name="builder" value="cart"><img class="resource-icon cart-icon" src="icons/resources/elixir_cart.png" alt="" width="26" height="26"><span data-i18n="resource_cart"></span></label>
+</div></div>
+</div>
+<fieldset id="minimum-fields" class="minimum-loot">
+<legend data-i18n="minimum_title"></legend>
+<div class="loot-inputs"><label><span><img src="icons/resources/gold.png" alt="" width="20" height="20"><span data-i18n="resource_gold"></span></span><input form="minimum-form" name="gold" aria-label="Minimum gold loot" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" pattern="[0-9]{1,3}(,[0-9]{3})*" value="0" required></label><label><span><img src="icons/resources/elixir.png" alt="" width="20" height="20"><span data-i18n="resource_elixir"></span></span><input form="minimum-form" name="elixir" aria-label="Minimum elixir loot" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" pattern="[0-9]{1,3}(,[0-9]{3})*" value="0" required></label><label><span><img src="icons/resources/dark_elixir.png" alt="" width="20" height="20"><span data-i18n="resource_dark"></span></span><input form="minimum-form" name="dark" aria-label="Minimum dark loot" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" pattern="[0-9]{1,3}(,[0-9]{3})*" value="0" required></label></div><div class="loot-save"><span class="hint" data-i18n="minimum_next_run"></span><button form="minimum-form" type="submit" class="secondary" data-i18n="minimum_save"></button></div></fieldset><label class="field-row first-village" data-for="walls farm"><span data-i18n="first"></span><select name="first"><option value="home" data-i18n="home_village"></option><option value="builder" data-i18n="builder_village"></option></select></label>
+</fieldset><details class="advanced"><summary><span data-i18n="section_limits"></span><span class="details-plus">+</span></summary><fieldset class="section" data-for="walls farm attack">
 
-    <section id="connect" class="card connect">
-      <h2 class="card-title" data-i18n="key_prompt"></h2>
-      <form id="key-form" class="row">
-        <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="coc_..." required>
-        <button type="submit" class="primary" data-i18n="connect"></button>
-      </form>
-      <p id="connect-error" class="error" hidden></p>
-    </section>
-
-    <section id="dashboard" class="dashboard" hidden>
-      <div class="status card">
-        <span id="online" class="badge offline"></span>
-        <span class="chip"><span data-i18n="host"></span> <b id="host">-</b></span>
-        <span class="chip"><span data-i18n="bot"></span> <b id="bot-state">-</b></span>
-        <span class="chip grow"><span data-i18n="command"></span> <code id="bot-args">-</code></span>
-        <button id="forget" class="ghost" type="button" data-i18n="change_key"></button>
-      </div>
-      <p id="notice" class="notice" hidden></p>
-
-      <div class="columns">
-        <form id="options" class="card options">
-          <h2 class="card-title" data-i18n="options_prompt"></h2>
-
-          <fieldset class="section">
-            <legend data-i18n="section_task"></legend>
-            <div class="tasks segmented">
-              <label><input type="radio" name="task" value="walls" checked> <span data-i18n="task_walls"></span></label>
-              <label><input type="radio" name="task" value="farm"> <span data-i18n="task_farm"></span></label>
-              <label><input type="radio" name="task" value="attack"> <span data-i18n="task_attack"></span></label>
-              <label><input type="radio" name="task" value="dry"> <span data-i18n="task_dry"></span></label>
-            </div>
-          </fieldset>
-
-          <fieldset class="section">
-            <legend data-i18n="section_target"></legend>
-            <label class="field-row" data-for="walls"><span data-i18n="walls_village"></span>
-              <select name="walls"><option value="both">both</option><option value="home">home</option><option value="builder">builder</option></select>
-            </label>
-            <div data-for="walls" class="checks">
-              <label><input type="checkbox" name="bulk_walls" value="yes"> <span data-i18n="bulk_walls"></span></label>
-            </div>
-            <label class="field-row" data-for="walls"><span data-i18n="wall_resource"></span>
-              <select name="wall_resource"><option value="both">both</option><option value="gold">gold</option><option value="elixir">elixir</option></select>
-            </label>
-            <div data-for="farm" class="checks">
-              <span data-i18n="builder_res"></span>
-              <label><input type="checkbox" name="builder" value="gold"> gold</label>
-              <label><input type="checkbox" name="builder" value="elixir"> elixir</label>
-              <label><input type="checkbox" name="builder" value="cart"> cart</label>
-            </div>
-            <div data-for="farm" class="checks">
-              <span data-i18n="home_res"></span>
-              <label><input type="checkbox" name="home" value="gold"> gold</label>
-              <label><input type="checkbox" name="home" value="elixir"> elixir</label>
-              <label><input type="checkbox" name="home" value="dark"> dark</label>
-            </div>
-            <p data-for="farm" class="hint" data-i18n="farm_hint"></p>
-            <div data-for="farm" class="checks">
-              <label><input type="checkbox" name="dark" value="yes"> <span data-i18n="farm_dark"></span></label>
-            </div>
-            <label class="field-row" data-for="walls farm"><span data-i18n="first"></span>
-              <select name="first"><option value="builder">builder</option><option value="home">home</option></select>
-            </label>
-            <label class="field-row" data-for="attack dry"><span data-i18n="village"></span>
-              <select name="village"><option value="both">both</option><option value="home">home</option><option value="builder">builder</option></select>
-            </label>
-          </fieldset>
-
-          <fieldset class="section" data-for="walls farm attack">
-            <legend data-i18n="section_limits"></legend>
-            <label class="field-row" data-for="attack"><span data-i18n="cycles"></span> <input name="cycles" type="number" min="1" max="100" value="1"></label>
+            <div data-for="walls" class="checks"><label><input type="checkbox" name="bulk_walls" value="yes"><span data-i18n="bulk_walls"></span></label></div><label class="field-row" data-for="attack"><span data-i18n="cycles"></span> <input name="cycles" type="number" min="1" max="100" value="1"></label>
             <label class="field-row" data-for="walls farm attack"><span data-i18n="searches"></span> <input name="searches" type="number" min="0" max="1000000" value="0"></label>
             <label class="field-row" data-for="walls farm"><span data-i18n="hours"></span> <input name="hours" type="number" min="0" max="1000" value="0"></label>
             <label class="field-row" data-for="walls farm"><span data-i18n="minutes"></span> <input name="minutes" type="number" min="0" max="60000" value="0"></label>
             <label class="field-row" data-for="walls"><span data-i18n="max_upgrades"></span> <input name="max_upgrades" type="number" min="0" max="100000" value="0"></label>
             <label class="field-row" data-for="walls"><span data-i18n="wall_every"></span> <input name="wall_every" type="number" min="0" max="1000" value="0"></label>
             <label class="field-row" data-for="walls farm"><span data-i18n="max_recoveries"></span> <input name="max_recoveries" type="number" min="0" max="1000" value="20"></label>
-          </fieldset>
+          </fieldset></details><details class="advanced"><summary><span data-i18n="section_army"></span><span class="details-plus">+</span></summary><fieldset class="section" data-for="walls farm attack">
 
-          <fieldset class="section" data-for="walls farm attack">
-            <legend data-i18n="section_army"></legend>
             <label class="field-row"><span data-i18n="army"></span>
               <select name="army">
                 <option value="" data-i18n="army_manual"></option>
@@ -146,10 +109,8 @@
             <label class="field-row"><span data-i18n="builder_style"></span>
               <select name="builder_style"><option value="ring" data-i18n="style_ring"></option><option value="stack" data-i18n="style_stack"></option></select>
             </label>
-          </fieldset>
+          </fieldset></details><details class="advanced"><summary><span data-i18n="section_surrender"></span><span class="details-plus">+</span></summary><fieldset class="section" data-for="walls farm attack">
 
-          <fieldset class="section" data-for="walls farm attack">
-            <legend data-i18n="section_surrender"></legend>
             <label class="field-row"><span data-i18n="surrender_at"></span> <input name="surrender_at" type="number" min="0" max="99" value="50"></label>
             <label class="field-row"><span data-i18n="surrender_stars"></span> <input name="surrender_stars" type="number" min="0" max="3" value="2"></label>
             <label class="field-row"><span data-i18n="trophy_floor"></span> <input name="trophy_floor" type="number" min="0" max="10000" value="0"></label>
@@ -157,80 +118,14 @@
               <select name="surrender"><option value="">off</option><option value="home">home</option><option value="builder">builder</option><option value="both">both</option></select>
             </label>
             <label class="field-row"><span data-i18n="surrender_after"></span> <input name="surrender_after" type="number" min="1" max="120" value="60"></label>
-          </fieldset>
-
-          <pre id="preview" class="preview"></pre>
-          <div class="actions">
-            <button id="start" type="submit" class="primary big" data-i18n="start"></button>
-            <button type="button" data-action="stop" data-i18n="stop"></button>
-            <button type="button" data-action="restart" data-i18n="restart"></button>
-          </div>
-          <div class="actions">
-            <button type="button" data-action="open_coc" data-i18n="open_coc"></button>
-            <button type="button" data-action="close_coc" data-i18n="close_coc" data-i18n-confirm="confirm_close_coc"></button>
-            <button type="button" data-action="restart_ld" data-i18n="restart_ld" data-i18n-confirm="confirm_restart_ld"></button>
-            <button type="button" data-action="kill_ld" data-i18n="kill_ld" data-i18n-confirm="confirm_kill_ld" class="danger"></button>
-          </div>
-        </form>
-
-        <section class="terminal log">
-          <div class="terminal-head">
-            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <h2 class="terminal-title" data-i18n="log_prompt"></h2>
-            <label class="toggle"><input id="follow" type="checkbox" checked> <span data-i18n="follow"></span></label>
-            <button id="clear" class="ghost" type="button" data-i18n="clear"></button>
-          </div>
-          <pre id="log" class="lines" aria-live="polite"></pre>
-        </section>
-      </div>
-
-      <section class="card settings">
-        <div class="card-head">
-          <h2 class="card-title" data-i18n="settings_prompt"></h2>
-          <button id="settings-load" type="button" data-i18n="settings_load"></button>
-        </div>
-        <div class="settings-grid">
-          <form id="minimum-form" class="group">
-            <h3 data-i18n="minimum_title"></h3>
-            <p class="hint" data-i18n="minimum_hint"></p>
-            <label><span>gold</span> <input name="gold" type="number" min="0" max="999999999" step="1" value="0" required></label>
-            <label><span>elixir</span> <input name="elixir" type="number" min="0" max="999999999" step="1" value="0" required></label>
-            <label><span>dark elixir</span> <input name="dark" type="number" min="0" max="999999999" step="1" value="0" required></label>
-            <div class="actions">
-              <button type="submit" class="primary" data-i18n="minimum_save"></button>
-            </div>
-          </form>
-          <div class="group display">
-            <h3 data-i18n="display_title"></h3>
-            <p class="hint" data-i18n="display_hint"></p>
-            <p><span data-i18n="display_now"></span>: <b id="display-now">-</b></p>
-            <p><span data-i18n="display_target"></span>: <b id="display-target">-</b></p>
-            <p id="display-note" class="hint"></p>
-            <div class="actions">
-              <button type="button" class="primary" data-action="fit_display" data-i18n="display_fit" data-i18n-confirm="confirm_display_fit"></button>
-              <button type="button" data-action="restore_display" data-i18n="display_restore" data-i18n-confirm="confirm_display_restore"></button>
-            </div>
-            <p class="hint language-note" data-i18n="language_note"></p>
-          </div>
-          <form id="setup-form" class="group">
-            <h3>LDPlayer</h3>
-            <p class="hint" data-i18n="setup_hint"></p>
-            <label><span>adb.exe</span> <input name="adb" type="text" spellcheck="false" autocomplete="off" placeholder="C:\LDPlayer\LDPlayer9\adb.exe" required></label>
-            <label><span>ldconsole.exe</span> <input name="ldconsole" type="text" spellcheck="false" autocomplete="off" placeholder="C:\LDPlayer\LDPlayer9\ldconsole.exe" required></label>
-            <label><span>serial</span> <input name="serial" type="text" spellcheck="false" autocomplete="off" placeholder="emulator-5554" required></label>
-            <label><span>ld_index</span> <input name="ld_index" type="number" min="0" max="99" step="1" value="0" required></label>
-            <label><span>touch_device</span> <input name="touch_device" type="text" spellcheck="false" autocomplete="off" placeholder="/dev/input/event4" required></label>
-            <ul id="setup-notes" class="notes" aria-live="polite"></ul>
-            <div class="actions">
-              <button id="setup-detect" type="button" data-i18n="setup_detect"></button>
-              <button type="submit" class="primary" data-i18n="setup_save"></button>
-            </div>
-          </form>
-        </div>
-        <p class="hint" data-i18n="deploy_note"></p>
-      </section>
-
-      <section class="card deploy">
+          </fieldset></details>
+<details class="command-details"><summary><svg class="command-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 7 5 5-5 5m8 0h6"/></svg><span data-i18n="view_command"></span><svg class="command-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary><pre id="preview" class="preview"></pre></details>
+<div class="run-actions"><button id="start" type="submit" class="primary big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg><span data-i18n="start"></span></button><button type="button" data-action="stop" class="stop-button"><span data-i18n="stop"></span></button></div>
+</form><form id="minimum-form" hidden></form><div class="monitor-column"><section class="panel live-panel"><div class="panel-heading"><h2 data-i18n="live_view"></h2><span id="screen-status" class="capture-tag" role="status" data-i18n="screen_source"></span></div><div class="device-screen"><img id="device-shot" alt="Current device screenshot" hidden><div id="screen-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8m-4-4v4"/></svg><span data-i18n="screen_waiting"></span></div></div><div class="live-footer"><span id="screen-updated" data-i18n="screen_auto"></span><button type="button" id="screen-refresh" class="text-button" data-i18n="screen_refresh"></button></div></section>
+<section class="panel terminal"><div class="terminal-head"><div class="terminal-title-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 7 5 5-5 5m8 0h6"/></svg><h2 data-i18n="log_prompt"></h2><span class="log-count" id="log-count">0</span></div><div class="terminal-tools"><label class="toggle"><input id="follow" type="checkbox" checked><span data-i18n="follow"></span></label><button id="clear" class="ghost" type="button" data-i18n="clear"></button></div></div><pre id="log" class="lines" aria-label="Bot activity log" aria-live="polite"></pre><div id="log-empty" class="log-empty"><span class="empty-symbol">⌁</span><span data-i18n="log_empty"></span></div><div class="terminal-footer"><span class="status-dot" id="log-live-dot"></span><span data-i18n="activity_caption"></span><span class="mono">UTF-8</span></div></section>
+<details class="panel current-command"><summary data-i18n="current_command"></summary><code id="bot-args">—</code></details>
+</div></div></section>
+      <section id="view-deploy" class="panel deploy-editor page-panel" role="tabpanel" aria-labelledby="tab-deploy" hidden>
         <div class="card-head">
           <h2 class="card-title" data-i18n="deploy_prompt"></h2>
           <button id="deploy-load" type="button" data-i18n="deploy_load"></button>
@@ -257,11 +152,44 @@
         </div>
         <p class="hint" data-i18n="deploy_note"></p>
       </section>
-    </section>
-  </main>
+      <section id="view-settings" class="panel settings page-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <div class="card-head">
+          <h2 class="card-title" data-i18n="settings_prompt"></h2>
+          <button id="settings-load" type="button" data-i18n="settings_load"></button>
+        </div>
+        <div class="settings-grid">
 
-  <footer class="site-foot">
-    <a href="https://github.com/peenjeee" target="_blank" rel="noopener noreferrer">@peenjeee</a>
-  </footer>
-</body>
-</html>
+          <div class="group display">
+            <h3 data-i18n="display_title"></h3>
+            <p class="hint" data-i18n="display_hint"></p>
+            <p><span data-i18n="display_now"></span>: <b id="display-now">-</b></p>
+            <p><span data-i18n="display_target"></span>: <b id="display-target">-</b></p>
+            <p id="display-note" class="hint"></p>
+            <div class="actions">
+              <button type="button" class="primary" data-action="fit_display" data-i18n="display_fit" data-i18n-confirm="confirm_display_fit"></button>
+              <button type="button" data-action="restore_display" data-i18n="display_restore" data-i18n-confirm="confirm_display_restore"></button>
+            </div>
+          </div>
+          <form id="setup-form" class="group">
+            <h3>LDPlayer</h3>
+            <p class="hint" data-i18n="setup_hint"></p>
+            <label><span>adb.exe</span> <input name="adb" type="text" spellcheck="false" autocomplete="off" placeholder="C:\LDPlayer\LDPlayer9\adb.exe" required></label>
+            <label><span>ldconsole.exe</span> <input name="ldconsole" type="text" spellcheck="false" autocomplete="off" placeholder="C:\LDPlayer\LDPlayer9\ldconsole.exe" required></label>
+            <label><span>serial</span> <input name="serial" type="text" spellcheck="false" autocomplete="off" placeholder="emulator-5554" required></label>
+            <label><span>ld_index</span> <input name="ld_index" type="number" min="0" max="99" step="1" value="0" required></label>
+            <label><span>touch_device</span> <input name="touch_device" type="text" spellcheck="false" autocomplete="off" placeholder="/dev/input/event4" required></label>
+            <ul id="setup-notes" class="notes" aria-live="polite"></ul>
+            <div class="actions">
+              <button id="setup-detect" type="button" data-i18n="setup_detect"></button>
+              <button type="submit" class="primary" data-i18n="setup_save"></button>
+            </div>
+          </form>
+        </div>
+        <p class="hint" data-i18n="deploy_note"></p>
+      </section>
+
+
+<section id="device-controls" class="panel device-controls" hidden><div><h2 data-i18n="device_controls"></h2><p class="hint" data-i18n="device_controls_note"></p></div><div class="actions"><button type="button" data-action="open_coc" data-i18n="open_coc"></button><button type="button" data-action="close_coc" data-i18n="close_coc" data-i18n-confirm="confirm_close_coc"></button><button type="button" data-action="restart_ld" data-i18n="restart_ld" data-i18n-confirm="confirm_restart_ld"></button><button type="button" data-action="kill_ld" data-i18n="kill_ld" data-i18n-confirm="confirm_kill_ld" class="danger"></button></div></section>
+</section>
+</main><footer class="site-foot"><span><span class="footer-mark">◇</span> coc-auto </span><span class="footer-right"><span class="status-dot"></span><a href="https://github.com/peenjeee/coc-auto/issues" target="_blank" rel="noopener noreferrer" data-i18n="report_issue"></a></span></footer>
+</body></html>
