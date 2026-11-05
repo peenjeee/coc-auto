@@ -3106,7 +3106,7 @@ class BotTests(unittest.TestCase):
 
     def test_the_vm_counts_as_running_while_its_process_lives_after_list2_says_stopped(self):
         stopped = '0,LDPlayer,50466224,246418094,2,26040,-1,1280,720,240\n'
-        headless = ('"C:\\Program Files\\ldplayer9box\\Ld9BoxHeadless.exe" --comment leidian{} --startvm '
+        headless = ('28500 "C:\\Program Files\\ldplayer9box\\Ld9BoxHeadless.exe" --comment leidian{} --startvm '
                     '20160302-aaaa-aaaa-3713-000000000000 --vrde config\n')
 
         def run(listed):
@@ -3143,6 +3143,25 @@ class BotTests(unittest.TestCase):
         self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=1), 6)
         self.assertIn((80, 70), device.inputs)
         self.assertEqual(seen, ['builder'])
+
+    def test_a_leftover_vm_is_ended_and_one_stuck_in_the_driver_stops_the_run(self):
+        device, emulator = self.restartable()
+        device.up, device.front = False, False
+        emulator.running = lambda: False
+        ended = []
+        emulator.vm_running = lambda: not ended
+        emulator.end_vm = lambda: ended.append('end_vm')
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, emulator=emulator)
+        runner.settle = lambda: None
+        with patch('bot.RECOVER_ADB_SECONDS', 0.5):
+            runner.recover()
+        self.assertEqual((ended, emulator.events), (['end_vm'], ['launch']))
+        # Killing does nothing to a VM held by the LDPlayer driver: no LDPlayer could boot, so say what helps.
+        device.up = False
+        emulator.vm_running = lambda: True
+        with self.assertRaises(bot.SetupError):
+            runner.recover()
+        self.assertEqual(emulator.events, ['launch'])
 
     def test_recover_quits_an_emulator_whose_adb_never_comes_back(self):
         device, emulator = self.restartable()
@@ -3516,6 +3535,20 @@ class BotTests(unittest.TestCase):
             emulator.launch()
             self.assertEqual(run.call_args.args[0], ['ldconsole.exe', 'launch', '--index', '0'])
             self.assertIs(run.call_args.kwargs.get('shell'), False)
+
+    def test_a_google_play_review_sheet_over_the_game_is_closed_before_it_is_opened_again(self):
+        device = bot.ADB('adb.exe', 'emulator-5554', [160, 90], live=True)
+        for top, expected in ((b'com.android.vending/com.google.android.finsky.inappreviewdialog.InAppReviewActivity',
+                               ['KEYCODE_BACK', bot.GAME_ACTIVITY]),
+                              (b'com.ldmnq.launcher3/com.android.launcher3.Launcher', [bot.GAME_ACTIVITY])):
+            calls = []
+
+            def run(command, **_):
+                calls.append(command[3:])
+                return SimpleNamespace(stdout=b'  topResumedActivity=ActivityRecord{1 u0 ' + top + b' t8}')
+            with self.subTest(top=top), patch('bot.subprocess.run', run):
+                device.launch(bot.GAME_ACTIVITY)
+                self.assertEqual([call[-1] for call in calls[1:]], expected)
 
     def test_adb_command_failure_is_device_error(self):
         device = bot.ADB('adb.exe', 'emulator-5554', [160, 90])

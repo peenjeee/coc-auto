@@ -105,6 +105,8 @@ POPUP_CLEAR_ATTEMPTS = 3
 STORE_OPEN_SECONDS, STORE_POLL_SECONDS = 90, 5
 UPDATE_INSTALL_SECONDS, INSTALL_POLL_SECONDS, UPDATE_LOG_SECONDS = 1800, 15, 60
 GAME_ACTIVITY = 'com.supercell.clashofclans/com.supercell.titan.GameApp'
+# Google Play's in-app review ("Rate this app"): com.google.android.finsky.inappreviewdialog.InAppReviewActivity.
+REVIEW_ACTIVITY = b'inappreview'
 RECOVER_ADB_SECONDS, RECOVER_LOAD_SECONDS, RECOVER_POLL_SECONDS = 300, 240, 5
 MAX_RECOVERIES = 20
 # Recoveries with nothing done in between after which a closed game means LDPlayer itself has to start fresh.
@@ -677,11 +679,13 @@ class ADB:
         except DeviceError:
             return False
 
-    def game_in_front(self) -> bool:
+    def resumed(self) -> bytes:
         # The resumed activity, not mCurrentFocus: dumpsys window keeps a focus line per display, and one of them
         # still names the game after it closed.
-        resumed = self.command('shell', 'dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity"')
-        return GAME_ACTIVITY.split('/')[0].encode() in resumed
+        return self.command('shell', 'dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity"')
+
+    def game_in_front(self) -> bool:
+        return GAME_ACTIVITY.split('/')[0].encode() in self.resumed()
 
     def ui_dump(self) -> bytes:
         """The window on screen as uiautomator XML; the Play Store has no calibrated screens."""
@@ -692,9 +696,12 @@ class ADB:
         return game_update.installed_version(output.decode('utf-8', 'replace'))
 
     def launch(self, activity: str) -> None:
-        """Start the game app; used only to recover from a crash or a closed game."""
+        """Start the game app; used only to recover from a crash or a closed game. Google Play's "Rate this app" sheet
+        is an activity of its own over the game, so it is closed first or the game would stay behind it."""
         if not self.live:
             raise BotError('Input perangkat dinonaktifkan dalam dry-run')
+        if REVIEW_ACTIVITY in self.resumed().lower():
+            self.command('shell', 'input', 'keyevent', 'KEYCODE_BACK')
         self.command('shell', 'am', 'start', '-n', activity)
 
     def stop_game(self) -> None:
@@ -818,7 +825,7 @@ class ADB:
 
 
 VM_PROCESSES = ("Get-CimInstance Win32_Process -Filter \"Name LIKE 'Ld%BoxHeadless.exe'\" | "
-                "ForEach-Object CommandLine")
+                "ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }")
 
 
 class Emulator:
@@ -846,15 +853,28 @@ class Emulator:
                 return True
         return self.vm_process()
 
-    def vm_process(self) -> bool:
-        """The VM process itself (`Ld9BoxHeadless … --comment leidianN`) is still going: `list2` already says -1
-        while it shuts down, and a launch then fails with "PowerUpFailed"."""
+    def vm_pids(self) -> list:
+        """The VM processes of this instance (`Ld9BoxHeadless … --comment leidianN`)."""
         try:
             listed = subprocess.run(['powershell', '-NoProfile', '-Command', VM_PROCESSES], capture_output=True,
                                     text=True, timeout=60, shell=False).stdout or ''
         except (OSError, subprocess.SubprocessError):
-            return False
-        return f'--comment leidian{self.index} ' in listed
+            return []
+        return [int(line.split()[0]) for line in listed.splitlines()
+                if f'--comment leidian{self.index} ' in line and line.split()[0].isdigit()]
+
+    def vm_process(self) -> bool:
+        """The VM process itself is still going: `list2` already says -1 while it shuts down, and a launch then fails
+        with "PowerUpFailed"."""
+        return bool(self.vm_pids())
+
+    def end_vm(self) -> None:
+        """Kill a VM that no LDPlayer window owns any more; one stuck in the LDPlayer driver survives even this."""
+        for pid in self.vm_pids():
+            try:
+                subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True, timeout=30, shell=False)
+            except (OSError, subprocess.SubprocessError):
+                pass
 
     def launch(self) -> None:
         self.run('launch')
@@ -3296,8 +3316,17 @@ class Bot:
                 # A VM that was just quit is still shutting down and holds its disks; launched before it lets go,
                 # LDPlayer fails with "Disk virtual tidak valid (InvalidMedium)".
                 stop = time.monotonic() + (EMULATOR_STOP_SECONDS if self.poll else 0)
-                while self.emulator.vm_running() and time.monotonic() < stop:
+                vm_up = self.emulator.vm_running()
+                while vm_up and time.monotonic() < stop:
                     time.sleep(RECOVER_POLL_SECONDS)
+                    vm_up = self.emulator.vm_running()
+                if vm_up:
+                    # A VM no LDPlayer window owns any more keeps every new LDPlayer from booting.
+                    self.emulator.end_vm()
+                    time.sleep(RECOVER_POLL_SECONDS if self.poll else 0)
+                    if self.emulator.vm_running():
+                        raise SetupError('VM LDPlayer lama macet dan tidak bisa dimatikan; restart PC lalu jalankan '
+                                         'bot lagi')
                 time.sleep(EMULATOR_SETTLE_SECONDS if self.poll else 0)
                 self.emulator.launch()
                 self.emulator_started = time.monotonic()
