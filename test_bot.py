@@ -3781,6 +3781,17 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.BotError):
             bot.ADB('adb.exe', 'emulator-5554', [1280, 720], live=True, touch='/x; rm').tap_many([[10, 20]])
 
+    def test_adb_scales_pixels_to_a_normalized_touchscreen(self):
+        device = bot.ADB('adb.exe', 'emulator-5554', [1280, 720], live=True, touch='/dev/input/event2')
+        device.axes['/dev/input/event2'] = (32767, 32767)
+        self.assertEqual(
+            device.scaled_events([(3, 53, 0), (3, 54, 0), (3, 53, 1279), (3, 54, 719), (3, 57, -1), (0, 0, 0)],
+                                 '/dev/input/event2'),
+            [(3, 53, 0), (3, 54, 0), (3, 53, 32767), (3, 54, 32767), (3, 57, -1), (0, 0, 0)])
+        # An LDPlayer node takes pixels as they are, so nothing is rewritten.
+        self.assertEqual(device.scaled_events([(3, 53, 640), (3, 54, 360)], '/dev/input/event4'),
+                         [(3, 53, 640), (3, 54, 360)])
+
     def with_switch_target(self):
         icon = self.frames['home'][40:50, 60:72]
         cv2.imwrite(str(self.root / 'boat.png'), icon)

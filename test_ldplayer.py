@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -36,6 +37,14 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(ldplayer.touch_range(GETEVENT, '/dev/input/event4'), (1279, 719))
         self.assertIsNone(ldplayer.touch_range(GETEVENT, '/dev/input/event2'))
         self.assertIsNone(ldplayer.touch_range(GETEVENT, '/dev/input/event9'))
+
+    def test_a_normalized_virtual_touchscreen_is_accepted(self):
+        normalized = ('aarch64\nadd device 1: /dev/input/event2\n  name: "virtio"\n  events:\n'
+                      '    ABS (0003): ABS_MT_POSITION_X     : value 0, min 0, max 32767, fuzz 0, flat 0, resolution 0\n'
+                      '                ABS_MT_POSITION_Y     : value 0, min 0, max 32767, fuzz 0, flat 0, resolution 0\n')
+        self.assertEqual(ldplayer.parse_touch(normalized), '/dev/input/event2')
+        self.assertEqual(ldplayer.touch_range(normalized, '/dev/input/event2'), (32767, 32767))
+        self.assertIsNone(ldplayer.touch_problem(normalized, '/dev/input/event2', [1280, 720]))
 
     def test_a_touch_problem_says_what_does_not_fit(self):
         self.assertIsNone(ldplayer.touch_problem('x86_64\n' + GETEVENT, '/dev/input/event4', [1280, 720]))
@@ -134,6 +143,7 @@ class DisplayFileTests(unittest.TestCase):
         self.path = Path(self.temp.name) / 'leidian0.config'
         self.path.write_bytes(INSTANCE.encode())
 
+    @unittest.skipUnless(os.name == 'nt', 'LDPlayer install paths are Windows paths')
     def test_the_instance_config_sits_in_the_ldplayer_folder(self):
         self.assertEqual(ldplayer.instance_config(r'C:\LDPlayer\LDPlayer9\ldconsole.exe', 2),
                          Path(r'C:\LDPlayer\LDPlayer9\vms\config\leidian2.config'))
