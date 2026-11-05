@@ -19,15 +19,17 @@ import sys
 import time
 from typing import Callable
 
+import messages
+
 if sys.version_info < (3, 10):
-    sys.exit('coc-auto butuh Python 3.10 atau lebih baru')
+    messages.initialize_cli(Path(__file__).resolve().parent / 'config.json')
+    sys.exit(messages.translate('coc-auto butuh Python 3.10 atau lebih baru'))
 
 import cv2
 import numpy as np
 
 import game_update
 import ldplayer
-import messages
 
 RESOURCES = ('gold', 'elixir', 'dark')
 VILLAGE_GOALS = {'builder': ('gold', 'elixir', 'cart'), 'home': ('gold', 'elixir', 'dark')}
@@ -3491,7 +3493,7 @@ def check_adb_debugging(console: str, index: int) -> None:
     except (OSError, ValueError):
         return  # Another LDPlayer layout: recovery reports a missing ADB its own way.
     if enabled == 0:
-        raise SetupError(ldplayer.adb_debug_hint())
+        raise SetupError(ldplayer.ADB_DEBUG_HINT)
 
 
 def local_config_path(path: Path) -> Path:
@@ -3549,13 +3551,7 @@ def restore_screen(config_path: Path) -> None:
 def configured_language(path: Path) -> str:
     """The terminal language, read straight from config.json and config.local.json before anything else so even
     the first errors use it; a file that cannot be read leaves Indonesian and is reported later on its own."""
-    language = 'id'
-    for source in (path, local_config_path(path)):
-        try:
-            language = json.loads(source.read_text(encoding='utf-8')).get('language', language)
-        except (OSError, ValueError, AttributeError):
-            pass
-    return language
+    return messages.configured_language(path)
 
 
 def load_config(path: Path) -> dict:
@@ -3573,75 +3569,76 @@ def load_config(path: Path) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='CoC LDPlayer: default dry-run tanpa tap')
+    messages.initialize_cli(Path(__file__).resolve().parent / 'config.json')
+    parser = argparse.ArgumentParser(description=messages.translate('CoC LDPlayer: default dry-run tanpa tap'))
     parser.add_argument('--config', type=Path, default=Path(__file__).resolve().parent / 'config.json')
     parser.add_argument('--mode', choices=('home', 'builder', 'both'), default='both')
     parser.add_argument('--cycles', type=int, default=1)
     parser.add_argument('--searches', type=int, default=0,
-                        help='Batas pencarian lawan desa asal; 0 = tanpa batas; di batas itu lawan yang tampil diserang')
+                        help=messages.translate('Batas pencarian lawan desa asal; 0 = tanpa batas; di batas itu lawan yang tampil diserang'))
     parser.add_argument('--until-full', action='store_true',
-                        help='Serang desa yang emas/elixirnya belum penuh; berhenti saat kedua desa penuh')
+                        help=messages.translate('Serang desa yang emas/elixirnya belum penuh; berhenti saat kedua desa penuh'))
     parser.add_argument('--builder', metavar='RESOURCES',
-                        help='--until-full desa malam saja sampai penuh: gold,elixir,cart (pilih sebagian) atau all')
+                        help=messages.translate('--until-full desa malam saja sampai penuh: gold,elixir,cart (pilih sebagian) atau all'))
     parser.add_argument('--home', metavar='RESOURCES',
-                        help='--until-full desa asal saja sampai penuh: gold,elixir,dark (pilih sebagian) atau all')
+                        help=messages.translate('--until-full desa asal saja sampai penuh: gold,elixir,dark (pilih sebagian) atau all'))
     parser.add_argument('--dark', action='store_true',
-                        help='--until-full: isi juga dark elixir desa asal (tanpa ini hanya gold dan elixir)')
+                        help=messages.translate('--until-full: isi juga dark elixir desa asal (tanpa ini hanya gold dan elixir)'))
     parser.add_argument('--first', choices=('builder', 'home'), default='builder',
-                        help='Desa yang dikerjakan dulu bila dua desa dipilih')
+                        help=messages.translate('Desa yang dikerjakan dulu bila dua desa dipilih'))
     parser.add_argument('--walls', choices=('home', 'builder', 'both'),
-                        help='Habiskan gold+elixir yang ada untuk upgrade tembok, farming sampai penuh, ulangi '
-                             'sampai semua tembok maksimal; tidak pernah memakai gem')
+                        help=messages.translate('Habiskan gold+elixir yang ada untuk upgrade tembok, farming sampai penuh, ulangi '
+                             'sampai semua tembok maksimal; tidak pernah memakai gem'))
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
-                        help='Dengan --live: batas pemulihan (crash, DC, layar macet) tanpa kemajuan; dihitung ulang '
-                             'setelah serangan selesai atau tembok di-upgrade')
+                        help=messages.translate('Dengan --live: batas pemulihan (crash, DC, layar macet) tanpa kemajuan; dihitung ulang '
+                             'setelah serangan selesai atau tembok di-upgrade'))
     parser.add_argument('--hours', type=int, default=0,
-                        help='--until-full/--walls: berhenti setelah sekian jam (bisa digabung --minutes); serangan '
-                             'atau upgrade yang sedang jalan diselesaikan dulu, lalu berhenti di desa')
-    parser.add_argument('--minutes', type=int, default=0, help='Seperti --hours, dalam menit')
+                        help=messages.translate('--until-full/--walls: berhenti setelah sekian jam (bisa digabung --minutes); serangan '
+                             'atau upgrade yang sedang jalan diselesaikan dulu, lalu berhenti di desa'))
+    parser.add_argument('--minutes', type=int, default=0, help=messages.translate('Seperti --hours, dalam menit'))
     parser.add_argument('--max-upgrades', type=int, default=0,
-                        help='--walls: berhenti di desa setelah sekian tembok di-upgrade; 0 = tanpa batas')
+                        help=messages.translate('--walls: berhenti di desa setelah sekian tembok di-upgrade; 0 = tanpa batas'))
     parser.add_argument('--bulk-walls', action='store_true',
-                        help='--walls: upgrade banyak tembok selevel sekaligus lewat "Tingkatkan Lebih Banyak" '
-                             '(sebanyak yang terbayar, satu Oke), lebih cepat dari satu per satu')
+                        help=messages.translate('--walls: upgrade banyak tembok selevel sekaligus lewat "Tingkatkan Lebih Banyak" '
+                             '(sebanyak yang terbayar, satu Oke), lebih cepat dari satu per satu'))
     parser.add_argument('--wall-every', type=int, default=0,
-                        help='--walls: cek tembok lagi setiap sekian serangan, tanpa menunggu gudang penuh; '
-                             '0 = tunggu gudang penuh')
+                        help=messages.translate('--walls: cek tembok lagi setiap sekian serangan, tanpa menunggu gudang penuh; '
+                             '0 = tunggu gudang penuh'))
     parser.add_argument('--wall-resource', choices=('gold', 'elixir', 'both'), default='both',
-                        help='--walls: bayar tembok dengan gold, elixir, atau keduanya (gold dulu); farming hanya '
-                             'sampai resource itu penuh')
+                        help=messages.translate('--walls: bayar tembok dengan gold, elixir, atau keduanya (gold dulu); farming hanya '
+                             'sampai resource itu penuh'))
     parser.add_argument('--surrender', choices=('home', 'builder', 'both'),
-                        help='Menyerah otomatis di desa ini bila battle belum selesai setelah --surrender-after detik')
+                        help=messages.translate('Menyerah otomatis di desa ini bila battle belum selesai setelah --surrender-after detik'))
     parser.add_argument('--surrender-after', type=int,
-                        help=f'Detik battle sejak deploy dimulai (1..{SURRENDER_MAX_SECONDS}, default '
-                             f'{SURRENDER_DEFAULT_SECONDS}); tanpa --surrender berlaku untuk kedua desa')
+                        help=messages.translate(f'Detik battle sejak deploy dimulai (1..{SURRENDER_MAX_SECONDS}, default '
+                             f'{SURRENDER_DEFAULT_SECONDS}); tanpa --surrender berlaku untuk kedua desa'))
     parser.add_argument('--surrender-at', type=int,
-                        help=f'Desa asal: menyerah otomatis saat persen kerusakan mencapai angka ini (0..99, default '
-                             f'{SURRENDER_AT_DEFAULT}; 0 = tidak pernah)')
+                        help=messages.translate(f'Desa asal: menyerah otomatis saat persen kerusakan mencapai angka ini (0..99, default '
+                             f'{SURRENDER_AT_DEFAULT}; 0 = tidak pernah)'))
     parser.add_argument('--surrender-stars', type=int,
-                        help=f'Desa malam: menyerah di tahap 1 saat bintang mencapai angka ini; tahap 2 tidak dimainkan '
-                             f'(0..3, default {SURRENDER_STARS_DEFAULT}; 0 = tidak pernah)')
+                        help=messages.translate(f'Desa malam: menyerah di tahap 1 saat bintang mencapai angka ini; tahap 2 tidak dimainkan '
+                             f'(0..3, default {SURRENDER_STARS_DEFAULT}; 0 = tidak pernah)'))
     parser.add_argument('--trophy-floor', type=int, default=0,
-                        help='Desa malam: selama trofi di bawah angka ini, serang sampai selesai tanpa menyerah; di '
-                             'atasnya menyerah lagi sesuai pengaturan (0 = mati)')
+                        help=messages.translate('Desa malam: selama trofi di bawah angka ini, serang sampai selesai tanpa menyerah; di '
+                             'atasnya menyerah lagi sesuai pengaturan (0 = mati)'))
     parser.add_argument('--ring', nargs='?', const='both', choices=('home', 'builder', 'both'),
-                        help='Pasukan disebar keliling base (tanpa nilai = kedua desa). Desa asal: hero (langsung '
-                             'ability), siege, spell, lalu pasukan keliling pinggir peta. Desa malam: default')
+                        help=messages.translate('Pasukan disebar keliling base (tanpa nilai = kedua desa). Desa asal: hero (langsung '
+                             'ability), siege, spell, lalu pasukan keliling pinggir peta. Desa malam: default'))
     parser.add_argument('--stack', nargs='?', const='both', choices=('home', 'builder', 'both'),
-                        help='Pasukan di satu titik deploy D (tanpa nilai = kedua desa). Desa asal: default (naga). '
-                             'Desa malam: hero (langsung ability) dulu, lalu semua pasukan di D (mis. full witch)')
+                        help=messages.translate('Pasukan di satu titik deploy D (tanpa nilai = kedua desa). Desa asal: default (naga). '
+                             'Desa malam: hero (langsung ability) dulu, lalu semua pasukan di D (mis. full witch)'))
     parser.add_argument('--quake', action='store_true',
-                        help='Desa asal: spell (gempa) 4 per titik di titik gempa atas, kanan, bawah, kiri base '
-                             '(editor deploy), bukan disebar')
-    parser.add_argument('--live', action='store_true', help='Izinkan input akun; risiko ban dan resource terpakai')
+                        help=messages.translate('Desa asal: spell (gempa) 4 per titik di titik gempa atas, kanan, bawah, kiri base '
+                             '(editor deploy), bukan disebar'))
+    parser.add_argument('--live', action='store_true', help=messages.translate('Izinkan input akun; risiko ban dan resource terpakai'))
     parser.add_argument('--agent', action='store_true',
-                        help='Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard')
+                        help=messages.translate('Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard'))
     parser.add_argument('--key', action='store_true',
-                        help='Tampilkan API key perangkat ini lalu keluar; tidak menjalankan apa pun')
+                        help=messages.translate('Tampilkan API key perangkat ini lalu keluar; tidak menjalankan apa pun'))
     parser.add_argument('--no-remote', action='store_true',
-                        help='Tanpa dashboard/API key: jalankan tugas lalu keluar seperti biasa')
+                        help=messages.translate('Tanpa dashboard/API key: jalankan tugas lalu keluar seperti biasa'))
     parser.add_argument('--new-key', action='store_true',
-                        help='Buat API key dashboard baru untuk perangkat ini; key lama tidak berlaku lagi')
+                        help=messages.translate('Buat API key dashboard baru untuk perangkat ini; key lama tidak berlaku lagi'))
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')

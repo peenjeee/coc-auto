@@ -1,9 +1,9 @@
 // Service worker for the installed dashboard. Pages and assets come from the network first, so a new version shows
 // at once; the cached copy is used only without a connection. Device data never passes here: it is a WebSocket to
 // Supabase, signed with the device key.
-const CACHE = 'coc-dashboard-v2';
+const CACHE = 'coc-dashboard-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'i18n.js', 'realtime.js', 'deploy.js', 'settings.js',
-  'config.js', 'favicon.svg', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+  'messages.js', 'messages_en.json', 'config.js', 'favicon.svg', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

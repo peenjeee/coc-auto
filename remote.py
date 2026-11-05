@@ -35,6 +35,7 @@ STOP_SECONDS = 20
 STREAM_PING_SECONDS = 15
 MAX_COMMAND_BYTES = 64 * 1024
 STATIC_FILES = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js',
+                '/messages.js': 'messages.js', '/messages_en.json': 'messages_en.json',
                 '/realtime.js': 'realtime.js', '/deploy.js': 'deploy.js', '/settings.js': 'settings.js',
                 '/style.css': 'style.css',
                 '/config.js': 'config.js', '/favicon.svg': 'favicon.svg',
@@ -43,6 +44,7 @@ STATIC_FILES = {'/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.
                 '/icons/icon-maskable-512.png': 'icons/icon-maskable-512.png',
                 '/icons/apple-touch-icon.png': 'icons/apple-touch-icon.png'}
 CONTENT_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+                 '.json': 'application/json; charset=utf-8',
                  '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
                  '.png': 'image/png', '.webmanifest': 'application/manifest+json'}
 LOCAL_HOSTS = ('localhost', '127.0.0.1')
@@ -395,7 +397,7 @@ class Settings:
     def write_setup(self, setup: object) -> None:
         import bot
         if not isinstance(setup, dict) or set(setup) != set(SETUP_FIELDS):
-            raise CommandRefused('Pengaturan LDPlayer perlu ' + ', '.join(SETUP_FIELDS))
+            raise CommandRefused(f'Pengaturan LDPlayer perlu {", ".join(SETUP_FIELDS)}')
         serial, touch = setup['serial'], setup['touch_device']
         if not isinstance(serial, str) or not SERIAL.fullmatch(serial):
             raise CommandRefused('serial harus seperti emulator-5554 atau 127.0.0.1:5555')
@@ -444,10 +446,9 @@ class Supervisor:
             listener(kind, data)
 
     def log(self, line: str) -> None:
-        line = messages.translate(line)
         with self.lock:
             self.lines.append(line)
-        print(line, flush=True)
+        print(messages.translate(line), flush=True)
         self.publish('line', line)
 
     def history(self) -> list[str]:
@@ -470,7 +471,7 @@ class Supervisor:
                 [*self.command_base, *args, '--worker'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', creationflags=flags,
                 start_new_session=os.name != 'nt',
-                env={**os.environ, 'PYTHONUNBUFFERED': '1', 'PYTHONIOENCODING': 'utf-8'})
+                env={**os.environ, 'PYTHONUNBUFFERED': '1', 'PYTHONIOENCODING': 'utf-8', 'COC_CANONICAL_LOG': '1'})
             self.child, self.args, self.since = child, list(args), time.time()
             self.log(f'REMOTE: menjalankan python bot.py {" ".join(args)}')
             threading.Thread(target=self.pump, args=(child,), daemon=True).start()
@@ -512,66 +513,64 @@ class Supervisor:
             if data is not None:
                 result['data'] = data
         except Unsigned as exc:
-            return {'ok': False, 'code': 'unsigned', 'message': str(exc)}
+            return {'ok': False, 'code': 'unsigned', 'message': messages.translate(str(exc)),
+                    'source_message': str(exc)}
         except (CommandRefused, SettingRefused) as exc:
             text = str(exc)
             result = {'ok': False, 'code': 'refused',
                       'message': text if text.startswith('Perintah ditolak') else f'Perintah ditolak: {text}'}
         except Exception as exc:  # A failed adb/ldconsole call is reported to the dashboard, never fatal here.
-            result = {'ok': False, 'code': 'failed', 'message': messages.translate(f'Gagal: {exc}')}
+            result = {'ok': False, 'code': 'failed', 'message': f'Gagal: {exc}'}
         self.log(f'REMOTE: {result["message"]}')
+        result["source_message"] = result["message"]
+        result["message"] = messages.translate(result["message"])
         return result
 
     def carry_out(self, action: str, options: dict) -> tuple[str, str, dict | None]:
         if action == 'start':
             args = build_args(options)
             self.start(args)
-            return 'started', messages.translate(f'Bot dijalankan: python bot.py {" ".join(args)}'), None
+            return 'started', f'Bot dijalankan: python bot.py {" ".join(args)}', None
         if action == 'restart':
             if not self.args:
                 raise CommandRefused('belum ada perintah untuk diulang; pakai Start')
             self.start(self.args)
-            return 'restarted', messages.translate(f'Bot dijalankan ulang: python bot.py {" ".join(self.args)}'), None
+            return 'restarted', f'Bot dijalankan ulang: python bot.py {" ".join(self.args)}', None
         if action == 'stop':
-            if self.stop():
-                return 'stopped', messages.translate('Bot dihentikan'), None
-            return 'not_running', messages.translate('Bot memang tidak berjalan'), None
+            return ('stopped', 'Bot dihentikan', None) if self.stop() else ('not_running', 'Bot memang tidak berjalan', None)
         if action == 'open_coc':
             self.device.open_coc()
-            return 'coc_opened', messages.translate('CoC dibuka'), None
+            return 'coc_opened', 'CoC dibuka', None
         if action in ('get_deploy', 'set_deploy'):
             if self.deploy is None:
                 raise CommandRefused('titik deploy tidak tersedia di perangkat ini')
             if action == 'set_deploy':
                 self.deploy.write(options.get('screen'), options.get('deploy'), options.get('points'))
-                return 'deploy_saved', messages.translate('Titik deploy disimpan; berlaku saat Start berikutnya'), None
+                return 'deploy_saved', 'Titik deploy disimpan; berlaku saat Start berikutnya', None
             data = self.deploy.read()
             for shot in self.deploy.snapshots():
                 self.publish('snapshot', shot)
-            return 'deploy_loaded', messages.translate('Titik deploy dimuat'), data
+            return 'deploy_loaded', 'Titik deploy dimuat', data
         if action in SETTINGS_ACTIONS:
             return self.configure(action, options)
         # Closing the game or the emulator under a running bot would only start its recovery.
         self.stop()
         if action == 'close_coc':
             self.device.close_coc()
-            return 'coc_closed', messages.translate('Bot dihentikan dan CoC ditutup'), None
+            return 'coc_closed', 'Bot dihentikan dan CoC ditutup', None
         if action == 'fit_display':
             if self.device.fit_display():
-                return ('display_fitted', messages.translate('Layar LDPlayer diubah ke kalibrasi bot; LDPlayer dinyalakan '
-                                                             'ulang'), self.display_data())
-            return 'display_ok', messages.translate('Layar LDPlayer sudah sesuai kalibrasi bot'), self.display_data()
+                return 'display_fitted', 'Layar LDPlayer diubah ke kalibrasi bot; LDPlayer dinyalakan ulang', self.display_data()
+            return 'display_ok', 'Layar LDPlayer sudah sesuai kalibrasi bot', self.display_data()
         if action == 'restore_display':
             if self.device.restore_display():
-                return ('display_restored', messages.translate('Layar LDPlayer dikembalikan ke setelan semula'),
-                        self.display_data())
-            return ('display_unchanged', messages.translate('Tidak ada setelan layar yang perlu dikembalikan'),
-                    self.display_data())
+                return 'display_restored', 'Layar LDPlayer dikembalikan ke setelan semula', self.display_data()
+            return 'display_unchanged', 'Tidak ada setelan layar yang perlu dikembalikan', self.display_data()
         self.device.kill_ld()
         if action == 'kill_ld':
-            return 'ld_off', messages.translate('Bot dihentikan dan LDPlayer dimatikan'), None
+            return 'ld_off', 'Bot dihentikan dan LDPlayer dimatikan', None
         self.device.launch_ld()
-        return 'ld_restarted', messages.translate('LDPlayer dinyalakan ulang'), None
+        return 'ld_restarted', 'LDPlayer dinyalakan ulang', None
 
     def configure(self, action: str, options: dict) -> tuple[str, str, dict]:
         """Settings changes take effect at the next Start; a bot already running keeps the config it read."""
@@ -580,20 +579,20 @@ class Supervisor:
         code = SETTINGS_ACTIONS[action]
         if action == 'detect_setup':
             found = self.settings.detect()
-            notes = '; '.join(found['problems']) or messages.translate('semua ditemukan, cek lalu Simpan')
-            return code, messages.translate(f'Deteksi LDPlayer: {notes}'), found
+            notes = '; '.join(found['problems']) or 'semua ditemukan, cek lalu Simpan'
+            return code, f'Deteksi LDPlayer: {notes}', found
         if action == 'set_minimum':
             self.settings.write_minimum(options.get('minimum'))
-            message = messages.translate('Minimal loot disimpan; berlaku saat Start berikutnya')
+            message = 'Minimal loot disimpan; berlaku saat Start berikutnya'
         elif action == 'set_setup':
             self.settings.write_setup(options.get('setup'))
-            message = messages.translate('Pengaturan LDPlayer disimpan; berlaku saat Start berikutnya')
+            message = 'Pengaturan LDPlayer disimpan; berlaku saat Start berikutnya'
         elif action == 'set_language':
-            # The log switches at once: lines from a bot started in the other language are translated as they come.
+            # Only presentation changes; the running worker continues emitting canonical messages.
             messages.use(self.settings.write_language(options.get('language')))
-            message = messages.translate('Bahasa terminal disimpan; log bot ikut berganti')
+            message = 'Bahasa tampilan disimpan; log langsung memakainya'
         else:
-            message = messages.translate('Pengaturan dimuat')
+            message = 'Pengaturan dimuat'
         return code, message, {**self.settings.read(), 'display': self.display_data()}
 
     def display_data(self) -> dict | None:
@@ -661,7 +660,9 @@ def serve_dashboard(supervisor: Supervisor, web_dir: Path, port: int) -> Threadi
             if isinstance(payload, dict):
                 result = supervisor.command(payload.get('body'), payload.get('sig'))
             else:
-                result = {'ok': False, 'code': 'unsigned', 'message': 'Perintah ditolak: isi rusak'}
+                result = {'ok': False, 'code': 'unsigned',
+                          'message': messages.translate('Perintah ditolak: isi rusak'),
+                          'source_message': 'Perintah ditolak: isi rusak'}
             data = json.dumps({**result, 'state': supervisor.state()}).encode()
             self.reply(200 if result['ok'] else 403, 'application/json', data)
 

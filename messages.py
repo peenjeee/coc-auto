@@ -1,40 +1,73 @@
-"""Terminal messages in the language picked in config ("language": "id", the default, or "en"). The code writes its
-messages in Indonesian; in English each log line and each error text is looked up in messages_en.json, by its exact
-template or, for a message built with values in it, by its template with those values matched back out."""
+"""Presentation-only localization; game recognition data never passes through this module."""
+from __future__ import annotations
 import json
 import logging
+import os
 import re
-from functools import cache
+import sys
+from functools import lru_cache
 from pathlib import Path
 
 LANGUAGES = ('id', 'en')
 CATALOG = Path(__file__).with_name('messages_en.json')
-# A value in a template: {} where the code writes an f-string, a printf field where it hands the values to the log.
-VALUE = re.compile(r'\{\}|%[-+ #0]*\d*(?:\.\d+)?[sdrfx]')
-LEVEL = re.compile(r'(DEBUG|INFO|WARNING|ERROR|CRITICAL): (.*)', re.S)
 _language = 'id'
+TOKENS = re.compile(r'\{\}|%[-+ #0]*\d*(?:\.\d+)?[sdrfx]|%%')
+PREFIX = re.compile(r'^(DEBUG|INFO|WARNING|ERROR|CRITICAL|REMOTE): ')
+
+
+def configured_language(path: Path) -> str:
+    """Read the display preference without importing OpenCV or a calibration."""
+    language = 'id'
+    for source in (path, path.with_name(path.stem + '.local.json')):
+        try:
+            language = json.loads(source.read_text(encoding='utf-8')).get('language', language)
+        except (OSError, ValueError, AttributeError):
+            pass
+    return language
+
+
+def initialize_cli(default: Path) -> None:
+    """Find --config before argparse handles --help or reports invalid arguments."""
+    path = default
+    for index, arg in enumerate(sys.argv[1:], 1):
+        if arg.startswith('--config='):
+            path = Path(arg.split('=', 1)[1])
+        elif arg == '--config' and index + 1 < len(sys.argv):
+            path = Path(sys.argv[index + 1])
+    use(configured_language(path))
 
 
 def use(language: object) -> None:
     """Every later message in this language; anything unknown keeps Indonesian."""
     global _language
-    _language = language if language in LANGUAGES else 'id'
+    _language = language if language in LANGUAGES and not os.environ.get('COC_CANONICAL_LOG') else 'id'
 
 
-def pieces(template: str) -> list:
-    """The text around a template's values, as it reads once they are filled in."""
-    return [piece.replace('%%', '%') for piece in VALUE.split(template)]
+def pieces(text: str) -> tuple[list, list]:
+    literals, values, start = [], [], 0
+    for token in TOKENS.finditer(text):
+        if token.group() == '%%':
+            continue
+        literals.append(text[start:token.start()].replace('%%', '%'))
+        values.append(token.group())
+        start = token.end()
+    literals.append(text[start:].replace('%%', '%'))
+    return literals, values
 
 
-@cache
+@lru_cache(maxsize=1)
 def catalog() -> tuple[dict, list]:
     english = json.loads(CATALOG.read_text(encoding='utf-8'))
-    # Templates with values, also the printf ones a bot running in Indonesian prints filled in.
-    found = [(pieces(key), pieces(english[key])) for key in english]
-    found = [(around, english) for around, english in found if len(around) > 1 and ''.join(around).strip()]
-    # The most specific template first, so "Tembok {} …" is tried before a looser "{} …".
-    found.sort(key=lambda template: -len(''.join(template[0])))
-    patterns = [(around, re.compile('(.*?)'.join(map(re.escape, around)), re.S), english) for around, english in found]
+    patterns = []
+    for source, target in english.items():
+        prefix = PREFIX.match(source)
+        if prefix and target.startswith(prefix.group()):
+            source, target = source[prefix.end():], target[prefix.end():]
+        literals, values = pieces(source)
+        if values and any(literals):
+            patterns.append((sum(map(len, literals)), re.compile('(.*?)'.join(map(re.escape, literals)), re.S),
+                             pieces(target)[0]))
+    patterns.sort(key=lambda entry: -entry[0])
     return english, patterns
 
 
@@ -45,19 +78,22 @@ def translate(text: object) -> object:
     exact, patterns = catalog()
     if text in exact:
         return exact[text]
-    level = LEVEL.fullmatch(text)
-    if level:
-        # A log line relayed from a bot that still runs in Indonesian.
-        return f'{level[1]}: {translate(level[2])}'
-    for around, pattern, english in patterns:
-        # Its fixed text comes first: a cheap check that leaves the regex to the few templates that can match.
-        if not (text.startswith(around[0]) and text.endswith(around[-1]) and all(p in text for p in around[1:-1])):
-            continue
+    prefix = PREFIX.match(text)
+    if prefix:
+        return prefix.group() + translate(text[prefix.end():])
+    # Error wrappers must be recognized before an inner, more specific error template.
+    for wrapper in ('Perintah ditolak: {}', 'Gagal: {}'):
+        if text.startswith(wrapper[:-2]):
+            return exact[wrapper][:-2] + translate(text[len(wrapper) - 2:])
+    for _, pattern, literals in patterns:
         found = pattern.fullmatch(text)
         if found:
             # A value can itself be a message, such as the reason in "… ({exc}); …".
             values = [translate(value) for value in found.groups()] + ['']
-            return ''.join(piece + value for piece, value in zip(english, values))
+            return ''.join(piece + value for piece, value in zip(literals, values))
+    for separator in (', ', '; '):
+        if separator in text:
+            return separator.join(translate(value) for value in text.split(separator))
     return text
 
 
@@ -79,3 +115,8 @@ def install(language: object) -> None:
     for handler in logging.getLogger().handlers:
         if not any(isinstance(existing, Translate) for existing in handler.filters):
             handler.addFilter(Translate())
+
+
+if __name__ == '__main__':
+    # Run python messages.py after editing the catalog; the test checks the browser copy stays in sync.
+    Path(__file__).with_name('web').joinpath('messages_en.json').write_bytes(CATALOG.read_bytes())

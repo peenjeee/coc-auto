@@ -10,8 +10,6 @@ import re
 import subprocess
 from typing import Callable
 
-import messages
-
 TIMEOUT_SECONDS = 15
 FIRST_PORT = 5554
 DEFAULT_RESOLUTION = (1280, 720)
@@ -25,12 +23,10 @@ AXIS = re.compile(r'ABS_MT_POSITION_([XY])\s*:.*?max (\d+)')
 CALIBRATED_DPI = 240
 RESOLUTION_KEY, DPI_KEY = 'advancedSettings.resolution', 'advancedSettings.resolutionDpi'
 ADB_DEBUG_KEY = 'basicSettings.adbDebug'
+ADB_DEBUG_HINT = ('ADB debugging LDPlayer mati: Pengaturan LDPlayer > Lainnya > Debug ADB > Buka koneksi lokal (atau '
+                  'tombol "sesuaikan layar" di dashboard), lalu nyalakan ulang LDPlayer')
+
 Runner = Callable[[list], str]
-
-
-def adb_debug_hint() -> str:
-    return messages.translate('ADB debugging LDPlayer mati: Pengaturan LDPlayer > Lainnya > Debug ADB > Buka koneksi '
-                              'lokal (atau tombol "sesuaikan layar" di dashboard), lalu nyalakan ulang LDPlayer')
 
 
 def run(command: list) -> str:
@@ -44,7 +40,7 @@ def safe(runner: Runner, command: list, problems: list, label: str) -> str:
     try:
         return runner(command) or ''
     except (OSError, subprocess.SubprocessError) as exc:
-        problems.append(messages.translate(f'{label} gagal: {exc}'))
+        problems.append(f'{label} gagal: {exc}')
         return ''
 
 
@@ -186,8 +182,7 @@ def detect(config: dict, runner: Runner = run, roots: list | None = None) -> dic
                          drive_roots() if roots is None else roots)
     found: dict = {'folders': folders, 'problems': problems}
     if not folders:
-        problems.append(messages.translate('LDPlayer tidak ditemukan; isi path adb.exe dan ldconsole.exe dari folder '
-                                           'LDPlayer manual'))
+        problems.append('LDPlayer tidak ditemukan; isi path adb.exe dan ldconsole.exe dari folder LDPlayer manual')
         return found
     folder = Path(folders[0])
     adb = found['adb'] = str(folder / 'adb.exe')
@@ -195,22 +190,22 @@ def detect(config: dict, runner: Runner = run, roots: list | None = None) -> dic
     instances = found['instances'] = parse_instances(safe(runner, [console, 'list2'], problems, 'ldconsole list2'))
     instance = pick_instance(instances, config.get('ld_index'))
     if instance is None:
-        problems.append(messages.translate('Tidak ada instance LDPlayer yang menyala; nyalakan LDPlayer lalu deteksi lagi'))
+        problems.append('Tidak ada instance LDPlayer yang menyala; nyalakan LDPlayer lalu deteksi lagi')
     else:
         found['ld_index'] = instance['index']
         settings = instance_config(console, instance['index'])
         try:
             if settings.is_file() and adb_debug(settings) == 0:
-                problems.append(adb_debug_hint())
+                problems.append(ADB_DEBUG_HINT)
         except (OSError, ValueError) as exc:
-            problems.append(messages.translate(f'{settings.name} tidak terbaca: {exc}'))
+            problems.append(f'{settings.name} tidak terbaca: {exc}')
     devices = found['devices'] = parse_devices(safe(runner, [adb, 'devices'], problems, 'adb devices'))
     candidates = ([instance['serial']] if instance else []) + [config.get('serial')]
     serial = next((value for value in candidates if value in devices), None)
     if serial is None:
         if instance:
-            problems.append(messages.translate(f'{instance["serial"]} belum tersambung ke adb; tunggu LDPlayer selesai '
-                                               'menyala lalu deteksi lagi'))
+            problems.append(f'{instance["serial"]} belum tersambung ke adb; tunggu LDPlayer selesai menyala lalu '
+                            'deteksi lagi')
         return found
     found['serial'] = serial
     expected = list(config.get('resolution') or DEFAULT_RESOLUTION)
@@ -220,16 +215,16 @@ def detect(config: dict, runner: Runner = run, roots: list | None = None) -> dic
         found['touch_device'] = touch
         span = touch_range(events, touch)
         if span and span != (expected[0] - 1, expected[1] - 1):
-            problems.append(messages.translate(f'Layar sentuh {touch} {span[0]}x{span[1]} tidak cocok dengan layar '
-                                               f'{expected[0]}x{expected[1]}; samakan resolusi LDPlayer dengan kalibrasi'))
+            problems.append(f'Layar sentuh {touch} {span[0]}x{span[1]} tidak cocok dengan layar {expected[0]}x{expected[1]}; '
+                            'samakan resolusi LDPlayer dengan kalibrasi')
     else:
-        problems.append(messages.translate('Layar sentuh tidak terbaca; isi touch_device manual, mis. /dev/input/event4'))
+        problems.append('Layar sentuh tidak terbaca; isi touch_device manual, mis. /dev/input/event4')
     size = parse_size(safe(runner, [adb, '-s', serial, 'shell', 'wm', 'size'], problems, 'adb wm size'))
     if size is None:
-        problems.append(messages.translate('Resolusi layar LDPlayer tidak terbaca'))
+        problems.append('Resolusi layar LDPlayer tidak terbaca')
     else:
         found['resolution'] = size
         if sorted(size) != sorted(expected):
-            problems.append(messages.translate(f'Resolusi LDPlayer {size[0]}x{size[1]}; bot dikalibrasi untuk '
-                                               f'{expected[0]}x{expected[1]} (ubah di Pengaturan LDPlayer > Tampilan)'))
+            problems.append(f'Resolusi LDPlayer {size[0]}x{size[1]}; bot dikalibrasi untuk {expected[0]}x{expected[1]} '
+                            '(ubah di Pengaturan LDPlayer > Tampilan)')
     return found

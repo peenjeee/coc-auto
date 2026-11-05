@@ -1,10 +1,13 @@
 import http.client
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
 import threading
 import time
+from types import SimpleNamespace
 import unittest
 
 import messages
@@ -79,6 +82,43 @@ class SupervisorTests(unittest.TestCase):
         self.assertTrue(until(lambda: any('args --mode home --worker' in line for line in self.lines())))
         self.assertEqual(self.supervisor.command(*signed('restart'))['code'], 'restarted')
         self.assertTrue(until(lambda: sum('args --mode home --worker' in line for line in self.lines()) == 2))
+
+    def test_a_language_switch_changes_output_without_restarting_the_worker(self):
+        self.addCleanup(messages.use, 'id')
+        self.supervisor.settings = SimpleNamespace(write_language=lambda language: language, read=lambda: {})
+        # The child deliberately requests English; its supervisor still receives canonical text.
+        script = ('import logging, messages\n'
+                  'logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")\n'
+                  'messages.install("en")\n'
+                  'logging.info("Serangan selesai: %s (%s)", "home", 1)\n' + CHILD)
+        self.supervisor.command_base = [sys.executable, '-c', script]
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            self.supervisor.start([])
+            self.assertTrue(until(lambda: 'INFO: Serangan selesai: home (1)' in self.supervisor.history()))
+            child = self.supervisor.child
+            result = self.supervisor.command(*signed('set_language', {'language': 'en'}))
+            self.assertTrue(result['ok'])
+            self.supervisor.log('INFO: Menyerah: kerusakan mencapai 50%')
+            self.assertIn('INFO: Surrender: damage reached 50%', stream.getvalue())
+            self.assertEqual(self.supervisor.history()[-1], 'INFO: Menyerah: kerusakan mencapai 50%')
+            self.assertEqual(self.lines()[-1], 'INFO: Menyerah: kerusakan mencapai 50%')
+            self.supervisor.command(*signed('set_language', {'language': 'id'}))
+            self.supervisor.log('INFO: Menyerah: kerusakan mencapai 50%')
+            self.assertIn('INFO: Menyerah: kerusakan mencapai 50%', stream.getvalue())
+            self.assertIs(self.supervisor.child, child)
+            self.assertIsNone(child.poll())
+            self.supervisor.stop()
+            self.assertTrue(until(lambda: any('bot berhenti' in line for line in self.supervisor.history())))
+
+    def test_english_refusals_keep_a_canonical_reason_for_the_dashboard(self):
+        self.addCleanup(messages.use, 'id')
+        messages.use('en')
+        result = self.supervisor.command(*signed('start', {'task': 'attack', 'cycles': 101}))
+        self.assertEqual(result['code'], 'refused')
+        self.assertEqual(result['message'], 'Command rejected: Option cycles must be a number 1..100')
+        self.assertEqual(result['source_message'], 'Perintah ditolak: Pilihan cycles harus angka 1..100')
+        self.assertEqual(self.device.calls, [])
 
     def test_device_actions_stop_the_bot_first(self):
         self.supervisor.start(['--mode', 'home'])
@@ -320,7 +360,7 @@ class SettingsTests(unittest.TestCase):
         result = supervisor.command(*signed('set_language', {'language': 'en'}))
         self.assertEqual((result['ok'], result['code'], result['data']['language']), (True, 'language_saved', 'en'))
         self.assertEqual(self.stored()['language'], 'en')
-        self.assertEqual(result['message'], 'Terminal language saved; the bot log switches too')
+        self.assertEqual(result['message'], 'Display language saved; logs use it immediately')
         self.assertEqual(messages.translate('REMOTE: menghentikan bot'), 'REMOTE: stopping bot')
         for language in ('fr', None, 1, ['en']):
             with self.subTest(language=language), self.assertRaises(remote.CommandRefused):
@@ -402,7 +442,11 @@ class DashboardTests(unittest.TestCase):
         (web / 'icons').mkdir()
         (web / 'manifest.webmanifest').write_text('{}', encoding='utf-8')
         (web / 'icons' / 'icon-192.png').write_bytes(b'png')
-        for path, kind in (('/manifest.webmanifest', 'application/manifest+json'), ('/icons/icon-192.png', 'image/png')):
+        (web / 'messages.js').write_text('export const example = 1;', encoding='utf-8')
+        (web / 'messages_en.json').write_text('{}', encoding='utf-8')
+        for path, kind in (('/manifest.webmanifest', 'application/manifest+json'), ('/icons/icon-192.png', 'image/png'),
+                           ('/messages.js', 'text/javascript; charset=utf-8'),
+                           ('/messages_en.json', 'application/json; charset=utf-8')):
             with self.subTest(path=path):
                 self.assertEqual(self.request('GET', path)[0], 200)
                 self.assertEqual(self.last_headers.get('Content-Type'), kind)

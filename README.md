@@ -372,6 +372,8 @@ sections: **Task**, **Targets** (villages, resources, dark elixir, walls, `--bul
 LDPlayer, turn LDPlayer off; the last three stop the bot first. When the PC is off, offline or the bot is not
 running, the dashboard says so instead of sending, and a command that gets no answer within 10 seconds is reported.
 Recovery and `settle` work as before: the task runs as a child process (`--worker`) of the dashboard link.
+The language switch updates live logs, recent log history, setup problems and visible notifications immediately,
+without restarting the task. It changes display text only; CoC's language and screen detection are independent.
 
 **Deploy points:** the deploy pins of the Home Village and both Builder Base stages are loaded when the dashboard
 connects and drawn over a real attack screen of each (`web/maps/`), or over the last screenshot the bot took of
@@ -615,7 +617,7 @@ How to change it:
 | `adb`, `serial`, `resolution` | ADB executable, device serial, and screen size. |
 | `ldconsole`, `ld_index` | LDPlayer console and instance index, used to start a stopped emulator. |
 | `touch_device` | Raw touch input device, e.g. `/dev/input/event4`. |
-| `language` | Terminal and dashboard log language: `id` (default) or `en`. The dashboard's ID/EN switch saves it in `config.local.json` and switches the log at once: lines of a bot started in the other language are translated as they come in, and the bot itself uses it from its next Start. |
+| `language` | Terminal, CLI help and calibration instruction language: `id` (default) or `en`. The dashboard's ID/EN switch saves it in `config.local.json`; supervised logs switch immediately without restarting the task. Each dashboard renders recent history in its own selected language. Game recognition is unchanged. |
 | `tesseract` | Tesseract executable; used for loot only when `digits` is not set. |
 | `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
 | `remote` | Web dashboard: online relay address and key, local `port` (8765), and the `dashboard` address printed in the terminal. |
@@ -677,7 +679,7 @@ again.
 python -m unittest -v
 ```
 
-The suites (369 tests) use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
+The Python suites use synthetic screens and a fake device, plus real screen crops and saved Play Store screens in
 `fixtures/`. They cover screen detection, digit reading, deploy plans for both villages (real card bars, stage 2
 camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), the hero ability meter, popups, the
 game update, recovery (`--cycles` included), the until-full loop, walls (the cheapest row in either language, the sale
@@ -685,6 +687,9 @@ dialog, bulk upgrades and their bar layouts, wall rings, `--wall-every`, `--wall
 dashboard link (signed commands, settings, the bot as a child process, the local server, and the relay against a fake
 relay server), the English terminal messages, the LDPlayer screen switch, and LDPlayer detection against fake tool
 output. They do not replace a live run on a real account.
+
+After editing `messages_en.json`, run `python messages.py` to synchronize the dashboard's catalog. The Python
+tests verify both copies match. Run the dependency-free dashboard localization tests with `node --test test_web.mjs`.
 
 ## Project structure
 

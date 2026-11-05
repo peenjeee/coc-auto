@@ -1,6 +1,7 @@
 // Device settings: the loot minimums the Home Village search skips opponents by, and where LDPlayer is on the
 // device. Auto-detect only fills the form with what the device found; nothing changes until save is pressed.
 import { t } from './i18n.js';
+import { translate } from './messages.js';
 
 const MINIMUM = ['gold', 'elixir', 'dark'];
 const SETUP = ['adb', 'ldconsole', 'serial', 'ld_index', 'touch_device'];
@@ -97,7 +98,7 @@ export class SettingsPanel {
     }
     if (Array.isArray(this.found.resolution)) add(`${t('setup_resolution')}: ${this.found.resolution.join('x')}`, 'info');
     const problems = list(this.found.problems);
-    for (const problem of problems) add(String(problem), 'problem');
+    for (const problem of problems) add(translate(String(problem)), 'problem');
     if (!problems.length) add(t('setup_all_found'), 'ok');
   }
 }

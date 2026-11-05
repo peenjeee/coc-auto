@@ -3,6 +3,7 @@
 // only trusts messages signed with the key, so nobody else on the channel can pose as the device.
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { applyLanguage, t } from './i18n.js';
+import { translate } from './messages.js';
 import { RealtimeChannel } from './realtime.js';
 import { DeployEditor } from './deploy.js';
 import { SettingsPanel } from './settings.js';
@@ -30,6 +31,8 @@ let lastState = null;
 let editor = null;
 let settings = null;
 let settingsAsked = false;
+let currentNotice = null;
+let connectionProblem = null;
 
 /** localStorage that never throws (private windows, blocked storage). */
 const stored = {
@@ -83,7 +86,8 @@ function addLines(lines) {
   for (const line of lines) {
     if (typeof line !== 'string') continue;
     const row = document.createElement('span');
-    row.textContent = line;
+    row.sourceMessage = line;
+    row.textContent = translate(line);
     row.className = lineClass(line);
     fragment.append(row);
   }
@@ -97,10 +101,22 @@ function clearLines() {
 }
 
 function notify(message, kind = 'info') {
+  currentNotice = { message, kind };
+  renderNotice();
+}
+
+function renderNotice() {
+  if (!currentNotice) return;
+  const { message, kind } = currentNotice;
   const notice = $('notice');
-  notice.textContent = message;
+  const text = typeof message === 'function' ? message() : translate(message);
+  notice.textContent = text;
   notice.className = `notice ${kind}`;
-  notice.hidden = !message;
+  notice.hidden = !text;
+}
+
+function renderConnectionProblem() {
+  if (connectionProblem) $('connect-error').textContent = connectionProblem();
 }
 
 function setOnline(isOnline, reason) {
@@ -111,9 +127,9 @@ function setOnline(isOnline, reason) {
   badge.className = `badge ${isOnline ? 'online' : 'offline'}`;
   if (!isOnline && (changed || reason)) {
     $('bot-state').textContent = '-';
-    notify(reason || t('offline_text'), 'error');
+    notify(reason || (() => t('offline_text')), 'error');
   } else if (isOnline && changed) {
-    notify(t('connected'), 'ok');
+    notify(() => t('connected'), 'ok');
     // Show the device's settings and its deploy pins over the maps once per connection, without a click.
     if (!settingsAsked) {
       settingsAsked = true;
@@ -136,16 +152,17 @@ function showState(state) {
 
 /** The dashboard's own words for a device answer; refusals and failures keep the device's detail. */
 function resultText(result) {
+  if (['no_answer', 'relay_lost'].includes(result.code)) return t(result.code);
   const key = `code_${result.code}`;
   const text = t(key);
-  return text === key ? String(result.message || '') : text;
+  return text === key ? translate(String(result.source_message ?? result.message ?? '')) : text;
 }
 
 const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved', 'language_saved'];
 const DISPLAY_ANSWERS = ['display_fitted', 'display_ok', 'display_restored', 'display_unchanged'];
 
 function handleResult(result, quiet = false) {
-  if (!quiet || !result.ok) notify(resultText(result), result.ok ? 'ok' : 'error');
+  if (!quiet || !result.ok) notify(() => resultText(result), result.ok ? 'ok' : 'error');
   showState(result.state);
   if (!result.ok || !result.data) return;
   if (result.code === 'deploy_loaded') editor.load(result.data);
@@ -166,7 +183,7 @@ class LocalLink {
   static async open(channel) {
     const url = `/api/stream?channel=${encodeURIComponent(channel)}`;
     const probe = await fetch(url);
-    if (probe.status === 403) throw new Error(t('key_not_here'));
+    if (probe.status === 403) throw Object.assign(new Error(t('key_not_here')), { code: 'key_not_here' });
     await probe.body.cancel();
     return new LocalLink(url);
   }
@@ -175,7 +192,7 @@ class LocalLink {
     this.source = new EventSource(url);
     // Every (re)connect starts with the state and the whole recent log.
     this.source.onopen = () => { clearLines(); setOnline(true); };
-    this.source.onerror = () => setOnline(false, t('local_lost'));
+    this.source.onerror = () => setOnline(false, () => t('local_lost'));
     this.source.addEventListener('state', (message) => showState(JSON.parse(message.data)));
     this.source.addEventListener('line', (message) => addLines([JSON.parse(message.data)]));
     this.source.addEventListener('snapshot', (message) => {
@@ -199,7 +216,7 @@ class LocalLink {
 class RelayLink {
   /** The device's Realtime channel; the device is online while its signed state keeps arriving. */
   static async open(channel) {
-    if (!SUPABASE_KEY) throw new Error(t('relay_missing'));
+    if (!SUPABASE_KEY) throw Object.assign(new Error(t('relay_missing')), { code: 'relay_missing' });
     return new RelayLink(channel);
   }
 
@@ -210,7 +227,7 @@ class RelayLink {
     this.channel = new RealtimeChannel(SUPABASE_URL, SUPABASE_KEY, name, {
       status: (joined) => {
         if (joined) this.channel.send('hello', {});
-        else setOnline(false, t('relay_lost'));
+        else setOnline(false, () => t('relay_lost'));
       },
       broadcast: (event, payload) => { this.received(event, payload); },
     });
@@ -251,13 +268,13 @@ class RelayLink {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.waiting.delete(nonce);
-        resolve({ ok: false, message: t('no_answer') });
+        resolve({ ok: false, code: 'no_answer' });
       }, ACK_MS);
       this.waiting.set(nonce, (payload) => { clearTimeout(timer); resolve(payload); });
       if (!this.channel.send('cmd', { body, sig })) {
         clearTimeout(timer);
         this.waiting.delete(nonce);
-        resolve({ ok: false, message: t('relay_lost') });
+        resolve({ ok: false, code: 'relay_lost' });
       }
     });
   }
@@ -415,17 +432,17 @@ function setBusy(busy) {
 async function send(action, args = {}, { quiet = false } = {}) {
   if (!link) return;
   if (!online) {
-    notify(t('cannot_run', { action, reason: t('offline_text') }), 'error');
+    notify(() => t('cannot_run', { action, reason: t('offline_text') }), 'error');
     return;
   }
   const nonce = crypto.randomUUID();
   const body = JSON.stringify({ action, args, ts: Date.now() / 1000, nonce });
   setBusy(true);
-  if (!quiet) notify(t('sending', { action }));
+  if (!quiet) notify(() => t('sending', { action }));
   try {
     handleResult(await link.send(body, await sign(body), nonce), quiet);
   } catch (error) {
-    notify(t('send_failed', { error: error instanceof Error ? error.message : String(error) }), 'error');
+    notify(() => t('send_failed', { error: error instanceof Error ? error.message : String(error) }), 'error');
   } finally {
     setBusy(false);
   }
@@ -435,8 +452,10 @@ async function connect(rawKey) {
   const key = rawKey.trim();
   const problem = $('connect-error');
   problem.hidden = true;
+  connectionProblem = null;
   if (!KEY_PATTERN.test(key)) {
-    problem.textContent = t('key_format');
+    connectionProblem = () => t('key_format');
+    renderConnectionProblem();
     problem.hidden = false;
     return;
   }
@@ -450,14 +469,16 @@ async function connect(rawKey) {
     link = LOCAL ? await LocalLink.open(channel) : await RelayLink.open(channel);
   } catch (error) {
     link = null;
-    problem.textContent = error instanceof Error ? error.message : String(error);
+    connectionProblem = () => ['key_not_here', 'relay_missing'].includes(error?.code)
+      ? t(error.code) : error instanceof Error ? error.message : String(error);
+    renderConnectionProblem();
     problem.hidden = false;
     return;
   }
   stored.set(STORE_KEY, key);
   $('connect').hidden = true;
   $('dashboard').hidden = false;
-  if (!LOCAL) setOnline(false, t('waiting_device'));
+  if (!LOCAL) setOnline(false, () => t('waiting_device'));
 }
 
 function changeLanguage(language) {
@@ -468,6 +489,9 @@ function changeLanguage(language) {
   showState(lastState);
   editor.render();
   settings.render();
+  for (const row of $('log').children) row.textContent = translate(row.sourceMessage);
+  renderNotice();
+  renderConnectionProblem();
 }
 
 /** Installable app: the browser offers it once the page qualifies; the button appears only then. */
