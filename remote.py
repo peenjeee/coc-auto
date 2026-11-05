@@ -359,10 +359,15 @@ def save_local(config_path: Path, changes: dict, root: Path, what: str) -> None:
 
 def ld_tool(value: object, name: str) -> str:
     """A path to one of LDPlayer's own tools: the bot runs it, so it must be that file on a local drive (a network
-    share would let a signed command run a program from elsewhere)."""
+    share would let a signed command run a program from elsewhere). On POSIX the path has no drive letter, so an
+    absolute path that is not a `//host/share` UNC path is the local case."""
     path = Path(value) if isinstance(value, str) and value else None
-    if (path is None or not LOCAL_DRIVE.fullmatch(path.drive) or not path.is_absolute()
-            or path.name.lower() != name or not path.is_file()):
+    if path is None or not path.is_absolute() or path.name.lower() != name or not path.is_file():
+        raise CommandRefused(f'{name} tidak ditemukan; pilih {name} di folder LDPlayer')
+    if os.name == 'nt':
+        if not LOCAL_DRIVE.fullmatch(path.drive):
+            raise CommandRefused(f'{name} tidak ditemukan; pilih {name} di folder LDPlayer')
+    elif str(path).startswith('//'):
         raise CommandRefused(f'{name} tidak ditemukan; pilih {name} di folder LDPlayer')
     return str(path)
 

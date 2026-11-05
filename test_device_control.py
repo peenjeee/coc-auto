@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -35,6 +36,7 @@ class DisplayTests(unittest.TestCase):
         ld = folder / 'LDPlayer9'
         (ld / 'vms' / 'config').mkdir(parents=True)
         (ld / 'ldconsole.exe').write_bytes(b'')
+        os.chmod(ld / 'ldconsole.exe', 0o755)  # bot.executable checks X_OK on POSIX
         self.instance = ld / 'vms' / 'config' / 'leidian0.config'
         self.write_instance(1600, 900, 320)
         config = json.loads((REPO / 'config.json').read_text(encoding='utf-8'))

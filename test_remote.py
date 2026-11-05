@@ -2,6 +2,7 @@ import http.client
 from contextlib import redirect_stdout
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -303,7 +304,9 @@ class SettingsTests(unittest.TestCase):
         self.ld = folder / 'LDPlayer9'
         self.ld.mkdir()
         for name in ('adb.exe', 'ldconsole.exe'):
-            (self.ld / name).write_bytes(b'')
+            path = self.ld / name
+            path.write_bytes(b'')
+            os.chmod(path, 0o755)  # bot.executable checks X_OK on POSIX
         self.asked = []
         self.settings = remote.Settings(self.config, REPO, detector=lambda config: self.asked.append(config) or
                                         {'adb': 'C:/LD/adb.exe', 'problems': []})
