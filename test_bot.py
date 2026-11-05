@@ -2489,6 +2489,16 @@ class BotTests(unittest.TestCase):
         image[240:480, 240:1040] = cv2.imread(str(root / 'fixtures' / 'idle-en.png'))
         self.assertEqual(bot.Detector(config, root).detect(image), 'idle')
 
+    def test_the_gold_pass_offer_is_closed_by_its_red_x_in_any_language(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        # Its X button and the Gold Pass shield carry no text, so one look covers every game language.
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[40:220, 200:1140] = cv2.imread(str(root / 'fixtures' / 'gold-pass-en.png'))
+        self.assertEqual(bot.Detector(config, root).detect(image), 'gold_pass')
+        self.assertEqual(bot.POPUP_ACTIONS['gold_pass'], 'close')
+        self.assertEqual(config['screens']['gold_pass']['actions']['close'], [1100, 80])
+
     def test_the_english_another_device_popup_is_the_other_device_screen(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent

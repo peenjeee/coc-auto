@@ -1960,6 +1960,52 @@
         ]
       }
     },
+    "gold_pass": {
+      "anchors": [
+        {
+          "file": "calibration/gold_pass-close.png",
+          "search": [
+            1060,
+            40,
+            80,
+            75
+          ],
+          "scales": [
+            1.05,
+            1.1,
+            1.15
+          ],
+          "max_score": 0.05
+        },
+        {
+          "file": "calibration/gold_pass-shield.png",
+          "search": [
+            205,
+            90,
+            125,
+            125
+          ],
+          "scales": [
+            0.95,
+            1.0,
+            1.05
+          ],
+          "max_score": 0.05
+        }
+      ],
+      "overrides": [
+        "home",
+        "builder",
+        "build_list",
+        "wall_selected"
+      ],
+      "actions": {
+        "close": [
+          1100,
+          80
+        ]
+      }
+    },
     "build_list": {
       "anchors": [
         {
