@@ -2466,6 +2466,14 @@ class BotTests(unittest.TestCase):
         image[260:460, 250:1000] = cv2.imread(str(root / 'fixtures' / 'disconnected-en.png'))
         self.assertEqual(bot.Detector(config, root).detect(image), 'disconnected')
 
+    def test_the_english_star_bonus_popup_is_the_star_bonus_screen(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        strips = cv2.imread(str(root / 'fixtures' / 'star-bonus-en.png'))
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[55:105, 380:910], image[590:636, 380:910] = strips[:50], strips[50:]
+        self.assertEqual(bot.Detector(config, root).detect(image), 'star_bonus')
+
     def test_the_english_welcome_back_popup_is_the_welcome_screen(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
