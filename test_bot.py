@@ -2489,6 +2489,13 @@ class BotTests(unittest.TestCase):
         image[240:480, 240:1040] = cv2.imread(str(root / 'fixtures' / 'idle-en.png'))
         self.assertEqual(bot.Detector(config, root).detect(image), 'idle')
 
+    def test_the_english_another_device_popup_is_the_other_device_screen(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[240:480, 240:1040] = cv2.imread(str(root / 'fixtures' / 'other-device-en.png'))
+        self.assertEqual(bot.Detector(config, root).detect(image), 'other_device')
+
     def test_the_english_unable_to_attack_screen_is_the_search_failed_screen(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
