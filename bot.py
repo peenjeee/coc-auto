@@ -3098,8 +3098,8 @@ class Bot:
                                                        WALL_TAP_SECONDS if self.poll else 0)
             except BotError as exc:
                 if self.current_screen() == 'wall_selected':
-                    # Seen live: the tap lights up more walls but the plain wall panel stays, with no -1/+10/+1.
-                    # Waiting again would only repeat it after every recovery.
+                    # Seen live with the last few walls left to max: the tap lights them up but the plain wall panel
+                    # stays, with no -1/+10/+1. Waiting again would only repeat it after every recovery.
                     raise BulkLayout('panel -1, +10, +1 tidak muncul') from exc
                 raise WaitTimeout(f'Tingkatkan Lebih Banyak tidak terbaca ({exc}); tidak ada input lanjutan') from exc
             if affordable and over:

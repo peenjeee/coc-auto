@@ -271,7 +271,8 @@ meningkatkan tembok yang dipilih dengan … Emas?", in English "… for … Gold
 resource (Emas/Gold, Eliksir/Elixir, or their "Tukang" Builder Base forms), so a gem price is never confirmed; anything
 else is cancelled with Batal. A wall without the button, or a
 resource that pays for one wall only, takes the one-wall upgrade. When the button lights up more walls but the -1/+10/+1
-bar never comes (the plain wall panel stays), the run stops using it and goes on one wall per upgrade. The bulk selection outlives the builder list, so the
+bar never comes (the plain wall panel stays, as with the last few walls left to max), the run stops using it and goes
+on one wall per upgrade. The bulk selection outlives the builder list, so the
 bot clears it by opening and closing the list. With wall rings (both villages) the ring adds a button, and beside the
 open builder list the buttons wrap into two rows: "Tingkatkan Lebih Banyak" ends the top row, and in bulk mode -1,
 +10 and +1 sit above the upgrade buttons instead of left of them; the bot reads both layouts. A bulk bar it cannot
