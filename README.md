@@ -719,6 +719,7 @@ game_update.py         Play Store Update button and installed game version, for 
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
 web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own relay client, ID/EN text, app manifest, service worker, icons and its font (fonts/)
 calibrate.py           calibration CLI (screenshots only, never taps)
+scripts/               macOS setup script and a one-anchor calibration helper (see scripts/README.md)
 test_bot.py            offline unit tests
 test_cloud_recovery.py stuck-screen recovery against a virtual clock (CoC, then LDPlayer restarts)
 test_game_update.py    Play Store screen and game version reading tests
