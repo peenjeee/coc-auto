@@ -301,6 +301,7 @@
  "Layar LDPlayer belum dikembalikan (%s); pakai tombol di dashboard": "LDPlayer screen not put back yet (%s); use the dashboard button",
  "{} detik battle saat deploy; sisa pasukan tidak dikerahkan": "{} seconds of battle during deploy; remaining troops not deployed",
  "tombol -1, +10, +1 tidak ditemukan": "no -1, +10, +1 buttons found",
+ "panel -1, +10, +1 tidak muncul": "the -1, +10, +1 panel did not show",
  "\"Tingkatkan Lebih Banyak\" tidak dipakai lagi: %s; lanjut satu tembok per upgrade": "\"Upgrade More\" no longer used: %s; going on one wall per upgrade",
  "Bahasa harus id atau en": "Language must be id or en",
  "API key perangkat : {}": "Device API key    : {}",

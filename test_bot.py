@@ -2587,6 +2587,20 @@ class BotTests(unittest.TestCase):
         # Not even one wall is affordable.
         self.assertEqual(run(0, 50, 1000), (None, []))
 
+    def test_upgrade_more_that_leaves_the_plain_wall_panel_falls_back_to_one_wall_at_a_time(self):
+        runner = bot.Bot(self.config, self.root, Device(self.frames), live=True, timeout=1, poll=0, bulk_walls=True)
+
+        def plain_panel(frame, spec, village, resource):
+            raise bot.UnexpectedScreen('Layar tidak diharapkan saat Tingkatkan Lebih Banyak: wall_selected')
+        runner.bulk_view = plain_panel
+        runner.current_screen = lambda: 'wall_selected'
+        with self.assertRaises(bot.BulkLayout):
+            runner.fill_bulk({}, 'home', 'elixir', 1000)
+        # Anything else that keeps the controls from showing is still a stall for recovery.
+        runner.current_screen = lambda: None
+        with self.assertRaises(bot.WaitTimeout):
+            runner.fill_bulk({}, 'home', 'elixir', 1000)
+
     def test_a_bulk_gold_upgrade_keeps_the_reserve_and_the_upgrade_limit(self):
         runner = bot.Bot(self.config, self.root, None, live=True, bulk_walls=True)
         runner.hud_gold = lambda spec: 3_250_000
