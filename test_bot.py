@@ -2594,8 +2594,9 @@ class BotTests(unittest.TestCase):
             raise bot.UnexpectedScreen('Layar tidak diharapkan saat Tingkatkan Lebih Banyak: wall_selected')
         runner.bulk_view = plain_panel
         runner.current_screen = lambda: 'wall_selected'
-        with self.assertRaises(bot.BulkLayout):
-            runner.fill_bulk({}, 'home', 'elixir', 1000)
+        for village, resource in (('home', 'elixir'), ('builder', 'gold')):
+            with self.assertRaises(bot.BulkLayout):
+                runner.fill_bulk({}, village, resource, 1000)
         # Anything else that keeps the controls from showing is still a stall for recovery.
         runner.current_screen = lambda: None
         with self.assertRaises(bot.WaitTimeout):
