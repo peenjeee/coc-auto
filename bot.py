@@ -614,6 +614,23 @@ class ADB:
         self.executable, self.serial = executable, serial
         self.resolution, self.live, self.touch = resolution, live, touch
         self.event_files: set = set()
+        self.axes: dict = {}
+
+    def touch_axes(self, device: str) -> tuple:
+        """The ABS_MT_POSITION range of the node: screen pixels on LDPlayer, 0..32767 on BlueStacks/QEMU.
+        check_touch fills it before the first tap; without it the node is assumed to take screen pixels."""
+        return self.axes.get(device, (self.resolution[0] - 1, self.resolution[1] - 1))
+
+    def scaled_events(self, events: list, device: str) -> list:
+        """Raw events with pixel positions mapped to the node's axis range, for virtual touchscreens."""
+        max_x, max_y = self.touch_axes(device)
+        screen_x, screen_y = self.resolution[0] - 1, self.resolution[1] - 1
+        if (max_x, max_y) == (screen_x, screen_y):
+            return events
+        scale_x, scale_y = max_x / screen_x, max_y / screen_y
+        return [(kind, code, round(value * scale_x) if kind == 3 and code == 53 else
+                 round(value * scale_y) if kind == 3 and code == 54 else value)
+                for kind, code, value in events]
 
     def inject(self, steps: list, device: str | None = None) -> None:
         """Replay touch steps by cat-ing prepared event files: one whole write() per frame."""
@@ -637,6 +654,7 @@ class ADB:
                 name = 'up'
                 files[name] = [(3, 47, 0), (3, 57, -1), (1, 330, 0), (0, 0, 0)]
             lines.append(f'cat {EVENT_DIR}/{name} > {device}')
+        files = {name: self.scaled_events(events, device) for name, events in files.items()}
         missing = {name: events for name, events in files.items() if name not in self.event_files}
         if missing:
             writes = [f'echo {base64.b64encode(event_bytes(events)).decode()} | base64 -d > {EVENT_DIR}/{name}'
@@ -665,6 +683,10 @@ class ADB:
         if not nodes:
             return None
         output = self.command('shell', 'uname -m; getevent -pl').decode('utf-8', 'replace')
+        for node in nodes:
+            span = ldplayer.touch_range(output, node)
+            if span:
+                self.axes[node] = span  # 0..32767 on BlueStacks; inject scales the pixels to it
         return next(filter(None, (ldplayer.touch_problem(output, node, self.resolution) for node in nodes)), None)
 
     def connected(self) -> bool:

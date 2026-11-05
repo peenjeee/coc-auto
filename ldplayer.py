@@ -21,6 +21,9 @@ TOUCH_NODE = re.compile(r'/dev/input/event\d{1,2}')
 SIZE = re.compile(r'(Override|Physical) size:\s*(\d+)x(\d+)')
 AXIS = re.compile(r'ABS_MT_POSITION_([XY])\s*:.*?max (\d+)')
 CALIBRATED_DPI = 240
+# BlueStacks/QEMU virtual touchscreens report ABS_MT_POSITION_X/Y as 0..32767
+# instead of screen pixels; the bot scales its pixel coordinates to this range.
+NORMALIZED_AXIS = 32767
 RESOLUTION_KEY, DPI_KEY = 'advancedSettings.resolution', 'advancedSettings.resolutionDpi'
 ADB_DEBUG_KEY = 'basicSettings.adbDebug'
 # LDPlayer decodes ASTC textures for the GPU; with it on its VM (Ld9BoxHeadless) grows twice as fast while CoC
@@ -128,6 +131,8 @@ def touch_problem(text: str, node: str, resolution: list) -> str | None:
     span = touch_range(text, node)
     if span is None:
         return f'{node} bukan layar sentuh (tanpa ABS_MT_POSITION_X/Y); isi touch_device lewat deteksi otomatis'
+    if span == (NORMALIZED_AXIS, NORMALIZED_AXIS):
+        return None  # a virtual touchscreen (BlueStacks/QEMU); ADB.inject scales the pixels
     width, height = resolution
     if span != (width - 1, height - 1):
         return (f'Layar sentuh {node} {span[0]}x{span[1]} tidak cocok dengan layar {width}x{height}; samakan '
@@ -233,7 +238,7 @@ def detect(config: dict, runner: Runner = run, roots: list | None = None) -> dic
     if touch:
         found['touch_device'] = touch
         span = touch_range(events, touch)
-        if span and span != (expected[0] - 1, expected[1] - 1):
+        if span and span not in ((expected[0] - 1, expected[1] - 1), (NORMALIZED_AXIS, NORMALIZED_AXIS)):
             problems.append(f'Layar sentuh {touch} {span[0]}x{span[1]} tidak cocok dengan layar {expected[0]}x{expected[1]}; '
                             'samakan resolusi LDPlayer dengan kalibrasi')
     else:
