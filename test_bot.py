@@ -2464,6 +2464,13 @@ class BotTests(unittest.TestCase):
         image[260:460, 250:1000] = cv2.imread(str(root / 'fixtures' / 'disconnected-en.png'))
         self.assertEqual(bot.Detector(config, root).detect(image), 'disconnected')
 
+    def test_the_english_welcome_back_popup_is_the_welcome_screen(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[50:180, 300:980] = cv2.imread(str(root / 'fixtures' / 'welcome-en.png'))
+        self.assertEqual(bot.Detector(config, root).detect(image), 'welcome')
+
     def test_the_english_unable_to_attack_screen_is_the_search_failed_screen(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
@@ -3506,10 +3513,12 @@ class BotTests(unittest.TestCase):
             with self.assertRaises(bot.DeviceError):
                 device.command('shell', 'true')
         with patch('bot.subprocess.run') as run:
-            run.return_value.stdout = b'  mCurrentFocus=Window{1 u0 com.supercell.clashofclans/x}'
+            run.return_value.stdout = b'  topResumedActivity=ActivityRecord{1 u0 com.supercell.clashofclans/x t8}'
             self.assertTrue(device.game_in_front())
-            run.return_value.stdout = b'  mCurrentFocus=Window{1 u0 com.android.launcher3/x}'
+            # A closed game: only the launcher is resumed, whatever focus line dumpsys window still keeps.
+            run.return_value.stdout = b'  topResumedActivity=ActivityRecord{2 u0 com.ldmnq.launcher3/x t6}'
             self.assertFalse(device.game_in_front())
+            self.assertIn('topResumedActivity', run.call_args.args[0][-1])
 
     def test_sweep_deploys_every_card_still_coloured(self):
         frame = self.frames['home_scout'].copy()

@@ -676,8 +676,10 @@ class ADB:
             return False
 
     def game_in_front(self) -> bool:
-        focus = self.command('shell', 'dumpsys window | grep mCurrentFocus')
-        return GAME_ACTIVITY.split('/')[0].encode() in focus
+        # The resumed activity, not mCurrentFocus: dumpsys window keeps a focus line per display, and one of them
+        # still names the game after it closed.
+        resumed = self.command('shell', 'dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity"')
+        return GAME_ACTIVITY.split('/')[0].encode() in resumed
 
     def ui_dump(self) -> bytes:
         """The window on screen as uiautomator XML; the Play Store has no calibrated screens."""
