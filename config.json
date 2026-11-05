@@ -178,7 +178,31 @@
           890,
           50
         ]
-      }
+      },
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              95,
+              40,
+              190,
+              40
+            ],
+            "file": "calibration/home_menu-multiplayer.png",
+            "margin": 4
+          },
+          {
+            "roi": [
+              180,
+              525,
+              220,
+              35
+            ],
+            "file": "calibration/home_menu-find.png",
+            "margin": 4
+          }
+        ]
+      ]
     },
     "home_army": {
       "anchors": [
@@ -210,7 +234,31 @@
           1237,
           66
         ]
-      }
+      },
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              560,
+              50,
+              180,
+              40
+            ],
+            "file": "calibration/home_army-title.png",
+            "margin": 4
+          },
+          {
+            "roi": [
+              1055,
+              595,
+              180,
+              55
+            ],
+            "file": "calibration/home_army-attack.png",
+            "margin": 4
+          }
+        ]
+      ]
     },
     "home_scout": {
       "anchors": [
