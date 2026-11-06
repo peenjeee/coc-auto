@@ -20,14 +20,15 @@ TOK=$(cat /home/hatch/workspace/.github-pat 2>/dev/null) || { log "FAIL: cannot 
 REMOTE="https://x-access-token:${TOK}@github.com/peenjeee/coc-auto"
 
 cd "$REPO" || { log "FAIL: checkout missing"; exit 1; }
-git fetch -q "$REMOTE" main || { log "FAIL: git fetch"; exit 1; }
+GIT="git -c safe.directory=$REPO"
+$GIT fetch -q "$REMOTE" main || { log "FAIL: git fetch"; exit 1; }
 
-LOCAL=$(git rev-parse HEAD)
-REMOTE_HEAD=$(git rev-parse FETCH_HEAD)
+LOCAL=$($GIT rev-parse HEAD)
+REMOTE_HEAD=$($GIT rev-parse FETCH_HEAD)
 [ "$LOCAL" = "$REMOTE_HEAD" ] && exit 0
 
-CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE_HEAD")
-if ! git merge --ff-only -q "$REMOTE_HEAD"; then
+CHANGED=$($GIT diff --name-only "$LOCAL" "$REMOTE_HEAD")
+if ! $GIT merge --ff-only -q "$REMOTE_HEAD"; then
     log "FAIL: not a fast-forward (${LOCAL:0:9} -> ${REMOTE_HEAD:0:9}); running version left untouched"
     exit 1
 fi
