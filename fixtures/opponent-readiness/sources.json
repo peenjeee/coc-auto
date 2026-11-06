@@ -1,0 +1,92 @@
+{
+  "stable-a.png": {
+    "source": "passive-before/scout-0062.png",
+    "source_sha256": "d7a02d0e83ee6d82b81347fb82e16496b0cef5436507e31393c35657f2654259",
+    "crop_regions": [
+      [
+        62,
+        90,
+        150,
+        26
+      ],
+      [
+        62,
+        127,
+        150,
+        26
+      ]
+    ]
+  },
+  "stable-b.png": {
+    "source": "passive-before/scout-0063.png",
+    "source_sha256": "1f668c0b771661838c2ae20f9a8dd6ceb4d134f99e9cdaa5c687084894753976",
+    "crop_regions": [
+      [
+        62,
+        90,
+        150,
+        26
+      ],
+      [
+        62,
+        127,
+        150,
+        26
+      ]
+    ]
+  },
+  "different-opponent.png": {
+    "source": "passive-before/scout-0135.png",
+    "source_sha256": "f2e62120090283347a94e448d1c2f830de3e09e725e27156ea6b74c54cbed3a9",
+    "crop_regions": [
+      [
+        62,
+        90,
+        150,
+        26
+      ],
+      [
+        62,
+        127,
+        150,
+        26
+      ]
+    ]
+  },
+  "noise-before.png": {
+    "source": "live-after-v3/wait-0008-previous.png",
+    "source_sha256": "aa2f8cd7b37dd5a60cfd52ff4858522d9c9b23db5a47a7bfd06c0fd487edb3bc",
+    "crop_regions": [
+      [
+        62,
+        90,
+        150,
+        26
+      ],
+      [
+        62,
+        127,
+        150,
+        26
+      ]
+    ]
+  },
+  "noise-after.png": {
+    "source": "live-after-v3/wait-0008-last.png",
+    "source_sha256": "04c8b3b5c61257c6f3f684a8d9d2bf4bcb20d77388c52773de0e42d0f4c4c128",
+    "crop_regions": [
+      [
+        62,
+        90,
+        150,
+        26
+      ],
+      [
+        62,
+        127,
+        150,
+        26
+      ]
+    ]
+  }
+}
