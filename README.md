@@ -29,7 +29,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, the "defence layout blocked" warning, the inactivity and "another device" reloads, a lost connection, the game update offer, the Gold Pass offer and Google Play's "Rate this app" sheet are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
 | **Walls** | `--walls` spends stored gold and elixir on walls, cheapest level first, then farms both full and repeats until every wall is maxed. It never spends gems. |
-| **Web dashboard** | Live log, a live view of the LDPlayer screen and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. Indonesian or English; the switch also sets the bot's terminal language. Installable as an app. |
+| **Web dashboard** | Live log, a live view of the LDPlayer screen and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. A Stats page (resource gains, attacks, walls, run history) and Discord notifications. Indonesian or English; the switch also sets the bot's terminal language. Installable as an app. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
 | **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. A setup that cannot work (taps that cannot land, ADB debugging off, a loot minimum no opponent meets) stops the run with what to change. |
 
@@ -133,7 +133,8 @@ sets the screen to 1280×720 at DPI 240, finds the touch device and writes `conf
 git clone https://github.com/peenjeee/coc-auto.git
 cd coc-auto
 scripts/bsair.sh deps    # a .venv with Python 3.12 and requirements.txt
-scripts/bsair.sh all     # ADB on, BlueStacks started, screen fitted, config.local.json written
+scripts/bsair.sh all     # ADB on, BlueStacks started, screen fitted, config.local.json written (terminal in English;
+                         # BSAIR_LANG=id keeps Indonesian)
 ```
 
 Then start the bot through the script instead of `python bot.py`; it takes the same options and fits the screen
@@ -317,31 +318,31 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--config PATH` | `config.json` next to `bot.py` | Calibration file to use; `config.local.json` beside it is read on top. |
 | `--mode {home,builder,both}` | `both` | Villages used by `--cycles` runs. |
 | `--cycles N` | `1` | Rounds to attack (1–100). |
-| `--searches N` | `0` | Opponent searches per Home attack; `0` means unlimited. At the limit the base on screen is attacked whatever its loot, so the run never stops for want of a good base. |
+| `--searches N` | `0` | Opponent searches per Home attack (0–1,000,000); `0` means unlimited. At the limit the base on screen is attacked whatever its loot, so the run never stops for want of a good base. |
 | `--until-full` | off | Attack until gold and elixir are full in both villages. |
 | `--dark` | off | With `--until-full` (and no `--builder`/`--home`): fill Home Village dark elixir too. |
 | `--builder RESOURCES` | – | Fill these Builder Base resources (`gold`, `elixir`, `cart`, or `all`). Implies `--until-full`. |
 | `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
 | `--first {builder,home}` | `builder` | Which village to work on first when both are chosen. |
-| `--walls {home,builder,both}` | – | Spend the stored gold and elixir on walls, then farm both full and repeat until every wall is maxed. Never uses gems. |
-| `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. With `--until-full`/`--builder`/`--home` it needs `--live`. |
-| `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded. `0` means no limit. |
-| `--bulk-walls` | off | `--walls` only: upgrade many walls of the picked level with one Oke through "Tingkatkan Lebih Banyak", as many as the resource pays for, instead of one at a time. Both villages. |
-| `--wall-every N` | `0` | `--walls` only: go back to the walls after every N attacks instead of waiting for full storage. `0` waits until full. |
+| `--walls {home,builder,both}` | – | Spend the stored gold and elixir on walls, then farm both full and repeat until every wall is maxed. Never uses gems. Needs `--live`; not with `--until-full`/`--builder`/`--home`. |
+| `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes; hours 0–1000, minutes 0–60,000). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. With `--until-full`/`--builder`/`--home` it needs `--live`. |
+| `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded (0–100,000). `0` means no limit. |
+| `--bulk-walls` | off | `--walls` only: upgrade many walls of the picked level with one Oke through "Tingkatkan Lebih Banyak", as many as the resource pays for, instead of one at a time. Both villages. Needs the `wall_bulk_confirm` screen calibrated (bundled). |
+| `--wall-every N` | `0` | `--walls` only: go back to the walls after every N attacks instead of waiting for full storage (0–1000). `0` waits until full. |
 | `--wall-resource gold\|elixir\|both` | `both` | `--walls` only: pay for walls with gold only, elixir only, or both (gold first). Farming then fills only that resource. Both villages. |
 | `--surrender home\|builder\|both` | off | Give up a battle in these villages that is still running `--surrender-after` seconds into it, counted from the start of the deploy and checked during the deploy too (like `--surrender-at`), so the rest of the army stays home: taps **Menyerah**/**Akhiri Serangan**, then **Oke**. In the Builder Base it counts per stage, so giving up stage 1 skips stage 2. |
 | `--surrender-after N` | `60` | Battle seconds, 1–120. On its own (without `--surrender`) it turns surrendering on in both villages. The battle clock runs at normal speed until its last minute (when the 4x button appears), so past 120 there is little left to save. |
 | `--surrender-at P` | `50` | Home Village: surrender once the battle's **Total Kerusakan** reads P percent (0–99) twice in a row, checked during the deploy too, so the rest of the army stays home. `0` never surrenders. Works with `--surrender-after`; whichever comes first. A setup without the damage calibration farms on without it (a warning says so) unless the option is given. |
 | `--surrender-stars N` | `2` | Builder Base: give up stage 1 once its damage box shows N gold stars (0–3) twice in a row, checked during the deploy too; a stage 2 reached anyway is ended from its own screen without deploying. `0` fights on, stage 2 included. |
-| `--trophy-floor N` | `0` (off) | Builder Base: before each attack read the trophy count on the village screen. Under N the battle is fought to the end with no surrender, stage 2 included, to win trophies back; at or over N it surrenders as set again. An unreadable count keeps the setting. |
+| `--trophy-floor N` | `0` (off) | Builder Base: before each attack read the trophy count on the village screen. Under N the battle is fought to the end with no surrender, stage 2 included, to win trophies back; at or over N it surrenders as set again. An unreadable count keeps the setting. 0–10,000; needs the `digits` and `builder.trophies` calibration (bundled). |
 | `--stack [home\|builder\|both]` | home | Troops on the one deploy point `D`. Home Village: the default dragon plan. Builder Base: the hero and its ability, then every camp on `D` (full Witches). |
-| `--ring [home\|builder\|both]` | builder | Builder Base: every camp in one go, each on the next spread point (the default). Home Village fast attack: every hero dropped at `D` then each ability, the siege machine, the spells (skeletons over the middle of the base, eight at once, one per finger), then each troop card streaming out of eight fingers held at once on ring pins round the map edge, moving one pin on each second until the card greys out. Without a touch device the troops are tapped instead, exactly the `xN` count read from the card. |
-| `--quake` | off | Home Village: the spells go four on each quake pin in turn (four earthquakes break the walls there), one per finger, at most the `xN` count read from the card. |
-| `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) a `--live` run (`--until-full`, `--walls` or `--cycles`) may make without progress. The count starts again after every finished attack or upgraded wall. |
+| `--ring [home\|builder\|both]` | builder | Builder Base: every camp in one go, each on the next spread point (the default). Home Village fast attack: every hero dropped at `D` then each ability, the siege machine, the spells (skeletons over the middle of the base, eight at once, one per finger), then each troop card streaming out of eight fingers held at once on ring pins round the map edge, moving one pin on each second until the card greys out. Without a touch device the troops are tapped instead, exactly the `xN` count read from the card. The Home Village ring needs its ring pins (`home_scout.auto.ring`, set in the deploy editor). A village cannot be given to both `--ring` and `--stack`. |
+| `--quake` | off | Home Village: the spells go four on each quake pin in turn (four earthquakes break the walls there), one per finger with `--ring`, at most the `xN` count read from the card. Needs the quake pins (`home_scout.auto.quake`, set in the deploy editor). |
+| `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) a `--live` run (`--until-full`, `--walls` or `--cycles`) may make without progress (0–1000). The count starts again after every finished attack or upgraded wall. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 | `--agent` | off | Run no task: show the device's API key and wait for **Start** from the web dashboard. |
 | `--key` | off | Only show this PC's API key and the dashboard addresses, then exit. Nothing is started. |
-| `--no-remote` | off | Run the task without the dashboard link and exit when it ends (the behaviour before the dashboard). |
+| `--no-remote` | off | Run the task without the dashboard link and exit when it ends. |
 | `--new-key` | off | Make a new dashboard API key for this PC; the old one stops working. |
 
 Every command runs under the [web dashboard](#web-dashboard) link: when its task ends (or is stopped), the bot stays on
@@ -355,8 +356,9 @@ Every `bot.py` command prints this PC's **API key** (made once, kept in `~/.coc-
 dashboard (open the address it prints in a browser). Enter the key there to follow the terminal log live and control the bot:
 
 - **Local:** `http://localhost:8765`, served by the bot itself (works without internet).
-- **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The PC connects out to an online relay channel
-  named after a hash of the key, so no router port has to be opened.
+- **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The page and the online relay (this project's own
+  `relay_server.py`, see [deploy/README.md](deploy/README.md)) run on one server; the PC connects out to a relay
+  channel named after a hash of the key, so no router port has to be opened.
 
 ![Dashboard walkthrough with LDPlayer: connecting, the live view and its switch, a Builder Base attack started from the dashboard, Stats, deploy pins, auto-detect, Discord and the language switch](docs/dashboard.gif)
 
@@ -411,7 +413,8 @@ covers every command above: the task, villages, resources to spend or fill, the 
 (a running task is stopped first). Other buttons: stop bot, repeat the last command, open CoC, close CoC, restart
 LDPlayer, turn LDPlayer off; the last three stop the bot first. When the PC is off, offline or the bot is not
 running, the dashboard says so instead of sending, and a command that gets no answer within 10 seconds is reported.
-Recovery and `settle` work as before: the task runs as a child process (`--worker`) of the dashboard link.
+Recovery and `settle` work the same under the dashboard: the task runs as a child process (`--worker`) of the
+dashboard link.
 The language switch updates live logs, recent log history, setup problems and visible notifications immediately,
 without restarting the task. It changes display text only; CoC's language and screen detection are independent.
 
@@ -488,8 +491,12 @@ as the device or as the dashboard. The key itself never leaves the browser or th
 third-party code: even its font, Lilita One, is served from `web/fonts/` (SIL Open Font License, `web/fonts/OFL.txt`). Only the options the CLI offers are accepted. The local dashboard listens on 127.0.0.1 only and
 refuses other sites (Host, Origin and JSON checks). Use `--new-key` if the key was shared by mistake.
 
-The online relay is already set up (`remote` in `config.json`, and `web/config.js`); there is nothing to configure
-for online use.
+The online relay is already set up: the PC reads `remote.relay_url` and `remote.relay_key` from `config.json`, and
+the page connects to its own address with the same relay token (`RELAY_KEY` in `web/config.js`). The token only lets
+a client join channels, so it is public; everything on a channel is signed with the device key. There is nothing to
+configure for online use. The relay forwards messages and stores none; like any web server, the online host keeps an
+access log (addresses and pages visited), never frames, logs or commands. Hosting the page and relay on a server of
+your own is described in [deploy/README.md](deploy/README.md).
 
 ## Calibration
 
@@ -604,6 +611,8 @@ use a saved screenshot). "Taps" are the points the tool asks for.
 | `python calibrate.py --screen other_device` | "Perangkat lain tersambung ke desa ini" | reload |
 | `python calibrate.py --screen surrender_confirm` | "Akhiri Pertempuran?" (Batal / Oke) | confirm (the Oke button) |
 | `python calibrate.py --screen builders_busy` | "Semua tukang sibuk!" | close (the X) |
+| `python calibrate.py --screen gold_pass` | "Get Gold Pass!" offer (any language) | close (the red X) |
+| `python calibrate.py --screen maintenance` | Maintenance break notice | – (CoC is closed and the run stops; start it again after the break) |
 
 **Walls**
 
@@ -700,7 +709,7 @@ How to change it:
 | `language` | Terminal, CLI help and calibration instruction language: `id` (default) or `en`. The dashboard's ID/EN switch saves it in `config.local.json`; supervised logs switch immediately without restarting the task. Each dashboard renders recent history in its own selected language. Game recognition is unchanged. |
 | `tesseract` | Tesseract executable; used for loot only when `digits` is not set. |
 | `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
-| `remote` | Web dashboard: online relay address and key, local `port` (8765), and the `dashboard` address printed in the terminal. |
+| `remote` | Web dashboard: the online relay's address and token (`relay_url`, `relay_key`), local `port` (8765), and the `dashboard` address printed in the terminal. |
 | `screens.<name>.anchors` | Two or more UI crops that must all match to identify a screen; optional `margin` for small UI shifts. |
 | `screens.<name>.alt_anchors` | Alternative anchor sets for screens with two layouts. |
 | `screens.<name>.overrides` | Screens this one wins over when both match (e.g. stage 2 over battle). |
@@ -752,9 +761,10 @@ Every recovery counts towards `--max-recoveries` (20). A finished attack or an u
 so the run stops only after that many recoveries with no progress in between.
 
 Single attacks (`--mode`/`--cycles`) also start LDPlayer and open CoC first when they are not up, and with `--live`
-recover the same way. After a recovery they pick up at the attack that was lost; a battle whose troops already went
-in is never played again, even when the recovery came before its result screen was left. Only an attack lost before
-its battle started (while searching, say) is played again.
+recover the same way. After a recovery they pick up at the attack that was lost; an attack counts as played once its
+opponent is taken (the Builder Base scout opens, or the Home Village base is chosen to attack), so it is never played
+again, even when the recovery came before its result screen was left. Only an attack lost before that (while
+searching, say) is played again.
 
 ## Testing
 
@@ -768,12 +778,13 @@ camps, multi-unit camps), surrender (damage, stars, stage 2, the trophy floor), 
 game update, recovery (`--cycles` included, and the CoC then LDPlayer restarts for a screen that stays stuck), the
 LDPlayer memory restart and its ASTC setting, the until-full loop, walls (the cheapest row in either language, the sale
 dialog, bulk upgrades and their bar layouts, wall rings, `--wall-every`, `--wall-resource`), English game screens, the
-dashboard link (signed commands, settings, the bot as a child process, the local server, and the relay against a fake
-relay server), the English terminal messages, the LDPlayer screen switch, and LDPlayer detection against fake tool
-output. They do not replace a live run on a real account.
+dashboard link (signed commands, settings, the bot as a child process, the local server, the relay client against a
+fake relay server and against the real `relay_server.py`), Stats and Discord notifications, opponent readiness after
+Next (with real loot-display crops in `fixtures/opponent-readiness/`), the English terminal messages, the LDPlayer
+screen switch, and LDPlayer detection against fake tool output. They do not replace a live run on a real account.
 
 After editing `messages_en.json`, run `python messages.py` to synchronize the dashboard's catalog. The Python
-tests verify both copies match. Run the dependency-free dashboard tests (localization and the live view poller) with
+tests verify both copies match. Run the dependency-free dashboard tests (localization, the live view poller and the stats chart layout) with
 `node --test test_web.mjs test_visible_poller.mjs test_chart_layout.mjs`.
 
 ## Project structure
@@ -784,18 +795,22 @@ remote.py              dashboard link: API key, signed commands, bot as a child 
 dashboard_metrics.py   dashboard stats read from the task's log, kept in .coc-auto/stats.sqlite3
 discord_hooks.py       Discord webhook settings and the background sender
 messages.py            terminal messages in English when config "language" is "en" (texts in messages_en.json)
-relay.py               online relay for the dashboard
+relay.py               online relay client: the PC's side of the dashboard channel
+relay_server.py        the online relay server the page and the PC meet on
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging, ASTC)
 game_update.py         Play Store Update button and installed game version, for the automatic game update
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
-web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, own relay client, ID/EN text, app manifest, service worker, icons and its font (fonts/)
+web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, Stats and Discord panels, own relay client, ID/EN text, app manifest, service worker, icons and its font (fonts/)
+deploy/                service files for hosting the page and the relay on a server (see deploy/README.md)
 calibrate.py           calibration CLI (screenshots only, never taps)
 scripts/               macOS setup script and a one-anchor calibration helper (see scripts/README.md)
 test_bot.py            offline unit tests
 test_cloud_recovery.py stuck-screen recovery against a virtual clock (CoC, then LDPlayer restarts)
 test_game_update.py    Play Store screen and game version reading tests
 test_remote.py         dashboard link tests (key, signatures, options, child process, local server)
-test_relay.py          relay tests against a fake relay server
+test_relay.py          relay client tests against a fake relay server
+test_relay_server.py   relay server protocol tests, with the real relay client
+test_opponent_readiness.py opponent readiness after Next, on real loot-display crops
 test_ldplayer.py       LDPlayer detection tests against fake tool output
 test_device_control.py screen switch tests
 test_messages.py       every terminal message has its English text; translation of the log
