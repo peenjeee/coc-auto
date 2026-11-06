@@ -85,7 +85,8 @@ flowchart LR
 
 ## Requirements
 
-- Windows with **LDPlayer** (tested on LDPlayer 14, Android 14, **1280×720**, the game in Indonesian or English)
+- Windows with **LDPlayer** (tested on LDPlayer 14, Android 14, **1280×720**, the game in Indonesian or English),
+  or a Mac with Apple Silicon and **BlueStacks Air**, set up by one script (see [macOS](#macos-bluestacks-air))
 - **Python 3.10+**
 - ADB from LDPlayer (`adb.exe`) with **local ADB debugging** enabled in LDPlayer settings (the dashboard's "fit
   screen" turns it on)
@@ -122,6 +123,32 @@ C:\LDPlayer\LDPlayer14\adb.exe devices
 > language, resolution, UI scale, or army layout will not match out of the box.
 > If the bot stops with *"Layar tidak dikenal"* (*"Unknown screen"* with `"language": "en"`) or taps the wrong place,
 > recalibrate it for your own setup — see [Calibration](#calibration).
+
+### macOS (BlueStacks Air)
+
+On a Mac with Apple Silicon, `scripts/bsair.sh` does the whole setup: it turns on ADB in BlueStacks Air, starts it,
+sets the screen to 1280×720 at DPI 240, finds the touch device and writes `config.local.json` for this Mac.
+
+```bash
+git clone https://github.com/peenjeee/coc-auto.git
+cd coc-auto
+scripts/bsair.sh deps    # a .venv with Python 3.12 and requirements.txt
+scripts/bsair.sh all     # ADB on, BlueStacks started, screen fitted, config.local.json written
+```
+
+Then start the bot through the script instead of `python bot.py`; it takes the same options and fits the screen
+again first, since BlueStacks forgets it on every restart:
+
+```bash
+scripts/bsair.sh bot --until-full --home all --live
+```
+
+The dashboard works the same, on `http://localhost:8765`. Run `scripts/bsair.sh all` again after a BlueStacks
+update or a Mac restart. Differences from LDPlayer: taps go through `input tap` (CoC ignores raw touch on
+BlueStacks Air), so there is no pinch zoom and ring attacks tap instead of streaming; the LDPlayer controls (fit
+screen, LDPlayer restart, the memory restart) are off; and the calibration comes from LDPlayer, so a screen may need
+recalibrating. Every command, what the script changes and the known limits are in
+[scripts/README.md](scripts/README.md).
 
 ## First-time setup for another PC or account
 
