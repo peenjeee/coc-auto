@@ -655,9 +655,9 @@ function updateRunMetrics() {
 }
 let screenInViewport = false;
 let screenPageActive = true;
-// Online every frame crosses the Supabase relay, so it refreshes less often than the local dashboard.
+// One frame a second, local and online alike (the online relay is our own server, without a message quota).
 // The switch stops only the automatic frames; Refresh still takes one on demand.
-const screenPoller = new VisiblePoller({visible: () => $('screen-live').checked && shouldCaptureScreen(), request: refreshScreen, interval: LOCAL ? 1000 : 3000});
+const screenPoller = new VisiblePoller({visible: () => $('screen-live').checked && shouldCaptureScreen(), request: refreshScreen, interval: 1000});
 function shouldCaptureScreen() {
   return !DEMO && online && link !== null && !document.hidden && screenPageActive &&
     activeView === 'overview' && !$('dashboard').hidden && screenInViewport;

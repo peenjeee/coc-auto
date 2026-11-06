@@ -371,8 +371,8 @@ The dashboard (Indonesian or English, switch in the title bar; the switch also s
 `language` in config, and on connecting the dashboard puts the device on the language it is shown in) has four
 pages. **Overview** shows whether the PC is online, the bot's state, run time, task and recoveries, the run setup,
 a **Live view** of the LDPlayer screen and the **Activity** log. The live view is captured only while the page is
-open and in view and its switch (in the panel's title, on by default) is on, every second on the local dashboard and
-every 3 seconds online (each frame crosses the relay); every frame replaces the last and none is stored. With the
+open and in view and its switch (in the panel's title, on by default) is on, once a second on the local and the
+online dashboard (online, each frame crosses the relay); every frame replaces the last and none is stored. With the
 switch off, **Refresh** still takes one frame. **Stats**, **Deployment** and **Device settings** are below. The run setup
 covers every command above: the task, villages, resources to spend or fill, the Home Village loot minimum and
 `--first`, then **Run limits** (`--bulk-walls`, attacks, searches, time, upgrades, `--wall-every`, recoveries),
