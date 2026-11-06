@@ -11,7 +11,8 @@ from pathlib import Path
 LANGUAGES = ('id', 'en')
 CATALOG = Path(__file__).with_name('messages_en.json')
 _language = 'id'
-TOKENS = re.compile(r'\{\}|%[-+ #0]*\d*(?:\.\d+)?[sdrfx]|%%')
+# No space flag: "50% saat" / "50% during" are text, and no message uses "% d" as a value.
+TOKENS = re.compile(r'\{\}|%[-+#0]*\d*(?:\.\d+)?[sdrfx]|%%')
 PREFIX = re.compile(r'^(DEBUG|INFO|WARNING|ERROR|CRITICAL|REMOTE): ')
 
 

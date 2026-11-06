@@ -172,6 +172,12 @@ class MessagesTests(unittest.TestCase):
         surrender = self.english['Menyerah: %s'] % self.english['kerusakan mencapai {}%'].replace('{}', '50')
         self.assertEqual(messages.translate('INFO: Menyerah: kerusakan mencapai 50%'), 'INFO: ' + surrender)
 
+    def test_a_percent_sign_before_a_word_is_text_not_a_value(self):
+        # "50% saat" / "50% during": "% s" and "% d" are not printf values; read as one, the line came out "50% suring".
+        messages.use('en')
+        self.assertEqual(messages.translate('INFO: Kerusakan mencapai 50% saat deploy; sisa pasukan tidak dikerahkan'),
+                         'INFO: Damage reached 50% during deploy; remaining troops not deployed')
+
     def test_the_log_and_the_errors_in_it_are_printed_in_the_chosen_language(self):
         stream = io.StringIO()
         handler = logging.StreamHandler(stream)
