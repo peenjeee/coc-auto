@@ -1,0 +1,8 @@
+[Unit]
+Description=coc-auto auto-deploy (pull origin main, restart only what changed)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=hatch
+ExecStart=/home/hatch/workspace/coc-auto-autodeploy.sh
