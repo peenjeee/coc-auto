@@ -69,3 +69,14 @@ systemctl restart coc-relay coc-web coc-analytics
 ```
 
 Nothing is built: the web folder is served as-is and the relay is a single Python file.
+
+## Cloudflare
+
+The Caddyfile sends `Cache-Control: no-cache` for the page code (HTML, JS, CSS, JSON) so an update is never
+served half old, half new. Two zone settings must leave that alone:
+
+- **Caching → Configuration → Browser Cache TTL: Respect Existing Headers.** With a fixed TTL Cloudflare
+  rewrites the header to `max-age=14400`, and a browser keeps an old `app.js` for four hours next to a new
+  `config.js`; the page then fails to start.
+- **Web Analytics (automatic setup): off.** Cloudflare otherwise injects its beacon script, which the page's CSP
+  blocks (`script-src 'self'`) and reports as an error on every load.
