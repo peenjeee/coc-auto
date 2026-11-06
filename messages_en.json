@@ -423,5 +423,7 @@
  "Pakai URL webhook Discord dari discord.com": "Use a Discord webhook URL from discord.com",
  "Pilih interval 15, 30, atau 60 menit": "Choose a 15, 30, or 60 minute interval",
  "Setelan Discord disimpan": "Discord settings saved",
- "Pesan tes diantrekan": "Test message queued"
+ "Pesan tes diantrekan": "Test message queued",
+ "RELAY: server relay online di ws://{}:{}{}": "RELAY: online relay server at ws://{}:{}{}",
+ "RELAY: token belum diatur; isi RELAY_TOKEN atau --token (samakan dengan config.json dan web/config.js)": "RELAY: token not set; set RELAY_TOKEN or --token (the same one as in config.json and web/config.js)"
 }
