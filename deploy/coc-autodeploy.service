@@ -4,5 +4,4 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=hatch
 ExecStart=/home/hatch/workspace/coc-auto-autodeploy.sh
