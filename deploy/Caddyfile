@@ -41,7 +41,7 @@ http://:8080 {
 	# Analytics CSP: the GoAccess report is one self-contained page with inline script/style;
 	# its only network need is the real-time websocket on this same origin.
 	@ana path /analytics*
-	header @ana Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' wss://{host}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	header @ana Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' wss://{host}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 
 	# The manifest must be served with its own content type.
 	@manifest path /manifest.webmanifest
