@@ -358,6 +358,13 @@ dashboard (open the address it prints in a browser). Enter the key there to foll
 - **Online:** `https://coc.0xpnj.dev`, for checking from a phone. The PC connects out to an online relay channel
   named after a hash of the key, so no router port has to be opened.
 
+![Dashboard walkthrough with LDPlayer: connecting, the live view and its switch, a Builder Base attack started from the dashboard, Stats, deploy pins, auto-detect, Discord and the language switch](docs/dashboard.gif)
+
+▶️ [Full-quality dashboard walkthrough (MP4)](docs/dashboard.mp4), recorded on the local dashboard with LDPlayer:
+connecting with the key, the live view and its switch, one Builder Base attack started from the dashboard (sped up
+8×), then Stats, the deploy pins on every map, LDPlayer auto-detect, Discord notifications and the switch to
+Indonesian.
+
 ![Web dashboard on a PC: the bot's status, run setup, live view and activity log](docs/dashboard-desktop.jpg)
 
 <p>
@@ -366,12 +373,8 @@ dashboard (open the address it prints in a browser). Enter the key there to foll
   <img src="docs/dashboard-deploy.jpg" alt="Deploy pins over a real attack screen" width="260">
 </p>
 
-The pictures are the dashboard's own preview, with sample data: add `?preview=1` to its address to look around
+The screenshots are the dashboard's own preview, with sample data: add `?preview=1` to its address to look around
 without a device.
-
-▶️ [Dashboard walkthrough video (MP4)](docs/dashboard.mp4), recorded on the local dashboard with LDPlayer: connecting
-with the key, the live view and its switch, one Builder Base attack started from the dashboard (sped up 8×), then
-Stats, the deploy pins on every map, LDPlayer auto-detect, Discord notifications and the switch to Indonesian.
 
 You can open the dashboard locally, or online when you are out or away from the PC. For online use, the PC that runs
 the bot must stay connected to the internet. Open [coc.0xpnj.dev](https://coc.0xpnj.dev) and enter the API key of the
@@ -785,5 +788,5 @@ calibration/           anchor, target and digit templates for config.json
 config.legacy.json     calibration for the previous game UI
 calibration-legacy/    templates for config.legacy.json
 config.example.json    minimal config skeleton
-docs/                  demo GIF and video, dashboard walkthrough (MP4) and screenshots
+docs/                  demo GIF and video, dashboard walkthrough (GIF, MP4) and screenshots
 ```
