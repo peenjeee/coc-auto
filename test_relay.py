@@ -14,7 +14,7 @@ from test_remote import KEY, FakeDevice, signed, until
 
 
 class FakeRealtime:
-    """Answers joins like Supabase Realtime, records what the device sends and can broadcast to it."""
+    """Answers joins like the online relay server, records what the device sends and can broadcast to it."""
 
     def __init__(self):
         self.received, self.sockets = [], []

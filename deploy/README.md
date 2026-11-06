@@ -25,7 +25,7 @@ python3 -m venv .venv
 # 3. Install Caddy (https://caddyserver.com/docs/install); the unit expects /usr/bin/caddy.
 
 # 4. Put the relay token into the relay unit: replace __RELAY_TOKEN__ in coc-relay.service with the
-#    SUPABASE_KEY value from web/config.js (the same token as remote.supabase_key in config.json).
+#    RELAY_KEY value from web/config.js (the same token as remote.relay_key in config.json).
 #    The token is public by design; it only keeps casual connections out.
 
 # 5. Install and start both services

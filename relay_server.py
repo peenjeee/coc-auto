@@ -9,8 +9,8 @@ broadcasts from a socket that never joined the topic are dropped. The relay neve
 commands and device messages are signed with the device API key, so it could neither read nor forge them.
 
 The token only keeps casual connections out. It is public by design (it ships in web/config.js), so it is no
-secret; set it with the RELAY_TOKEN environment variable or --token, matching remote.supabase_key in
-config.json and SUPABASE_KEY in web/config.js.
+secret; set it with the RELAY_TOKEN environment variable or --token, matching remote.relay_key in
+config.json and RELAY_KEY in web/config.js.
 
 Limits, chosen for one device plus a few dashboard tabs: frames of at most 1 MiB (live view frames are
 50-100 KB), at most 64 topics with 8 sockets each, about 20 messages per second per socket with a short

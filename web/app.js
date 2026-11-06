@@ -1,7 +1,7 @@
 // coc-auto dashboard: live log and control for one device, found by its API key. On localhost it talks to the
 // bot on this PC directly; online it goes through the relay channel named after the key's hash, and
 // only trusts messages signed with the key, so nobody else on the channel can pose as the device.
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
+import { RELAY_URL, RELAY_KEY } from './config.js';
 import { applyLanguage, t } from './i18n.js';
 import { translate } from './messages.js';
 import { RealtimeChannel } from './realtime.js';
@@ -238,7 +238,7 @@ class LocalLink {
 class RelayLink {
   /** The device's Realtime channel; the device is online while its signed state keeps arriving. */
   static async open(channel) {
-    if (!SUPABASE_KEY) throw Object.assign(new Error(t('relay_missing')), { code: 'relay_missing' });
+    if (!RELAY_KEY) throw Object.assign(new Error(t('relay_missing')), { code: 'relay_missing' });
     return new RelayLink(channel);
   }
 
@@ -246,7 +246,7 @@ class RelayLink {
     this.waiting = new Map();
     this.heard = 0;
     this.stateTime = 0;
-    this.channel = new RealtimeChannel(SUPABASE_URL, SUPABASE_KEY, name, {
+    this.channel = new RealtimeChannel(RELAY_URL, RELAY_KEY, name, {
       status: (joined) => {
         if (joined) this.channel.send('hello', {});
         else setOnline(false, () => t('relay_lost'));
