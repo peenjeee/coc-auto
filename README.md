@@ -726,8 +726,9 @@ Every recovery counts towards `--max-recoveries` (20). A finished attack or an u
 so the run stops only after that many recoveries with no progress in between.
 
 Single attacks (`--mode`/`--cycles`) also start LDPlayer and open CoC first when they are not up, and with `--live`
-recover the same way. After a recovery they pick up at the attack that was lost; finished attacks are not played
-again.
+recover the same way. After a recovery they pick up at the attack that was lost; a battle whose troops already went
+in is never played again, even when the recovery came before its result screen was left. Only an attack lost before
+its battle started (while searching, say) is played again.
 
 ## Testing
 

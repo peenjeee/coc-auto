@@ -199,7 +199,9 @@ class BotTests(unittest.TestCase):
 
     def test_both_villages_and_builder_second_stage(self):
         device = Device(self.frames)
-        self.assertEqual(self.make_bot(device, True).run('both', 1, 3), 2)
+        runner = self.make_bot(device, True)
+        self.assertEqual(runner.run('both', 1, 3), 2)
+        self.assertEqual(runner.battles, 2)  # one per battle played: what --cycles picks up from after a recovery
         self.assertEqual(device.state, 'builder')
         self.assertEqual(device.inputs.count((40, 40)), 6)
         self.assertEqual(device.inputs.count((150, 75)), 1)
@@ -2489,6 +2491,15 @@ class BotTests(unittest.TestCase):
         image[240:480, 240:1040] = cv2.imread(str(root / 'fixtures' / 'idle-en.png'))
         self.assertEqual(bot.Detector(config, root).detect(image), 'idle')
 
+    def test_the_english_builder_result_is_known_while_its_battle_plays_on_behind_it(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        # A real frame on which "Troops expended", over the see-through panel, no longer matched: the battle
+        # animating behind the panel left every second frame unknown, and the Return Home tap was refused.
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[250:640, 550:735] = cv2.imread(str(root / 'fixtures' / 'builder-result-en.png'))
+        self.assertEqual(bot.Detector(config, root).detect(image), 'builder_result')
+
     def test_the_gold_pass_offer_is_closed_by_its_red_x_in_any_language(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
@@ -2956,15 +2967,40 @@ class BotTests(unittest.TestCase):
 
         def builder_attack():
             attacks.append(1)
+            if len(attacks) == 2:  # the game closed while searching, before any troop went in
+                device.front = False
+                raise bot.BotError('Layar tidak dikenal')
+            runner.battles += 1
+        runner.builder_attack = builder_attack
+        job = lambda searches: runner.run('builder', 3, searches, done=runner.battles)
+        self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2, job=job), 3)
+        # Attack 2 was lost before its battle started and played again; attacks 1 and 3 ran once.
+        self.assertEqual(len(attacks), 4)
+        self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
+
+    def test_cycles_never_play_a_battle_again_once_its_troops_went_in(self):
+        # Seen live: a Builder Base battle surrendered at 2 stars, then the way back from its result screen failed,
+        # and every recovery played a whole new battle in its place.
+        device = Device(self.frames)
+        device.front = True
+        device.launches = []
+        device.game_in_front = lambda: device.front
+        device.launch = lambda activity: (device.launches.append(activity), setattr(device, 'front', True))
+        device.connected = lambda: True
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        attacks = []
+        runner.navigate = lambda village: None
+
+        def builder_attack():
+            attacks.append(1)
+            runner.battles += 1
             if len(attacks) == 2:
                 device.front = False
                 raise bot.BotError('Layar tidak dikenal')
         runner.builder_attack = builder_attack
-        job = lambda searches: runner.run('builder', 3, searches, done=runner.progress)
+        job = lambda searches: runner.run('builder', 3, searches, done=runner.battles)
         self.assertEqual(runner.run_until_full_resilient(0, max_recoveries=2, job=job), 3)
-        # Attack 2 was lost to the closed game and played again; attacks 1 and 3 ran once.
-        self.assertEqual(len(attacks), 4)
-        self.assertEqual(device.launches, [bot.GAME_ACTIVITY])
+        self.assertEqual(len(attacks), 3)
 
     def test_resilient_run_starts_game_that_is_not_open(self):
         device = Device(self.frames)

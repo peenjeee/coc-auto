@@ -1801,6 +1801,29 @@
           "file": "calibration/builder_result-9bcb809d676e47b8bf5da07008f3071e.png"
         }
       ],
+      "alt_anchors": [
+        [
+          {
+            "roi": [
+              580,
+              585,
+              120,
+              48
+            ],
+            "file": "calibration/en/builder_result-33acedda2f1d40ca9ca160b1ea0cfee4.png"
+          },
+          {
+            "roi": [
+              558,
+              263,
+              168,
+              24
+            ],
+            "file": "calibration/builder_result-total.png",
+            "margin": 3
+          }
+        ]
+      ],
       "actions": {
         "return": [
           640,

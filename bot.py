@@ -1796,6 +1796,8 @@ class Bot:
         self.cart_misses, self.cart_lost = 0, False
         # Attacks finished plus walls upgraded; recoveries are counted again once it moves.
         self.progress = 0
+        # Battles whose troops went in, finished or not: --cycles never plays one of them again after a recovery.
+        self.battles = 0
         self.capacity: dict = {}
 
     def observe(self) -> tuple[str, np.ndarray]:
@@ -2428,6 +2430,7 @@ class Bot:
             # stopping; its loot refills the gold.
             if passes or broke or stuck or attempt == searches:
                 self.damage_last = None
+                self.battles += 1
                 try:
                     self.deploy('home_scout', {'home_scout', 'home_battle'}, image)
                 except SurrenderReached as exc:
@@ -2534,6 +2537,7 @@ class Bot:
         self.tap_until('builder', 'attack', {'builder_menu'}, 30)
         self.tap_until('builder_menu', 'find', {'builder_scout'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES, attack=True)
         self.stars_last = None
+        self.battles += 1
         try:
             # Once stage 1 has won a star its end button reads as stage 2's, so both battle screens are allowed.
             self.deploy('builder_scout', {'builder_scout', 'builder_battle', 'builder_battle2'})
@@ -3582,8 +3586,8 @@ class Bot:
             self.tap_until(state, 'return', set(VILLAGES), 30)
 
     def run(self, mode: str, cycles: int, searches: int, done: int = 0) -> int:
-        """--cycles: attack each village of mode cycles times; done attacks already finished before a recovery are
-        not played again."""
+        """--cycles: attack each village of mode cycles times; the first done attacks, whose battles were played (or
+        started) before a recovery, are not played again."""
         integer(cycles, 1, 100, 'cycles')
         integer(searches, 0, 1_000_000, 'searches')
         if mode not in ('home', 'builder', 'both'):
@@ -3887,7 +3891,7 @@ def main() -> int:
             # Only --cycles attacks count as progress here, so after a recovery the run picks up at the lost attack.
             runner.run_until_full_resilient(
                 args.searches, args.max_recoveries,
-                job=lambda searches: runner.run(args.mode, args.cycles, searches, done=runner.progress))
+                job=lambda searches: runner.run(args.mode, args.cycles, searches, done=runner.battles))
         else:
             runner.run(args.mode, args.cycles, args.searches)
         return 0
