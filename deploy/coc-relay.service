@@ -1,0 +1,18 @@
+[Unit]
+Description=coc-auto online relay (Phoenix/Realtime subset websocket server)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Environment=HOME=/home/hatch
+WorkingDirectory=/home/hatch/workspace/coc-auto
+# The relay token is public by design (it ships in web/config.js). Replace the placeholder with the
+# SUPABASE_KEY value from web/config.js before installing this unit.
+Environment=RELAY_TOKEN=__RELAY_TOKEN__
+ExecStart=/home/hatch/workspace/coc-auto/.venv/bin/python relay_server.py --host 127.0.0.1 --port 4000
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

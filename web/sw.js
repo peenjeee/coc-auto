@@ -1,6 +1,6 @@
 // Service worker for the installed dashboard. Pages and assets come from the network first, so a new version shows
 // at once; the cached copy is used only without a connection. Device data never passes here: it is a WebSocket to
-// Supabase, signed with the device key.
+// the online relay, signed with the device key.
 const CACHE = 'coc-dashboard-v23';
 const SHELL = ['icons/stats/attacks.png', 'icons/stats/walls.webp', 'stats.js?v=8', 'discord.js?v=4', 'visible-poller.js?v=2', 'select.js', 'icons/resources/elixir_cart.png', './', 'index.html', 'style.css?v=stats-discord-v8', 'app.js?v=live-1s', 'i18n.js', 'realtime.js', 'deploy.js', 'settings.js?v=3',
   'messages.js', 'messages_en.json',

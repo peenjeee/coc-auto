@@ -1,5 +1,5 @@
 """Web dashboard link: a per-device API key, signed commands from the dashboard, and the bot run as a child
-process whose log is streamed to the dashboard (online through the Supabase relay, or on localhost)."""
+process whose log is streamed to the dashboard (online through the relay server, or on localhost)."""
 from __future__ import annotations
 
 import base64
@@ -782,7 +782,7 @@ def serve_dashboard(supervisor: Supervisor, web_dir: Path, port: int) -> Threadi
 
 
 def remote_settings(config_path: Path) -> dict:
-    """The `remote` block of config.json: Supabase project URL and publishable key, local port, online URL."""
+    """The `remote` block of config.json: online relay URL and token, local port, online dashboard URL."""
     import bot
     try:
         raw = bot.load_config(config_path).get('remote') or {}

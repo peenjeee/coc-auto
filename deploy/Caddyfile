@@ -1,0 +1,37 @@
+# coc-auto dashboard hosting on the VM.
+#
+# Caddy binds 127.0.0.1:8080 only and matches any Host (the tunnel forwards the public hostname,
+# so a pinned site address would never match). This VM has no public IP, and public HTTPS is terminated by the
+# Cloudflare Tunnel in front of it (tunnel ingress: coc.0xpnj.dev -> http://127.0.0.1:8080). It serves ONLY
+# the web/ folder and reverse-proxies the relay websocket path to relay_server.py on 127.0.0.1:4000.
+# The security headers are the ones the old static hosting set; connect-src now points at this host itself
+# ({host} is the requested hostname) because page and relay share one origin.
+
+{
+	auto_https off
+}
+
+http://:8080 {
+	bind 127.0.0.1
+	root * /home/hatch/workspace/coc-auto/web
+
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; connect-src 'self' wss://{host}; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	# The manifest must be served with its own content type.
+	@manifest path /manifest.webmanifest
+	header @manifest Content-Type "application/manifest+json"
+
+	# The service worker is re-checked on every visit, so a new version goes live at once.
+	@sw path /sw.js
+	header @sw Cache-Control "no-cache"
+
+	reverse_proxy /realtime/* 127.0.0.1:4000
+
+	file_server
+}
