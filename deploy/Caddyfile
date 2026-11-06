@@ -11,7 +11,6 @@
 # The report page needs inline script/style, so it gets its own looser CSP, and it is protected by basic
 # auth; the password hash is NOT stored here but injected through the ANALYTICS_BCRYPT environment
 # variable (coc-web.service reads it from a VM-local env file outside this repository).
-
 {
 	auto_https off
 }
