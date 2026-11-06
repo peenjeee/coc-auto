@@ -751,7 +751,6 @@ test_visible_poller.mjs live view polling only while the page is in view (node -
 test_chart_layout.mjs  stats chart layout (node --test)
 fixtures/              real screen crops and Play Store screens the tests read
 requirements.txt       Python dependencies (OpenCV, NumPy, websockets)
-netlify.toml           online dashboard hosting: published folder and security headers
 config.json            calibration for the current game UI
 config.local.json      this PC's own settings on top of config.json (not in git; the dashboard saves here)
 calibration/           anchor, target and digit templates for config.json
