@@ -16,7 +16,7 @@ import messages
 
 ROOT = Path(__file__).resolve().parent
 WRITERS = {'debug', 'info', 'warning', 'error', 'exception', 'critical', 'log', 'translate'}
-PRINTF = re.compile(r'%[-+ #0]*\d*(?:\.\d+)?[sdrfx%]')
+PRINTF = re.compile(r'%[-+#0]*\d*(?:\.\d+)?[sdrfx%]')
 
 
 def template(node: ast.AST) -> str | None:

@@ -16,7 +16,7 @@ test('browser and terminal ship the same catalog', async () => {
 test('every exact and rendered message retains its values in English', () => {
   const render = (text) => {
     let index = 0;
-    return text.replace(/\{\}|%[-+ #0]*\d*(?:\.\d+)?[sdrfx]|%%/g,
+    return text.replace(/\{\}|%[-+#0]*\d*(?:\.\d+)?[sdrfx]|%%/g,
       (token) => token === '%%' ? '%' : `VALUE_${index++}`);
   };
   for (const [source, english] of Object.entries(catalog)) {
@@ -29,6 +29,8 @@ test('every exact and rendered message retains its values in English', () => {
 test('nested reasons, printf logs and diagnostic lists translate fully', () => {
   const examples = {
     'INFO: Menyerah: kerusakan mencapai 50%': 'INFO: Surrender: damage reached 50%',
+    'INFO: Kerusakan mencapai 50% saat deploy; sisa pasukan tidak dikerahkan':
+      'INFO: Damage reached 50% during deploy; remaining troops not deployed',
     'INFO: Trofi desa malam 1000 < 2000: serang sampai selesai':
       'INFO: Builder Base trophies 1000 < 2000: fight to the end',
     'INFO: Tombol upgrade tembok: gold putih, elixir merah':

@@ -2,7 +2,8 @@
 const response = await fetch(new URL('./messages_en.json', import.meta.url));
 if (!response.ok) throw new Error('Could not load the message catalog');
 const english = await response.json();
-const tokenPattern = /\{\}|%[-+ #0]*\d*(?:\.\d+)?[sdrfx]|%%/g;
+// No space flag: "50% saat" / "50% during" are text, and no message uses "% d" as a value.
+const tokenPattern = /\{\}|%[-+#0]*\d*(?:\.\d+)?[sdrfx]|%%/g;
 const prefixPattern = /^(DEBUG|INFO|WARNING|ERROR|CRITICAL|REMOTE): /;
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
