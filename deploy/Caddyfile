@@ -6,6 +6,11 @@
 # the web/ folder and reverse-proxies the relay websocket path to relay_server.py on 127.0.0.1:4000.
 # The security headers are the ones the old static hosting set; connect-src now points at this host itself
 # ({host} is the requested hostname) because page and relay share one origin.
+#
+# /analytics serves a GoAccess real-time report built from the Caddy access log (see coc-analytics.service).
+# The report page needs inline script/style, so it gets its own looser CSP, and it is protected by basic
+# auth; the password hash is NOT stored here but injected through the ANALYTICS_BCRYPT environment
+# variable (coc-web.service reads it from a VM-local env file outside this repository).
 
 {
 	auto_https off
@@ -15,13 +20,29 @@ http://:8080 {
 	bind 127.0.0.1
 	root * /home/hatch/workspace/coc-auto/web
 
+	log {
+		output file /home/hatch/workspace/coc-analytics/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format json
+	}
+
 	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self'; connect-src 'self' wss://{host}; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
 		X-Frame-Options "DENY"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 	}
+
+	# Dashboard CSP: strict, no inline script/style. Excludes the analytics paths.
+	@dash not path /analytics*
+	header @dash Content-Security-Policy "default-src 'self'; script-src 'self'; connect-src 'self' wss://{host}; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+
+	# Analytics CSP: the GoAccess report is one self-contained page with inline script/style;
+	# its only network need is the real-time websocket on this same origin.
+	@ana path /analytics*
+	header @ana Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' wss://{host}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 
 	# The manifest must be served with its own content type.
 	@manifest path /manifest.webmanifest
@@ -30,6 +51,21 @@ http://:8080 {
 	# The service worker is re-checked on every visit, so a new version goes live at once.
 	@sw path /sw.js
 	header @sw Cache-Control "no-cache"
+
+	# GoAccess real-time websocket (the report's live data stream).
+	handle /analytics-ws {
+		reverse_proxy 127.0.0.1:7890
+	}
+
+	# GoAccess report page (a single generated HTML file), password protected.
+	handle /analytics* {
+		basic_auth {
+			panji {env.ANALYTICS_BCRYPT}
+		}
+		root * /home/hatch/workspace/coc-analytics
+		rewrite * /report.html
+		file_server
+	}
 
 	reverse_proxy /realtime/* 127.0.0.1:4000
 

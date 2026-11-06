@@ -5,7 +5,14 @@ Two services, no build step:
 - **coc-relay** — `relay_server.py`, a small WebSocket server for the subset of the Phoenix/Realtime
   protocol the bot and the dashboard already speak. Listens on `127.0.0.1:4000` only.
 - **coc-web** — Caddy serving the static `web/` folder on `127.0.0.1:8080` and reverse-proxying
-  `/realtime/` to the relay, with the dashboard's security headers (see `Caddyfile`).
+  `/realtime/` to the relay, with the dashboard's security headers (see `Caddyfile`). Caddy also
+  writes a JSON access log used by the analytics service below.
+- **coc-analytics** — GoAccess following the Caddy access log and publishing a real-time HTML
+  report at `/analytics` (websocket stream on `/analytics-ws`, both handled in the `Caddyfile`).
+  The page is protected by basic auth (user `panji`); its bcrypt hash reaches Caddy through the
+  `ANALYTICS_BCRYPT` environment variable from a VM-local env file
+  (`/home/hatch/workspace/coc-analytics/analytics.env`), never from this repository. The
+  `goaccess` binary is expected at `/home/hatch/workspace/bin/goaccess`.
 
 The VM has no public IP and no open ports. Public HTTPS is terminated by the Cloudflare Tunnel in front
 of it: point the tunnel ingress for `coc.0xpnj.dev` at `http://127.0.0.1:8080`. Page and relay share that
@@ -28,17 +35,25 @@ python3 -m venv .venv
 #    RELAY_KEY value from web/config.js (the same token as remote.relay_key in config.json).
 #    The token is public by design; it only keeps casual connections out.
 
-# 5. Install and start both services
-cp deploy/coc-relay.service deploy/coc-web.service /etc/systemd/system/
+# 5. Analytics (optional): install GoAccess, then create the basic-auth env file for Caddy.
+#    The plaintext password stays in the same VM-local folder (mode 600); only the hash goes to the env file.
+mkdir -p /home/hatch/workspace/coc-analytics
+caddy hash-password   # paste the result below
+printf 'ANALYTICS_BCRYPT=<hash from the previous command>\n' > /home/hatch/workspace/coc-analytics/analytics.env
+chmod 600 /home/hatch/workspace/coc-analytics/analytics.env
+
+# 6. Install and start the services
+cp deploy/coc-relay.service deploy/coc-web.service deploy/coc-analytics.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now coc-relay coc-web
+systemctl enable --now coc-relay coc-web coc-analytics
 ```
 
 ## Check
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/        # 200: the dashboard page
-systemctl status coc-relay coc-web                                     # both active
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/analytics  # 401 without the password, 200 with it
+systemctl status coc-relay coc-web coc-analytics                       # all active
 .venv/bin/python -m unittest test_relay_server                         # protocol tests against the server
 ```
 
@@ -50,7 +65,7 @@ the dashboard shows the device online, streams the log and answers Start/Stop.
 ```bash
 cd /home/hatch/workspace/coc-auto
 git pull
-systemctl restart coc-relay coc-web
+systemctl restart coc-relay coc-web coc-analytics
 ```
 
 Nothing is built: the web folder is served as-is and the relay is a single Python file.

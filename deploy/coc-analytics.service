@@ -1,0 +1,16 @@
+[Unit]
+Description=coc-auto analytics (GoAccess real-time report built from the Caddy access log)
+After=network.target coc-web.service
+Wants=coc-web.service
+
+[Service]
+Type=simple
+User=root
+ExecStartPre=/bin/mkdir -p /home/hatch/workspace/coc-analytics
+ExecStartPre=/usr/bin/touch /home/hatch/workspace/coc-analytics/access.log
+ExecStart=/home/hatch/workspace/bin/goaccess /home/hatch/workspace/coc-analytics/access.log --log-format=CADDY --real-time-html --addr=127.0.0.1 --port=7890 --ws-url=wss://coc.0xpnj.dev/analytics-ws -o /home/hatch/workspace/coc-analytics/report.html
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
