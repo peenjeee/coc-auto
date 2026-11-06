@@ -16,6 +16,16 @@ if [ -f "$LOG" ] && [ "$(stat -c%s "$LOG")" -gt 204800 ]; then
     tail -c 102400 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
 fi
 
+# systemd services start with a clean environment, but this VM reaches the internet only
+# through its egress proxy; borrow the proxy variables from the stack's persistent env file.
+PROXY_ENV=/home/hatch/workspace/9router-hermes-setup/openclaw-gateway.env
+if [ -f "$PROXY_ENV" ]; then
+    for v in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY; do
+        val=$(grep -E "^$v=" "$PROXY_ENV" | head -1 | cut -d= -f2- | tr -d '"')
+        [ -n "$val" ] && export "$v=$val"
+    done
+fi
+
 TOK=$(cat /home/hatch/workspace/.github-pat 2>/dev/null) || { log "FAIL: cannot read GitHub PAT"; exit 1; }
 REMOTE="https://x-access-token:${TOK}@github.com/peenjeee/coc-auto"
 
