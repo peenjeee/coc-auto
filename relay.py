@@ -1,7 +1,8 @@
-"""Supabase Realtime relay for the web dashboard. The PC connects out to the device's channel, so no port has
-to be opened. Everything it broadcasts (log, state heartbeat, history, command answers, deploy screenshots) is
-signed with the device key, so a stranger on the public channel can neither fake the device nor read commands
-into it; signed dashboard commands go to the supervisor (Realtime protocol 1.0.0, JSON text frames)."""
+"""Online relay client for the web dashboard. The PC connects out to the device's channel on the relay
+server (relay_server.py), so no port has to be opened. Everything it broadcasts (log, state heartbeat, history,
+command answers, deploy screenshots) is signed with the device key, so a stranger on the public channel can
+neither fake the device nor read commands into it; signed dashboard commands go to the supervisor
+(Phoenix/Realtime protocol 1.0.0, JSON text frames)."""
 from __future__ import annotations
 
 import asyncio

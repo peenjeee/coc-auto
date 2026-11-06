@@ -1,5 +1,5 @@
 // coc-auto dashboard: live log and control for one device, found by its API key. On localhost it talks to the
-// bot on this PC directly; online it goes through the Supabase Realtime channel named after the key's hash, and
+// bot on this PC directly; online it goes through the relay channel named after the key's hash, and
 // only trusts messages signed with the key, so nobody else on the channel can pose as the device.
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { applyLanguage, t } from './i18n.js';

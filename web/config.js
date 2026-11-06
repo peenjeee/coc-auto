@@ -1,5 +1,6 @@
-// Online relay (Supabase Realtime). The publishable key is meant to be public: it only lets a browser join
-// channels; commands are signed with the device's API key and device messages are checked against it.
-// Keep the web server's Content-Security-Policy connect-src in step with SUPABASE_URL.
-export const SUPABASE_URL = 'https://mctutlxqkpjqldbfxqcs.supabase.co';
-export const SUPABASE_KEY = 'sb_publishable_YhJFWOLMBDYGRgmC-B_EBQ_uiWZ4tBN';
+// Online relay, hosted together with this page, so the page simply uses its own origin as the relay
+// address. The relay token is meant to be public: it only lets a browser join channels; commands are
+// signed with the device's API key and device messages are checked against it.
+// Keep the web server's Content-Security-Policy connect-src in step with the relay address.
+export const SUPABASE_URL = location.origin;
+export const SUPABASE_KEY = 'RYrsXH1Zz-ZA2OGWcBJ7_DY8h7jzPNHT';

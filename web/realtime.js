@@ -1,12 +1,13 @@
-// A small Supabase Realtime client (Phoenix protocol 1.0.0, broadcast only) for one channel. It is part of the
-// page rather than supabase-js from a CDN, so no third-party script runs next to the device key.
+// A small realtime client (Phoenix protocol 1.0.0, broadcast only) for one channel, speaking to the relay
+// server hosted with this page. It is part of the page rather than a library from a CDN, so no third-party
+// script runs next to the device key.
 const HEARTBEAT_MS = 20000;
 const RECONNECT_MS = [1000, 2000, 5000, 10000, 20000];
 
 export class RealtimeChannel {
   /**
-   * @param {string} url project URL, https://<ref>.supabase.co
-   * @param {string} apikey publishable key
+   * @param {string} url relay base URL (this page's own origin)
+   * @param {string} apikey relay token
    * @param {string} name channel name
    * @param {{ broadcast: (event: string, payload: unknown) => void, status: (joined: boolean) => void }} handlers
    */

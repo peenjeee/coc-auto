@@ -1,0 +1,15 @@
+[Unit]
+Description=coc-auto web dashboard (Caddy: static web/ plus /realtime/ proxy to the relay)
+After=network.target coc-relay.service
+Wants=coc-relay.service
+
+[Service]
+Type=simple
+User=root
+Environment=HOME=/home/hatch
+ExecStart=/usr/bin/caddy run --config /home/hatch/workspace/coc-auto/deploy/Caddyfile --adapter caddyfile
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

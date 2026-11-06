@@ -3191,8 +3191,8 @@
     }
   },
   "remote": {
-    "supabase_url": "https://mctutlxqkpjqldbfxqcs.supabase.co",
-    "supabase_key": "sb_publishable_YhJFWOLMBDYGRgmC-B_EBQ_uiWZ4tBN",
+    "supabase_url": "https://coc.0xpnj.dev",
+    "supabase_key": "RYrsXH1Zz-ZA2OGWcBJ7_DY8h7jzPNHT",
     "port": 8765,
     "dashboard": "https://coc.0xpnj.dev"
   }
