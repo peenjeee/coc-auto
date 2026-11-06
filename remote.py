@@ -791,7 +791,7 @@ def remote_settings(config_path: Path) -> dict:
     port = raw.get('port', DEFAULT_PORT)
     if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         port = DEFAULT_PORT
-    return {'url': str(raw.get('supabase_url') or ''), 'key': str(raw.get('supabase_key') or ''), 'port': port,
+    return {'url': str(raw.get('relay_url') or ''), 'key': str(raw.get('relay_key') or ''), 'port': port,
             'dashboard': str(raw.get('dashboard') or DEFAULT_DASHBOARD)}
 
 

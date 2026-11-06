@@ -2,5 +2,5 @@
 // address. The relay token is meant to be public: it only lets a browser join channels; commands are
 // signed with the device's API key and device messages are checked against it.
 // Keep the web server's Content-Security-Policy connect-src in step with the relay address.
-export const SUPABASE_URL = location.origin;
-export const SUPABASE_KEY = 'RYrsXH1Zz-ZA2OGWcBJ7_DY8h7jzPNHT';
+export const RELAY_URL = location.origin;
+export const RELAY_KEY = 'RYrsXH1Zz-ZA2OGWcBJ7_DY8h7jzPNHT';
