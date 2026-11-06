@@ -47,12 +47,18 @@ http://:8080 {
 	@manifest path /manifest.webmanifest
 	header @manifest Content-Type "application/manifest+json"
 
-	# The service worker is re-checked on every visit, so a new version goes live at once.
-	@sw path /sw.js
-	header @sw Cache-Control "no-cache"
+	# Page code is revalidated on every load (ETag), so an update never mixes a cached old module with a new one:
+	# app.js cached from before a rename once imported names config.js no longer had, and the page did not start.
+	# The service worker is among them, so a new version goes live at once. Images and fonts keep the CDN default.
+	@code path / *.html *.js *.css *.json *.webmanifest
+	header @code Cache-Control "no-cache"
 
-	# GoAccess real-time websocket (the report's live data stream).
+	# GoAccess real-time websocket (the report's live data stream). It carries the same data as the report,
+	# visitor IPs included, so it sits behind the same password; the browser sends the report's credentials.
 	handle /analytics-ws {
+		basic_auth {
+			panji {env.ANALYTICS_BCRYPT}
+		}
 		reverse_proxy 127.0.0.1:7890
 	}
 
