@@ -116,7 +116,11 @@ class BotTests(unittest.TestCase):
 
     def make_bot(self, device, live=False):
         reader = lambda image, screen: next(device.loot)
-        return bot.Bot(self.config, self.root, device, live=live, reader=reader, timeout=0.02, poll=0)
+        runner = bot.Bot(self.config, self.root, device, live=live, reader=reader, timeout=0.02, poll=0)
+        # Synthetic screen profiles contain random pixels, not loot digits. Device.Next changes this marker;
+        # test_opponent_readiness exercises the production digit signature on rendered and recorded HUDs.
+        runner.scout_signature = lambda image: (image[50:70, 50:100],)
+        return runner
 
     def test_resource_grouping_and_malformed_ocr(self):
         for text, expected in [('123456', 123456), ('123 456', 123456), ('1,234,567', 1234567), ('123.456', 123456), ('0', 0)]:
@@ -1466,6 +1470,9 @@ class BotTests(unittest.TestCase):
         state, _ = runner.observe()
         self.assertEqual(state, 'home_scout')
         unchanged = self.frames['home_scout']
+        # This synthetic profile uses random pixels rather than a digit HUD. Isolate the state/Next contract;
+        # real digit masks and animated scenery have dedicated tests in test_opponent_readiness.py.
+        runner.scout_signature = lambda image: (image[50:70, 50:100],)
         self.assertEqual(runner.wait_new_scout(unchanged), 'home_scout')
         # A stall, not a stop: the resilient run recovers from it like any other screen that did not come.
         with self.assertRaises(bot.WaitTimeout):
@@ -2840,21 +2847,40 @@ class BotTests(unittest.TestCase):
         self.assertEqual(device.inputs.count((140, 60)), 1)
         self.assertIn((40, 40), device.inputs)
 
-    def test_an_opponent_that_never_changes_after_next_is_attacked_instead_of_left_to_the_scout_timer(self):
+    def test_an_opponent_that_never_changes_retries_then_recovers_without_deployment(self):
         device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 3)
         runner = self.make_bot(device, True)
 
         def stuck(image):
             raise bot.WaitTimeout('Lawan belum berubah/stabil; hentikan pencarian')
         runner.wait_new_scout = stuck
-        runner.home_attack(0)
-        self.assertEqual(device.inputs.count((140, 60)), 1)
-        self.assertIn((40, 40), device.inputs)
-        self.assertEqual(runner.broke_attacks, 0)  # not an out-of-gold attack
-        # Still on the search clouds: nothing to attack, so recovery takes it.
-        runner.current_screen = lambda: None
+        runner.leave_home_search = cleanup = unittest.mock.Mock()
         with self.assertRaises(bot.WaitTimeout):
             runner.home_attack(0)
+        self.assertEqual(device.inputs.count((140, 60)), 2)
+        self.assertNotIn((40, 40), device.inputs)
+        cleanup.assert_called_once_with()
+        self.assertEqual(runner.broke_attacks, 0)  # not an out-of-gold attack
+
+    def test_lost_next_retry_does_not_consume_a_search_limit_opponent(self):
+        device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 3)
+        runner = self.make_bot(device, True)
+        runner.wait_new_scout = unittest.mock.Mock(side_effect=[bot.WaitTimeout('lost'), 'home_scout', 'home_scout'])
+        runner.home_attack(3)
+        self.assertEqual(device.inputs.count((140, 60)), 3)  # retry plus two actual opponent transitions
+        self.assertIn((40, 40), device.inputs)
+
+    def test_battle_started_before_initial_loot_observation_cleans_up_without_ocr_or_deploy(self):
+        device = Device(self.frames, 'home_battle')
+        runner = self.make_bot(device, True)
+        runner.tap_until = unittest.mock.Mock()
+        runner.reader = unittest.mock.Mock()
+        runner.leave_home_search = unittest.mock.Mock()
+        with self.assertRaises(bot.WaitTimeout):
+            runner.home_attack(0)
+        runner.leave_home_search.assert_called_once_with()
+        runner.reader.assert_not_called()
+        self.assertNotIn((40, 40), device.inputs)
 
     def test_running_out_of_gold_while_searching_again_and_again_stops_with_the_reason(self):
         device = Device(self.frames, loot=[{'gold': 1, 'elixir': 1}] * 20)

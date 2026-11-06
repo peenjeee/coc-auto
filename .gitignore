@@ -13,6 +13,7 @@ captures/
 !calibration-legacy/**/*.png
 !docs/*.png
 !fixtures/*.png
+!fixtures/opponent-readiness/*.png
 !web/icons/*.png
 config.json.bak
 config.json.tmp

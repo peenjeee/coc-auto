@@ -158,6 +158,8 @@ TROPHY_SETTLE_SECONDS = 8
 SURRENDER_STATES = {'home': ('home_battle',), 'builder': ('builder_battle', 'builder_battle2')}
 KNOWN_SCREENS = SCREEN_NAMES + ('loading',) + POPUPS + OPTIONAL_SCREENS
 SEARCH_RETRY_SECONDS, LOOT_READ_SECONDS = 60, 3
+# Keep the full matchmaking budget for clouds, but do not spend a 30-second scout countdown waiting for scenery.
+SCOUT_READY_SECONDS, SCOUT_NEXT_ATTEMPTS = 8, 2
 HUD_ALIGN_PX, HUD_GAP_RATIO, HUD_MIN_MEAN_VALUE = 2, 1.2, 235
 # A digit is about as wide as tall; a blob much wider is touching digits, cut where the bridge is thinnest.
 DIGIT_ASPECT, WIDE_RATIO, BRIDGE_RATIO = 0.95, 1.4, 0.15
@@ -2370,31 +2372,155 @@ class Bot:
                 break
         return state
 
+    def scout_signature(self, image: np.ndarray) -> tuple:
+        """Digit shapes in the configured loot HUD, without OCR or animated battlefield pixels.
+
+        An identical-loot opponent without an observed loading transition is deliberately inconclusive. A fresh
+        loot read still controls the minimum check after readiness; this signature never supplies a resource value.
+        """
+        screen = self.config['screens']['home_scout']
+        keys = [key for key, value in self.config.get('minimum', {}).items() if value]
+        keys = keys or [key for key in ('gold', 'elixir') if key in screen['loot']]
+        masks = []
+        for key in keys:
+            region = crop(image, screen['loot'][key])
+            hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+            # Gold can be pale yellow. This is shape comparison only, not the stricter OCR reader's mask.
+            bright = ((hsv[..., 2] >= 235) & (hsv[..., 1] <= 140)).astype(np.uint8)
+            count, labels, stats, _ = cv2.connectedComponentsWithStats(bright, connectivity=8)
+            height, width = region.shape[:2]
+            # Drop clipped background/cloud components. Keep every interior stroke, including small disconnected
+            # pieces of a digit: discarding those could hide a changing trailing digit.
+            interior = [i for i in range(1, count) if stats[i, cv2.CC_STAT_LEFT] > 0
+                        and stats[i, cv2.CC_STAT_TOP] > 0
+                        and stats[i, cv2.CC_STAT_LEFT] + stats[i, cv2.CC_STAT_WIDTH] < width
+                        and stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT] < height]
+            if not interior or max(stats[i, cv2.CC_STAT_HEIGHT] for i in interior) < .3 * height:
+                raise BotError('Angka loot tidak terlihat; hentikan tanpa input')
+            ink = np.isin(labels, interior)
+            if len(interior) > 50 or ink.mean() > .45:
+                raise BotError('Angka loot tidak terlihat; hentikan tanpa input')
+            mask = np.where(ink, 0, 255).astype(np.uint8)
+            masks.append(mask)
+        if not masks:
+            raise BotError('Angka loot tidak terlihat; hentikan tanpa input')
+        return tuple(masks)
+
+    @staticmethod
+    def same_scout_signature(first: tuple | None, second: tuple | None, tolerance: float = .01) -> bool:
+        return (first is not None and second is not None and len(first) == len(second)
+                and all(a.shape == b.shape and np.count_nonzero(a != b) <= max(
+                    2, tolerance * max(np.count_nonzero(a == 0), np.count_nonzero(b == 0)))
+                        for a, b in zip(first, second)))
+
     def wait_new_scout(self, previous: np.ndarray) -> str:
         deadline = time.monotonic() + min(self.timeout, 60)
-        stable = None
+        stable = visible_since = None
+        saw_loading = False
+        image = previous
+        try:
+            previous_signature = self.scout_signature(previous)
+        except BotError:
+            previous_signature = None
         while time.monotonic() < deadline:
             try:
                 state, image = self.observe()
             except UnknownScreen:
                 state = 'loading'
             if state == 'loading':
-                stable = None
+                stable = visible_since = None
+                saw_loading = True
             elif state == 'gem_offer':
                 self.action(state, 'close')
                 raise OutOfGold('Gold habis untuk lawan berikutnya; tawaran gem ditutup')
+            elif state == 'home_battle':
+                # The prep countdown can expire before a screenshot/ADB command returns. This is recoverable,
+                # and must not fall through to deployment or wait out an empty battle.
+                self.keep_scout_failure(previous, image, 'battle-before-readiness')
+                raise WaitTimeout('Battle dimulai sebelum lawan siap; kembali untuk pemulihan')
             elif state != 'home_scout':
                 raise UnexpectedScreen('Layar tidak diharapkan saat mencari lawan baru')
             else:
-                delta = cv2.absdiff(previous, image)
-                changed = float(np.mean(np.max(delta, axis=2) > 20)) > 0.02
-                if changed and stable is not None and float(cv2.absdiff(stable, image).mean()) < 2:
+                if visible_since is None:
+                    visible_since = time.monotonic()
+                try:
+                    signature = self.scout_signature(image)
+                except BotError:
+                    signature = None
+                changed = saw_loading or (previous_signature is not None and signature is not None
+                                           and not self.same_scout_signature(previous_signature, signature, .05))
+                if changed and self.same_scout_signature(stable, signature):
                     return state
-                stable = image if changed else None
+                stable = signature if changed else None
+                if time.monotonic() - visible_since >= SCOUT_READY_SECONDS:
+                    break
             time.sleep(self.poll)
-        # A lost Next tap or a base that keeps moving: home_attack attacks the base on screen; slow matchmaking is a
-        # stall that recovery settles.
+        self.keep_scout_failure(previous, image, 'not-changed-or-stable')
         raise WaitTimeout('Lawan belum berubah/stabil; hentikan pencarian')
+
+    def keep_scout_failure(self, previous: np.ndarray, image: np.ndarray, reason: str) -> None:
+        """Bounded local evidence: overwrite the latest failure, never an unbounded screenshot stream."""
+        folder = self.root / 'captures'
+        try:
+            folder.mkdir(exist_ok=True)
+            for label, frame in (('previous', previous), ('current', image)):
+                if not cv2.imwrite(str(folder / f'opponent-readiness-last-{label}.png'), frame):
+                    raise OSError('Gagal menyimpan screenshot lawan')
+            (folder / 'opponent-readiness-last.json').write_text(json.dumps({
+                'timestamp': time.time(), 'reason': reason, 'visible_budget_seconds': SCOUT_READY_SECONDS,
+                'matchmaking_budget_seconds': min(self.timeout, 60)}, indent=2), encoding='utf-8')
+        except (OSError, cv2.error) as exc:
+            LOG.warning('Diagnostik lawan tidak tersimpan: %s', exc)
+
+    def leave_home_search(self) -> None:
+        """Leave an unready scout/empty auto-started battle using guarded surrender and return actions."""
+        for _ in range(3):
+            state, _ = self.observe()
+            if state == 'home':
+                return
+            try:
+                if state == 'home_scout':
+                    # Existing calibrations only store this coordinate on home_battle. It is the same End Attack
+                    # button during preparation; keep the guard on the actual scout screen.
+                    self.guarded_tap({'home_scout'}, self.config['screens']['home_battle']['actions']['surrender'])
+                    state = self.wait({'surrender_confirm', 'home_result', 'home', 'home_battle'},
+                                      {'home_scout'}, 10)
+                if state == 'surrender_confirm':
+                    state = self.tap_until(state, 'confirm', {'home_result', 'home'}, 30,
+                                           passing={'home_scout', 'home_battle'})
+                if state == 'home_battle':
+                    state = self.surrender_battle(state, {'home_result', 'home'})
+                if state == 'home_result':
+                    self.tap_until(state, 'return', {'home'}, 30)
+                    return
+                if state == 'home':
+                    return
+            except UnexpectedScreen:
+                # Scout -> battle can race a guarded tap. Observe again, never relax its screen guard.
+                continue
+            raise WaitTimeout('Lawan belum berubah/stabil; hentikan pencarian')
+        raise WaitTimeout('Lawan belum berubah/stabil; hentikan pencarian')
+
+    def next_home_scout(self, previous: np.ndarray) -> None:
+        for attempt in range(SCOUT_NEXT_ATTEMPTS):
+            try:
+                self.action('home_scout', 'next')
+                self.wait_new_scout(previous)
+                return
+            except WaitTimeout as exc:
+                try:
+                    state, image = self.observe()
+                except UnknownScreen:
+                    # Preserve the recoverable timeout through a transient cloud/transition frame.
+                    raise exc
+                if state == 'home_scout' and attempt + 1 < SCOUT_NEXT_ATTEMPTS:
+                    LOG.warning('Lawan belum siap; coba tombol Berikutnya sekali lagi')
+                    previous = image
+                    continue
+                if state in {'home_scout', 'home_battle', 'home_result', 'home'}:
+                    LOG.warning('Lawan belum siap; kembali ke desa tanpa deployment')
+                    self.leave_home_search()
+                raise
 
     def scout_loot(self, image: np.ndarray) -> tuple:
         """(loot, frame) from a scout frame; a passing cloud or banner can make a single read fail."""
@@ -2407,9 +2533,12 @@ class Bot:
         # After the game restarts the search button shows a short cooldown; keep tapping until it is available.
         self.tap_until('home_menu', 'find', {'home_army'}, FIND_COOLDOWN_SECONDS, FIND_RETRIES)
         self.tap_until('home_army', 'attack', {'home_scout'}, 60, attack=True)
-        broke = stuck = False
+        broke = False
         for attempt in itertools.count(1):
             state, image = self.observe()
+            if state == 'home_battle':
+                self.leave_home_search()
+                raise WaitTimeout('Battle dimulai sebelum lawan siap; kembali untuk pemulihan')
             if state != 'home_scout':
                 raise BotError('Scout berubah sebelum OCR')
             if not any(self.config.get('minimum', {}).values()):
@@ -2426,7 +2555,7 @@ class Bot:
                 LOG.warning('Batas %s pencarian tercapai; serang lawan yang sedang tampil', searches)
             # Without gold for another search, or at the search limit, the base on screen is attacked instead of
             # stopping; its loot refills the gold.
-            if passes or broke or stuck or attempt == searches:
+            if passes or broke or attempt == searches:
                 self.damage_last = None
                 try:
                     self.deploy('home_scout', {'home_scout', 'home_battle'}, image)
@@ -2438,19 +2567,11 @@ class Bot:
                     self.tap_until('home_result', 'return', {'home'}, 30)
                 self.count_broke_attack(broke and not passes)
                 return
-            self.action('home_scout', 'next')
             try:
-                self.wait_new_scout(image)
+                self.next_home_scout(image)
             except OutOfGold as exc:
                 LOG.warning('%s; serang lawan yang sedang tampil', exc)
                 broke = True
-            except WaitTimeout as exc:
-                # Left alone, the scout timer would start a battle with no troops; still on the search clouds,
-                # recovery takes it.
-                if self.current_screen() != 'home_scout':
-                    raise
-                LOG.warning('%s; serang lawan yang sedang tampil', exc)
-                stuck = True
 
     def game_ready(self) -> bool:
         """LDPlayer answers over ADB and CoC is in front; a device without these checks counts as ready."""
