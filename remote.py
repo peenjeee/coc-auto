@@ -542,7 +542,7 @@ class Supervisor:
             with self.nonce_lock:
                 command = open_command(self.key, body, sig, self.seen, self.started)
             if command['action'] in ('set_discord', 'test_discord') and not local:
-                raise CommandRefused('Configure Discord from the local dashboard')
+                raise CommandRefused('Atur Discord dari dashboard lokal')
             if command['action'] in ('get_screen', 'get_stats', 'get_discord'):
                 # A slow screenshot must not hold the lock needed to stop the worker.
                 code, message, data = self.carry_out(command['action'], command['args'])
@@ -578,11 +578,11 @@ class Supervisor:
             except HookRefused as exc:
                 raise CommandRefused(str(exc)) from exc
             self.discord.start_monitor(lambda: self.statistics.snapshot() if self.running() else None)
-            return 'discord_saved', 'Discord settings saved', data
+            return 'discord_saved', 'Setelan Discord disimpan', data
         if action == 'test_discord':
             if not self.discord.notify('test', self.statistics.snapshot(), force=True):
-                raise CommandRefused('Save a webhook URL first')
-            return 'discord_tested', 'Test message queued', self.discord.public()
+                raise CommandRefused('Simpan URL webhook dulu')
+            return 'discord_tested', 'Pesan tes diantrekan', self.discord.public()
         if action == 'get_screen':
             import cv2
             frame = self.device.adb().capture()

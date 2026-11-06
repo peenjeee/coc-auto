@@ -368,11 +368,12 @@ It shows the key and waits for **Start** from the dashboard. `python bot.py --ke
 dashboard can control the PC only while `--agent` (or any other bot command) is running there.
 
 The dashboard (Indonesian or English, switch in the title bar; the switch also sets the bot's terminal language,
-`language` in config, and on connecting the dashboard puts the device on the language it is shown in) has three
+`language` in config, and on connecting the dashboard puts the device on the language it is shown in) has four
 pages. **Overview** shows whether the PC is online, the bot's state, run time, task and recoveries, the run setup,
 a **Live view** of the LDPlayer screen and the **Activity** log. The live view is captured only while the page is
-open and in view, every second on the local dashboard and every 3 seconds online (each frame crosses the relay);
-every frame replaces the last and none is stored. **Deployment** and **Device settings** are below. The run setup
+open and in view and its switch (in the panel's title, on by default) is on, every second on the local dashboard and
+every 3 seconds online (each frame crosses the relay); every frame replaces the last and none is stored. With the
+switch off, **Refresh** still takes one frame. **Stats**, **Deployment** and **Device settings** are below. The run setup
 covers every command above: the task, villages, resources to spend or fill, the Home Village loot minimum and
 `--first`, then **Run limits** (`--bulk-walls`, attacks, searches, time, upgrades, `--wall-every`, recoveries),
 **Army & deployment** (the army templates, ring or stack per village, `--quake`) and **Battle behavior**
@@ -383,6 +384,20 @@ running, the dashboard says so instead of sending, and a command that gets no an
 Recovery and `settle` work as before: the task runs as a child process (`--worker`) of the dashboard link.
 The language switch updates live logs, recent log history, setup problems and visible notifications immediately,
 without restarting the task. It changes display text only; CoC's language and screen detection are independent.
+
+**Stats:** resource gains, completed attacks, wall upgrades (bulk upgrades included), recoveries, run time, attacks
+per hour, run history and activity charts, for this run, 24 hours or 7 days. Home Gold/Elixir and Builder Gold/Elixir
+are counted apart. The numbers come from the task's own log and are kept in `.coc-auto/stats.sqlite3` next to the
+config, so closing the browser does not reset them. Resources are **measured storage increases**, never the loot
+offered by a scouted opponent: the first reading is a baseline, a resource that was never read stays blank, and full
+storages or spending between readings can hide gains.
+
+**Discord notifications** (Device settings, local dashboard only): paste a Discord webhook URL, optionally your
+numeric Discord user ID for pings, pick the events (run started, run ended, recovery, progress report every 15, 30 or
+60 minutes), enable and save; **Send test** checks the saved webhook. The URL is kept in `.coc-auto/discord.json`,
+never shown back in the dashboard and never sent through the online relay; only `discord.com` webhook URLs are
+accepted, and only the given user ID is ever mentioned. Messages go out from a small background queue, so the game
+never waits on Discord; recovery messages have a one-minute cooldown.
 
 **Deploy points:** the deploy pins of the Home Village and both Builder Base stages are loaded when the dashboard
 connects and drawn over a real attack screen of each (`web/maps/`), or over the last screenshot the bot took of
@@ -705,13 +720,15 @@ output. They do not replace a live run on a real account.
 
 After editing `messages_en.json`, run `python messages.py` to synchronize the dashboard's catalog. The Python
 tests verify both copies match. Run the dependency-free dashboard tests (localization and the live view poller) with
-`node --test test_web.mjs test_visible_poller.mjs`.
+`node --test test_web.mjs test_visible_poller.mjs test_chart_layout.mjs`.
 
 ## Project structure
 
 ```text
 bot.py                 bot, detector, digit reader, ADB/emulator control, CLI
 remote.py              dashboard link: API key, signed commands, bot as a child process, local dashboard server
+dashboard_metrics.py   dashboard stats read from the task's log, kept in .coc-auto/stats.sqlite3
+discord_hooks.py       Discord webhook settings and the background sender
 messages.py            terminal messages in English when config "language" is "en" (texts in messages_en.json)
 relay.py               online relay for the dashboard
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging, ASTC)
@@ -728,8 +745,10 @@ test_relay.py          relay tests against a fake relay server
 test_ldplayer.py       LDPlayer detection tests against fake tool output
 test_device_control.py screen switch tests
 test_messages.py       every terminal message has its English text; translation of the log
+test_dashboard_features.py stats from the log, Discord settings and sender, stats commands
 test_web.mjs           dashboard text in both languages (node --test)
 test_visible_poller.mjs live view polling only while the page is in view (node --test)
+test_chart_layout.mjs  stats chart layout (node --test)
 fixtures/              real screen crops and Play Store screens the tests read
 requirements.txt       Python dependencies (OpenCV, NumPy, websockets)
 netlify.toml           online dashboard hosting: published folder and security headers
@@ -741,24 +760,3 @@ calibration-legacy/    templates for config.legacy.json
 config.example.json    minimal config skeleton
 docs/                  demo GIF and video, dashboard walkthrough (GIF, MP4) and screenshots
 ```
-
-
-### Discord notifications and statistics
-
-The dashboard’s **Stats** tab shows resource gains, completed attacks, wall upgrades (including bulk upgrades),
-recoveries, active run time, rates, run history, and activity charts. Choose This run, 24 hours, or 7 days.
-Home Gold/Elixir and Builder Gold/Elixir have separate totals, graph series, and Discord fields.
-Statistics are stored beside the device config in `.coc-auto/stats.sqlite3`; closing the browser does not reset them.
-Resources are **measured storage increases**, not the loot offered on a scouted opponent. The first reading is a
-baseline. Numeric storage calibration must read a resource before it can be counted; an unmeasured resource stays
-blank. Storage caps, spending between readings, and percentage-only calibration can hide gains.
-
-Under **Device settings → Discord notifications**, paste a Discord webhook URL, optionally add your numeric
-Discord user ID, select notification events and a report interval, then enable notifications and save. **Send test**
-sends a connection check using the saved webhook. Changes apply immediately. Recovery notifications have a
-one-minute cooldown; periodic reports use a bounded background queue and never wait in the game’s input loop.
-
-Webhook configuration is available from the **local dashboard**. URLs are kept in `.coc-auto/discord.json`
-(with owner-only permissions where supported), are never echoed into dashboard state, and are never sent through
-the public Realtime channel. Only an explicitly supplied user ID is eligible for a ping; roles and everyone are
-not mentioned. The local `?preview=1` interface uses illustrative statistics and never sends Discord messages.

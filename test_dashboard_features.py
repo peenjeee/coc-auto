@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import tempfile
 import time
@@ -52,8 +53,10 @@ class StatisticsTests(unittest.TestCase):
             path=Path(folder)/'stats.db'
             store=Statistics(path,clock=lambda:self.now)
             run=store.start(['--walls','home']);store.record(run,'walls',walls=5);store.finish(run,0)
+            store.db.close()
             other=Statistics(path,clock=lambda:self.now)
             self.assertEqual(other.snapshot('7d')['totals']['walls'],5)
+            other.db.close()  # Windows cannot delete an open database file
 
 class DiscordTests(unittest.TestCase):
     def options(self,**changes):return dict(url=URL,ping_id='123456789012345678',enabled=True,events=['ended','recovery','summary'],interval=30,**changes)
@@ -68,7 +71,8 @@ class DiscordTests(unittest.TestCase):
             result=hook.save(self.options())
             self.assertNotIn(URL,json.dumps(result))
             self.assertNotIn('url',result)
-            self.assertEqual(path.stat().st_mode&0o777,0o600)
+            if os.name != 'nt':  # Windows has no owner-only mode bits
+                self.assertEqual(path.stat().st_mode&0o777,0o600)
             self.assertTrue(DiscordHooks(path).public()['configured'])
     def test_arbitrary_hosts_and_invalid_ids_are_rejected(self):
         for url in ['https://evil.com/api/webhooks/123/test',URL+'?redirect=https://evil.com','http://discord.com/api/webhooks/123/test']:

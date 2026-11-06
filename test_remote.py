@@ -379,6 +379,7 @@ class SettingsTests(unittest.TestCase):
 
     def test_the_dashboard_reads_detects_and_saves_through_signed_commands(self):
         supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), settings=self.settings)
+        self.addCleanup(supervisor.statistics.db.close)  # Windows cannot delete an open database file
         for action, args, code in (('get_settings', {}, 'settings_loaded'),
                                    ('set_minimum', {'minimum': {'gold': 1, 'elixir': 2, 'dark': 0}}, 'minimum_saved'),
                                    ('detect_setup', {}, 'setup_detected'),
@@ -394,6 +395,7 @@ class SettingsTests(unittest.TestCase):
     def test_the_dashboard_language_is_saved_for_the_terminal_and_used_at_once(self):
         self.addCleanup(messages.use, 'id')
         supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), settings=self.settings)
+        self.addCleanup(supervisor.statistics.db.close)
         result = supervisor.command(*signed('set_language', {'language': 'en'}))
         self.assertEqual((result['ok'], result['code'], result['data']['language']), (True, 'language_saved', 'en'))
         self.assertEqual(self.stored()['language'], 'en')

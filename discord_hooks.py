@@ -38,21 +38,21 @@ class DiscordHooks:
         with self.lock: return {k:v for k,v in self.options.items() if k!='url'} | {'configured':bool(self.options['url']), 'status':self.status}
 
     def save(self, value):
-        if not isinstance(value,dict): raise HookRefused('Invalid Discord settings')
+        if not isinstance(value,dict): raise HookRefused('Setelan Discord tidak valid')
         with self.lock:
             url = value.get('url', '').strip()
             if value.get('remove'): url=''
             elif not url: url=self.options['url']
             ping = value.get('ping_id','').strip()
-            if url and not WEBHOOK.fullmatch(url): raise HookRefused('Use a Discord webhook URL from discord.com')
-            if ping and not re.fullmatch(r'\d{17,22}',ping): raise HookRefused('Discord user ID must contain 17–22 digits')
+            if url and not WEBHOOK.fullmatch(url): raise HookRefused('Pakai URL webhook Discord dari discord.com')
+            if ping and not re.fullmatch(r'\d{17,22}',ping): raise HookRefused('ID pengguna Discord harus 17–22 digit')
             events = value.get('events', [])
-            if not isinstance(events,list) or any(x not in EVENTS for x in events): raise HookRefused('Invalid notification events')
+            if not isinstance(events,list) or any(x not in EVENTS for x in events): raise HookRefused('Pilihan notifikasi tidak valid')
             interval=value.get('interval',30)
-            if type(interval) is not int or interval not in (15,30,60): raise HookRefused('Choose a 15, 30, or 60 minute interval')
+            if type(interval) is not int or interval not in (15,30,60): raise HookRefused('Pilih interval 15, 30, atau 60 menit')
             enabled=value.get('enabled',False)
-            if type(enabled) is not bool: raise HookRefused('Invalid enabled option')
-            if enabled and not url: raise HookRefused('Add a webhook URL before enabling notifications')
+            if type(enabled) is not bool: raise HookRefused('Pilihan nyala/mati tidak valid')
+            if enabled and not url: raise HookRefused('Isi URL webhook sebelum menyalakan notifikasi')
             options={'url':url,'enabled':enabled,'ping_id':ping,'events':list(dict.fromkeys(events)),'interval':interval}
             if self.path:
                 self.path.parent.mkdir(parents=True,exist_ok=True)
