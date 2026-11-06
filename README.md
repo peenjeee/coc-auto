@@ -422,12 +422,35 @@ config, so closing the browser does not reset them. Resources are **measured sto
 offered by a scouted opponent: the first reading is a baseline, a resource that was never read stays blank, and full
 storages or spending between readings can hide gains.
 
-**Discord notifications** (Device settings, local dashboard only): paste a Discord webhook URL, optionally your
-numeric Discord user ID for pings, pick the events (run started, run ended, recovery, progress report every 15, 30 or
-60 minutes), enable and save; **Send test** checks the saved webhook. The URL is kept in `.coc-auto/discord.json`,
-never shown back in the dashboard and never sent through the online relay; only `discord.com` webhook URLs are
-accepted, and only the given user ID is ever mentioned. Messages go out from a small background queue, so the game
-never waits on Discord; recovery messages have a one-minute cooldown.
+**Discord notifications** send the bot's progress to a Discord channel, straight from the PC, whether you watch on
+the local dashboard, the online one or neither. To set them up:
+
+1. **Webhook URL:** in Discord, right-click your server → **Server Settings → Integrations → Webhooks → New Webhook**
+   (or the channel's gear, **Edit Channel → Integrations → Create Webhook**). Pick the channel the messages go to,
+   save, and press **Copy Webhook URL**. You need your own server or the *Manage Webhooks* permission. The webhook's
+   avatar is used; the name shown is always **CoC Auto**.
+2. **User ID** (optional, to be mentioned): **User Settings → Advanced → Developer Mode** on, then right-click your
+   name → **Copy User ID**.
+3. Start the bot (any command, or `python bot.py --agent`) and open the **local** dashboard, `http://localhost:8765`.
+   The online dashboard shows the Discord status but refuses changes, so the webhook URL never crosses the relay.
+4. **Device settings → Discord notifications:** paste the URL, the user ID if you want pings, pick the events, turn
+   on **Enable notifications**, press **Save webhook**, then **Send test**: a "Webhook connected" message arrives in
+   the channel.
+
+| Event | When |
+|-------|------|
+| Run started | a task starts |
+| Run ended or failed | it finishes, is stopped, or stops on an error |
+| Recovery alerts | a recovery starts (a stuck screen, a closed game, low PC memory), at most once a minute |
+| Progress reports | every 15, 30 or 60 minutes while a task runs |
+
+Each message lists Home Gold/Elixir/Dark elixir, Builder Gold/Elixir, attacks, walls, recoveries, run time and
+attacks per hour. The user ID is mentioned only on run end, failure, recovery and the test, and nobody else (no
+roles, no @everyone). The URL is kept in `.coc-auto/discord.json` on the PC (not in git), never shown back in the
+dashboard; only `discord.com` webhook URLs are accepted. Messages go out from a small background queue, so the game
+never waits on Discord. Turn **Enable notifications** off to pause them, or **Remove** to forget the webhook. Anyone
+holding the webhook URL can post to that channel: if it was shared by mistake, delete the webhook in Discord and make
+a new one.
 
 **Deploy points:** the deploy pins of the Home Village and both Builder Base stages are loaded when the dashboard
 connects and drawn over a real attack screen of each (`web/maps/`), or over the last screenshot the bot took of
