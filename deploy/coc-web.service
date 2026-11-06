@@ -7,6 +7,7 @@ Wants=coc-relay.service
 Type=simple
 User=root
 Environment=HOME=/home/hatch
+EnvironmentFile=-/home/hatch/workspace/coc-analytics/analytics.env
 ExecStart=/usr/bin/caddy run --config /home/hatch/workspace/coc-auto/deploy/Caddyfile --adapter caddyfile
 Restart=always
 RestartSec=2
