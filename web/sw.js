@@ -1,8 +1,8 @@
 // Service worker for the installed dashboard. Pages and assets come from the network first, so a new version shows
 // at once; the cached copy is used only without a connection. Device data never passes here: it is a WebSocket to
 // Supabase, signed with the device key.
-const CACHE = 'coc-dashboard-v14';
-const SHELL = ['visible-poller.js?v=2', 'select.js', 'icons/resources/elixir_cart.png', './', 'index.html', 'style.css?v=requirements', 'app.js?v=viewer-timer-fix', 'i18n.js', 'realtime.js', 'deploy.js', 'settings.js?v=3',
+const CACHE = 'coc-dashboard-v22';
+const SHELL = ['icons/stats/attacks.png', 'icons/stats/walls.webp', 'stats.js?v=8', 'discord.js?v=4', 'visible-poller.js?v=2', 'select.js', 'icons/resources/elixir_cart.png', './', 'index.html', 'style.css?v=stats-discord-v8', 'app.js?v=stats-discord-v8', 'i18n.js', 'realtime.js', 'deploy.js', 'settings.js?v=3',
   'messages.js', 'messages_en.json',
   'icons/resources/builder_gold.webp', 'icons/resources/builder_elixir.webp', 'icons/resources/gold.png', 'icons/resources/elixir.png', 'icons/resources/dark_elixir.png', 'fonts/lilita-one-latin.woff2', 'config.js', 'favicon.svg', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 

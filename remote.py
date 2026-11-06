@@ -26,6 +26,8 @@ from urllib.parse import parse_qs, urlsplit
 from device_control import DeviceActions, SettingRefused
 import ldplayer
 import messages
+from dashboard_metrics import Statistics
+from discord_hooks import DiscordHooks, HookRefused
 
 HERE = Path(__file__).resolve().parent
 BOT_SCRIPT, WEB_DIR = HERE / 'bot.py', HERE / 'web'
@@ -34,7 +36,8 @@ HISTORY_LINES = 400
 STOP_SECONDS = 20
 STREAM_PING_SECONDS = 15
 MAX_COMMAND_BYTES = 64 * 1024
-STATIC_FILES = {'/visible-poller.js': 'visible-poller.js', '/select.js': 'select.js', '/icons/resources/elixir_cart.png': 'icons/resources/elixir_cart.png',
+STATIC_FILES = {'/icons/stats/attacks.png': 'icons/stats/attacks.png',
+                '/icons/stats/walls.webp': 'icons/stats/walls.webp', '/stats.js': 'stats.js', '/discord.js': 'discord.js', '/visible-poller.js': 'visible-poller.js', '/select.js': 'select.js', '/icons/resources/elixir_cart.png': 'icons/resources/elixir_cart.png',
                 '/icons/resources/builder_gold.webp': 'icons/resources/builder_gold.webp',
                 '/icons/resources/builder_elixir.webp': 'icons/resources/builder_elixir.webp',
                 '/icons/resources/gold.png': 'icons/resources/gold.png',
@@ -64,7 +67,7 @@ COMMAND_MAX_AGE_SECONDS = 120
 # Settings action -> its answer code; every one answers with the settings as they are now (or what was found).
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
                     'set_setup': 'setup_saved', 'set_language': 'language_saved'}
-ACTIONS = ('get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
+ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
            'fit_display', 'restore_display', *SETTINGS_ACTIONS)
 VILLAGE_CHOICES = ('home', 'builder', 'both')
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
@@ -440,6 +443,11 @@ class Supervisor:
         self.host = socket.gethostname()
         self.lock = threading.Lock()  # log, history and listeners; never held while waiting
         self.nonce_lock = threading.Lock()
+        local_path = getattr(settings, 'config_path', None)
+        data_dir = Path(local_path).parent / '.coc-auto' if local_path else None
+        self.statistics = Statistics(data_dir / 'stats.sqlite3' if data_dir else None)
+        self.discord = DiscordHooks(data_dir / 'discord.json' if data_dir else None)
+        self.stats_run = None
         self.control = threading.RLock()  # one command at a time, from any dashboard
 
     def subscribe(self, listener: Callable[[str, object], None]) -> None:
@@ -457,7 +465,14 @@ class Supervisor:
         for listener in listeners:
             listener(kind, data)
 
-    def log(self, line: str) -> None:
+    def log(self, line: str, *, stats_run: int | None = None) -> None:
+        if stats_run is not None:
+            try:
+                kind = self.statistics.consume(line, stats_run)
+                if kind == 'recovery' and self.discord.options['enabled']: self.discord.notify('recovery', self.statistics.snapshot(run_id=stats_run))
+                if kind in ('attack', 'walls') and self.discord.options['enabled']: self.discord.notify('summary', self.statistics.snapshot(run_id=stats_run))
+            except Exception:
+                pass  # Telemetry must never stop the stdout reader and block the worker.
         with self.lock:
             self.lines.append(line)
         print(messages.translate(line), flush=True)
@@ -485,16 +500,22 @@ class Supervisor:
                 start_new_session=os.name != 'nt',
                 env={**os.environ, 'PYTHONUNBUFFERED': '1', 'PYTHONIOENCODING': 'utf-8', 'COC_CANONICAL_LOG': '1'})
             self.child, self.args, self.since = child, list(args), time.time()
+            self.stats_run = self.statistics.start(args)
+            self.discord.start_monitor(lambda: self.statistics.snapshot() if self.running() else None)
+            self.discord.last_summary = time.time()
+            self.discord.notify('started', self.statistics.snapshot())
             self.log(f'REMOTE: menjalankan python bot.py {" ".join(args)}')
-            threading.Thread(target=self.pump, args=(child,), daemon=True).start()
+            threading.Thread(target=self.pump, args=(child, self.stats_run), daemon=True).start()
         self.publish('state', self.state())
 
-    def pump(self, child: subprocess.Popen) -> None:
+    def pump(self, child: subprocess.Popen, stats_run: int | None = None) -> None:
         for raw in child.stdout:
             line = raw.rstrip('\r\n')
             if line:
-                self.log(line)
+                self.log(line, stats_run=stats_run)
         code = child.wait()
+        self.statistics.finish(stats_run, code)
+        self.discord.notify('ended' if code == 0 else 'stopped' if code in (-2, 130, -1073741510) else 'failed', self.statistics.snapshot(run_id=stats_run))
         self.log(f'REMOTE: bot berhenti (exit {code}); menunggu perintah dari dashboard')
         self.publish('state', self.state())
 
@@ -514,13 +535,15 @@ class Supervisor:
                 child.wait()
             return True
 
-    def command(self, body: object, sig: object) -> dict:
+    def command(self, body: object, sig: object, *, local: bool = False) -> dict:
         """Carry out a signed dashboard command: {'ok', 'code', 'message'} plus 'data' for what it read."""
         command = None
         try:
             with self.nonce_lock:
                 command = open_command(self.key, body, sig, self.seen, self.started)
-            if command['action'] == 'get_screen':
+            if command['action'] in ('set_discord', 'test_discord') and not local:
+                raise CommandRefused('Configure Discord from the local dashboard')
+            if command['action'] in ('get_screen', 'get_stats', 'get_discord'):
                 # A slow screenshot must not hold the lock needed to stop the worker.
                 code, message, data = self.carry_out(command['action'], command['args'])
             else:
@@ -538,13 +561,28 @@ class Supervisor:
                       'message': text if text.startswith('Perintah ditolak') else f'Perintah ditolak: {text}'}
         except Exception as exc:  # A failed adb/ldconsole call is reported to the dashboard, never fatal here.
             result = {'ok': False, 'code': 'failed', 'message': f'Gagal: {exc}'}
-        if command is None or command['action'] != 'get_screen':
+        if command is None or command['action'] not in ('get_screen', 'get_stats', 'get_discord'):
             self.log(f'REMOTE: {result["message"]}')
         result["source_message"] = result["message"]
         result["message"] = messages.translate(result["message"])
         return result
 
     def carry_out(self, action: str, options: dict) -> tuple[str, str, dict | None]:
+        if action == 'get_stats':
+            return 'stats_loaded', '', self.statistics.snapshot(options.get('period', 'run'))
+        if action == 'get_discord':
+            return 'discord_loaded', '', self.discord.public()
+        if action == 'set_discord':
+            try:
+                data = self.discord.save(options)
+            except HookRefused as exc:
+                raise CommandRefused(str(exc)) from exc
+            self.discord.start_monitor(lambda: self.statistics.snapshot() if self.running() else None)
+            return 'discord_saved', 'Discord settings saved', data
+        if action == 'test_discord':
+            if not self.discord.notify('test', self.statistics.snapshot(), force=True):
+                raise CommandRefused('Save a webhook URL first')
+            return 'discord_tested', 'Test message queued', self.discord.public()
         if action == 'get_screen':
             import cv2
             frame = self.device.adb().capture()
@@ -689,7 +727,7 @@ def serve_dashboard(supervisor: Supervisor, web_dir: Path, port: int) -> Threadi
             except ValueError:
                 payload = None
             if isinstance(payload, dict):
-                result = supervisor.command(payload.get('body'), payload.get('sig'))
+                result = supervisor.command(payload.get('body'), payload.get('sig'), local=True)
             else:
                 result = {'ok': False, 'code': 'unsigned',
                           'message': messages.translate('Perintah ditolak: isi rusak'),

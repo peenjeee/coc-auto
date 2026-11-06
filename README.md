@@ -741,3 +741,24 @@ calibration-legacy/    templates for config.legacy.json
 config.example.json    minimal config skeleton
 docs/                  demo GIF and video, dashboard walkthrough (GIF, MP4) and screenshots
 ```
+
+
+### Discord notifications and statistics
+
+The dashboard’s **Stats** tab shows resource gains, completed attacks, wall upgrades (including bulk upgrades),
+recoveries, active run time, rates, run history, and activity charts. Choose This run, 24 hours, or 7 days.
+Home Gold/Elixir and Builder Gold/Elixir have separate totals, graph series, and Discord fields.
+Statistics are stored beside the device config in `.coc-auto/stats.sqlite3`; closing the browser does not reset them.
+Resources are **measured storage increases**, not the loot offered on a scouted opponent. The first reading is a
+baseline. Numeric storage calibration must read a resource before it can be counted; an unmeasured resource stays
+blank. Storage caps, spending between readings, and percentage-only calibration can hide gains.
+
+Under **Device settings → Discord notifications**, paste a Discord webhook URL, optionally add your numeric
+Discord user ID, select notification events and a report interval, then enable notifications and save. **Send test**
+sends a connection check using the saved webhook. Changes apply immediately. Recovery notifications have a
+one-minute cooldown; periodic reports use a bounded background queue and never wait in the game’s input loop.
+
+Webhook configuration is available from the **local dashboard**. URLs are kept in `.coc-auto/discord.json`
+(with owner-only permissions where supported), are never echoed into dashboard state, and are never sent through
+the public Realtime channel. Only an explicitly supplied user ID is eligible for a ping; roles and everyone are
+not mentioned. The local `?preview=1` interface uses illustrative statistics and never sends Discord messages.

@@ -412,5 +412,14 @@
  "Setelan LDPlayer disesuaikan: Debug ADB nyala, tekstur ASTC mati (bikin memori VM bocor)": "LDPlayer settings adjusted: ADB debugging on, ASTC textures off (they make the VM leak memory)",
  "Layar tetap macet; restart dinonaktifkan dalam dry-run": "Screen remains stuck; restarting is disabled in dry-run",
  "Pemulihan layar masih macet (%s); restart CoC, pemulihan %s/%s": "Screen recovery is still stuck (%s); restarting CoC, recovery %s/%s",
- "Restart CoC belum memulihkan layar (%s); restart LDPlayer, pemulihan %s/%s": "CoC restart did not recover the screen (%s); restarting LDPlayer, recovery %s/%s"
+ "Restart CoC belum memulihkan layar (%s); restart LDPlayer, pemulihan %s/%s": "CoC restart did not recover the screen (%s); restarting LDPlayer, recovery %s/%s",
+ "Invalid notification events": "Invalid notification events",
+ "Discord user ID must contain 17–22 digits": "Discord user ID must contain 17–22 digits",
+ "Invalid Discord settings": "Invalid Discord settings",
+ "Save a webhook URL first": "Save a webhook URL first",
+ "Add a webhook URL before enabling notifications": "Add a webhook URL before enabling notifications",
+ "Configure Discord from the local dashboard": "Configure Discord from the local dashboard",
+ "Invalid enabled option": "Invalid enabled option",
+ "Use a Discord webhook URL from discord.com": "Use a Discord webhook URL from discord.com",
+ "Choose a 15, 30, or 60 minute interval": "Choose a 15, 30, or 60 minute interval"
 }

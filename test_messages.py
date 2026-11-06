@@ -112,8 +112,12 @@ class MessagesTests(unittest.TestCase):
                     if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
                     and node.body and isinstance(node.body[0], ast.Expr)
                     and isinstance(node.body[0].value, ast.Constant)}
+            patterns = {node.args[0] for node in ast.walk(tree)
+                        if isinstance(node, ast.Call) and node.args and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name) and node.func.value.id == 're'
+                        and node.func.attr in ('compile', 'fullmatch', 'match', 'search', 'sub')}
             for node in ast.walk(tree):
-                if node in docs or isinstance(parents.get(node), ast.JoinedStr):
+                if node in docs or node in patterns or isinstance(parents.get(node), ast.JoinedStr):
                     continue
                 text = template(node)
                 if text and words.search(text) and text not in self.english and text != 'Perintah ditolak':

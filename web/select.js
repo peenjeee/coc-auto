@@ -19,6 +19,7 @@ export function refreshSelects() {
       item.textContent = c.select.options[i].textContent;
       item.setAttribute('aria-selected', String(c.select.selectedIndex === i));
       item.disabled = c.select.options[i].disabled;
+      item.hidden = c.select.options[i].hidden;
     });
   }
 }
@@ -57,7 +58,7 @@ export function setupSelects() {
       const item = document.createElement('button'); item.type = 'button'; item.setAttribute('role','option'); item.tabIndex=-1;
       item.addEventListener('click', e => {e.preventDefault(); choose(i);});
       item.addEventListener('keydown', e => {
-        const enabled = c.items.filter(x=>!x.disabled); const at=enabled.indexOf(item);
+        const enabled = c.items.filter(x=>!x.disabled&&!x.hidden); const at=enabled.indexOf(item);
         let next;
         if (e.key==='ArrowDown') next=enabled[(at+1)%enabled.length];
         if (e.key==='ArrowUp') next=enabled[(at-1+enabled.length)%enabled.length];
