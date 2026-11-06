@@ -639,7 +639,8 @@ function updateRunMetrics() {
 let screenInViewport = false;
 let screenPageActive = true;
 // Online every frame crosses the Supabase relay, so it refreshes less often than the local dashboard.
-const screenPoller = new VisiblePoller({visible: shouldCaptureScreen, request: refreshScreen, interval: LOCAL ? 1000 : 3000});
+// The switch stops only the automatic frames; Refresh still takes one on demand.
+const screenPoller = new VisiblePoller({visible: () => $('screen-live').checked && shouldCaptureScreen(), request: refreshScreen, interval: LOCAL ? 1000 : 3000});
 function shouldCaptureScreen() {
   return !DEMO && online && link !== null && !document.hidden && screenPageActive &&
     activeView === 'overview' && !$('dashboard').hidden && screenInViewport;
@@ -734,6 +735,10 @@ function setupWorkspace() {
   }
   for (const button of document.querySelectorAll('[data-open-view]')) button.addEventListener('click', () => switchView(button.dataset.openView));
   $('screen-refresh').addEventListener('click', refreshScreen);
+  $('screen-live').addEventListener('change', () => {
+    if (!$('screen-live').checked) $('screen-status').textContent = t('screen_source');
+    screenPoller.sync();
+  });
   document.addEventListener('visibilitychange', () => screenPoller.sync());
   window.addEventListener('pagehide', () => { screenPageActive = false; screenPoller.sync(); });
   window.addEventListener('pageshow', () => { screenPageActive = true; screenPoller.sync(); });

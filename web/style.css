@@ -774,6 +774,7 @@ summary::-webkit-details-marker { display: none; }
 
 /* Device monitor and farming preferences. */
 .live-panel .panel-heading { gap: 12px; }
+.live-tools { display: flex; align-items: center; gap: 10px; }
 .device-screen { margin: 0 16px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: #262b24; border: 2px solid #8e743e; }
 .device-screen img { width: 100%; height: 100%; object-fit: contain; }
 #screen-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #b9bdad; font-size: 12px; }
