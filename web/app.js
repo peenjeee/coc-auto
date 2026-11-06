@@ -8,6 +8,8 @@ import { RealtimeChannel } from './realtime.js';
 import { DeployEditor } from './deploy.js';
 import { SettingsPanel } from './settings.js?v=3';
 import { setupSelects, refreshSelects } from './select.js';
+import { StatsPanel, previewStatistics } from './stats.js?v=8';
+import { DiscordPanel } from './discord.js?v=4';
 import { VisiblePoller } from './visible-poller.js?v=2';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
@@ -34,6 +36,8 @@ let online = false;
 let lastState = null;
 let editor = null;
 let settings = null;
+let stats = null;
+let discord = null;
 let settingsAsked = false;
 let currentNotice = null;
 let connectionProblem = null;
@@ -144,10 +148,12 @@ function setOnline(isOnline, reason) {
       setTimeout(async () => {
         await send('get_settings', {}, { quiet: true });
         await send('get_deploy', {}, { quiet: true });
+        await send('get_discord', {}, { quiet: true });
       }, 0);
     }
   }
   screenPoller.sync();
+  stats?.sync();
 }
 
 /** @param {{state?: string, args?: string[], host?: string} | undefined} state */
@@ -175,7 +181,9 @@ function handleResult(result, quiet = false) {
   if (!quiet || !result.ok) notify(() => resultText(result), result.ok ? 'ok' : 'error');
   showState(result.state);
   if (!result.ok || !result.data) return;
-  if (result.code === 'deploy_loaded') editor.load(result.data);
+  if (result.code === 'stats_loaded') { stats.load(result.data); if (result.data.period === 'run') discord.stats(result.data); }
+  else if (['discord_loaded','discord_saved','discord_tested'].includes(result.code)) { discord.load(result.data, result.code); refreshSelects(); }
+  else if (result.code === 'deploy_loaded') editor.load(result.data);
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
@@ -445,6 +453,8 @@ function restoreOptions() {
 function setBusy(busy) {
   for (const button of document.querySelectorAll('#options button, #deploy-load, #deploy-save, .settings button')) button.disabled = busy;
   refreshSelects();
+  if (!LOCAL) for (const b of document.querySelectorAll('#discord-form button')) b.disabled=true;
+  if (discord?.saved) { $('discord-test').disabled=!LOCAL||!discord.saved.configured||discord.dirty; $('discord-remove').disabled=!LOCAL||!discord.saved.configured; }
 }
 
 /** Send a signed command; quiet ones (loading on connect) only speak up when they fail. */
@@ -504,6 +514,8 @@ async function connect(rawKey) {
 
 function changeLanguage(language) {
   applyLanguage(language);
+  stats?.localize();
+  discord?.localize();
   $('mode').textContent = t(LOCAL ? 'mode_local' : 'mode_online');
   const badge = $('online');
   badge.textContent = t(online ? 'online' : 'offline');
@@ -543,6 +555,9 @@ function init() {
   setUpInstall();
   setupWorkspace();
   setupRequirements();
+  stats = new StatsPanel(period => send('get_stats', {period}, {quiet:true}),
+    () => online && link !== null && !document.hidden && screenPageActive && activeView === 'stats' && !$('dashboard').hidden);
+  discord = new DiscordPanel(send, {local: LOCAL, preview: DEMO});
   setupSelects();
   editor = new DeployEditor((screen, deploy, points) => send('set_deploy', { screen, deploy, points }));
   settings = new SettingsPanel(send);
@@ -609,10 +624,12 @@ function switchView(view) {
   }
   for (const panel of document.querySelectorAll('.page-panel')) panel.hidden = panel.id !== `view-${view}`;
   $('device-controls').hidden = view !== 'settings';
-  const key = view === 'deploy' ? 'deployment' : view === 'settings' ? 'settings' : 'overview';
+  const key = view === 'stats' ? 'stats' : view === 'deploy' ? 'deployment' : view === 'settings' ? 'settings' : 'overview';
   $('page-title').textContent = t(`${key}_title`);
   $('page-description').textContent = t(`${key}_description`);
   screenPoller.sync();
+  stats?.sync();
+  if (view === 'settings' && online && link) send('get_discord', {}, {quiet:true});
 }
 function updateRunMetrics() {
   if (!lastState) return;
@@ -753,11 +770,16 @@ class DemoLink {
   constructor() {
     this.state = {state:'running', args:['--walls','home','--first','builder','--max-recoveries','20','--live'], host:'LDPlayer 01', since:Date.now()/1000-1147};
     this.minimum = {gold:1000000,elixir:1000000,dark:0};
+    this.discord = {configured:false,enabled:false,ping_id:'',events:['ended','recovery','summary'],interval:30,status:'Not connected'};
   }
   async send(body) {
     const {action,args} = JSON.parse(body);
     let code = 'settings_loaded', data;
-    if (action === 'start') {this.state = {...this.state,state:'running',args:previewArgs(args),since:Date.now()/1000};code='started';addLines(['REMOTE: Run started.']);}
+    if (action === 'get_stats') {code='stats_loaded';data=previewStatistics(args.period);}
+    else if (action === 'get_discord') {code='discord_loaded';data=this.discord;}
+    else if (action === 'set_discord') {this.discord={...this.discord,...args,configured:args.remove?false:Boolean(args.url||this.discord.configured)};delete this.discord.url;code='discord_saved';data=this.discord;}
+    else if (action === 'test_discord') {code='discord_tested';data=this.discord;}
+    else if (action === 'start') {this.state = {...this.state,state:'running',args:previewArgs(args),since:Date.now()/1000};code='started';addLines(['REMOTE: Run started.']);}
     else if (action === 'stop') {this.state.state='idle';code='stopped';addLines(['REMOTE: Run stopped.']);}
     else if (action === 'restart') {this.state.state='running';this.state.since=Date.now()/1000;code='restarted';}
     else if (action === 'get_deploy') {data=structuredClone(DEMO_DEPLOY);code='deploy_loaded';}
@@ -800,5 +822,8 @@ async function openDemo() {
   ]);
   editor.load(structuredClone(DEMO_DEPLOY));
   handleResult(await link.send(JSON.stringify({action:'get_settings',args:{}})),true);
+  handleResult(await link.send(JSON.stringify({action:'get_discord',args:{}})),true);
+  discord.stats(previewStatistics());
+  if (new URLSearchParams(location.search).get('tab') === 'stats') switchView('stats');
 }
 init();
