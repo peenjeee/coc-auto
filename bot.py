@@ -3888,7 +3888,7 @@ def main() -> int:
         elif until_full and args.live:
             runner.run_until_full_resilient(args.searches, args.max_recoveries)
         elif args.live:
-            # Only --cycles attacks count as progress here, so after a recovery the run picks up at the lost attack.
+            # After a recovery the run picks up after the last battle whose troops went in, never playing it again.
             runner.run_until_full_resilient(
                 args.searches, args.max_recoveries,
                 job=lambda searches: runner.run(args.mode, args.cycles, searches, done=runner.battles))
