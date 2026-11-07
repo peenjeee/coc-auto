@@ -190,7 +190,8 @@ def read_time(image: np.ndarray, digits: dict, units: dict) -> str | None:
         # Neighbouring digits can touch ("30").
         pieces = bot.split_glyphs(glyph, max(2, round(w / (h * bot.DIGIT_ASPECT)))) if w > bot.WIDE_RATIO * h \
             else [glyph]
-        number = ''.join(bot.classify(bot.mask_canvas(piece), digits) or '?' for piece in pieces)
+        # The same floor as a row's price: a timer on a running bar's green reads a little fainter.
+        number = ''.join(bot.classify(bot.mask_canvas(piece), digits, bot.FRACTION_MIN_SCORE) or '?' for piece in pieces)
         number = None if '?' in number else number
         # A '1' is drawn a little shorter than the other digits, as short as a unit letter ("18j").
         found = (number or letter) if tall else (letter or number)
