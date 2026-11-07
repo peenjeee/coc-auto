@@ -45,6 +45,9 @@ SAME_ROW_PX = 12
 # list's last pixels fade into the tabs and are left out. The list stops between whole pixels, so even the right
 # spot scores a little off, but clearly better than the next best one.
 SHIFT_STRIP, SHIFT_MARGIN, SHIFT_MAX_SCORE, SHIFT_UNIQUE = 60, 20, 0.05, 2
+# Rows that look alike can make a second spot score close to the right one; a spot whose move matches the previous
+# swipe's (each swipe moves the list about as far) is taken then. Seen live: 314 px against 86 px, scores 0.034/0.039.
+SHIFT_PRIOR_PX = 60
 NAME_MIN_RATIO, OCR_WORKERS = 0.75, 8
 # Timer glyphs: digits are full height, unit letters ('h', 'm', 's') shorter; 'd' and 'j' reach full height too.
 TIME_SCALE, TIME_MIN_HEIGHT, TIME_LETTER_HEIGHT, TIME_GAP = 2, 0.45, 0.85, 1.0
@@ -248,8 +251,9 @@ def items(image: np.ndarray, region: list) -> list[tuple[str, int]]:
     return sorted(found, key=lambda item: item[1])
 
 
-def list_shift(previous: np.ndarray, current: np.ndarray, region: list) -> int:
-    """How far the list moved up between two frames: where the previous frame's bottom strip shows in the next."""
+def list_shift(previous: np.ndarray, current: np.ndarray, region: list, expected: int | None = None) -> int:
+    """How far the list moved up between two frames: where the previous frame's bottom strip shows in the next.
+    expected: the previous swipe's move, which settles a spot that is not clearly the best on its own."""
     _, y, _, h = region
     bottom = y + h - SHIFT_MARGIN
     left, right = PANEL_COLUMNS
@@ -257,10 +261,13 @@ def list_shift(previous: np.ndarray, current: np.ndarray, region: list) -> int:
     scores = cv2.matchTemplate(current[y:y + h, left:right], strip, cv2.TM_SQDIFF_NORMED)[:, 0]
     found = int(np.argmin(scores))
     others = np.delete(scores, range(max(0, found - SAME_ROW_PX), found + SAME_ROW_PX))
-    if not (scores[found] <= SHIFT_MAX_SCORE and (not others.size or others.min() >= SHIFT_UNIQUE * scores[found])):
+    moved = bottom - SHIFT_STRIP - y - found
+    unique = not others.size or others.min() >= SHIFT_UNIQUE * scores[found]
+    steady = expected is not None and abs(moved - expected) <= SHIFT_PRIOR_PX
+    if not (scores[found] <= SHIFT_MAX_SCORE and (unique or steady)):
         # A stall to the upgrade run, which tidies the screen and reads the list again.
         raise bot.WaitTimeout('Daftar bangunan bergeser terlalu jauh untuk disambung; scan dibatalkan')
-    return bottom - SHIFT_STRIP - y - found
+    return moved
 
 
 def band(image: np.ndarray, spec: tuple, y: int) -> np.ndarray:
@@ -287,7 +294,8 @@ def offsets(frames: list, region: list) -> list[int]:
     """How far down the list each frame shows, the first one at 0."""
     found = [0]
     for previous, image in zip(frames, frames[1:]):
-        found.append(found[-1] + list_shift(previous, image, region))
+        expected = found[-1] - found[-2] if len(found) > 1 else None
+        found.append(found[-1] + list_shift(previous, image, region, expected))
     return found
 
 
