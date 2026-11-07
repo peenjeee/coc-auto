@@ -8,8 +8,8 @@ import { RealtimeChannel } from './realtime.js';
 import { DeployEditor } from './deploy.js';
 import { SettingsPanel } from './settings.js?v=3';
 import { setupSelects, refreshSelects } from './select.js';
-import { StatsPanel, previewStatistics } from './stats.js?v=8';
-import { DiscordPanel } from './discord.js?v=4';
+import { StatsPanel, previewStatistics } from './stats.js?v=9';
+import { DiscordPanel } from './discord.js?v=5';
 import { VisiblePoller } from './visible-poller.js?v=2';
 import { BuildingsPanel } from './buildings.js?v=3';
 

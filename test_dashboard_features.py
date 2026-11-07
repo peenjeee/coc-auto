@@ -39,6 +39,16 @@ class StatisticsTests(unittest.TestCase):
         self.consume('WARNING: Number unreadable')
         totals=self.stats.snapshot()['totals']
         self.assertEqual([totals[k] for k in ('walls','attacks','recoveries')],[12,1,1])
+    def test_building_upgrades_are_counted_in_either_language(self):
+        run=self.stats.start(['--buildings','--live'])
+        self.assertEqual(self.stats.consume('INFO: Bangunan di-upgrade: Tambang Emas ke level 12',run),'upgrade')
+        self.assertEqual(self.stats.consume('INFO: Building upgraded: Archer Tower to level 8',run),'upgrade')
+        snapshot=self.stats.snapshot()
+        self.assertEqual(snapshot['runs'][0]['task'],'Building upgrades')
+        self.assertEqual(snapshot['totals']['upgrades'],2)
+        self.assertEqual(snapshot['recent'][0]['detail'],'Archer Tower upgraded to level 8')
+        fields=DiscordHooks.embed('summary',snapshot)['embeds'][0]['fields']
+        self.assertIn(('🏗️ Upgrades','**2**'),[(f['name'],f['value']) for f in fields])
     def test_history_and_session_isolation(self):
         self.consume('INFO: Serangan selesai: home (1)')
         self.now+=120

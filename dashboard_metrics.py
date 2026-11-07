@@ -11,7 +11,7 @@ import threading
 import time
 
 RESOURCES = ('gold', 'elixir', 'dark', 'builder_gold', 'builder_elixir')
-FIELDS = (*RESOURCES, 'walls', 'attacks', 'recoveries', 'searches', 'errors')
+FIELDS = (*RESOURCES, 'walls', 'upgrades', 'attacks', 'recoveries', 'searches', 'errors')
 
 class Statistics:
     def __init__(self, path=None, clock=time.time):
@@ -31,7 +31,7 @@ class Statistics:
             CREATE TABLE IF NOT EXISTS scans (village TEXT, list TEXT, scanned_at REAL, rows TEXT,
             PRIMARY KEY(village, list));''')
         columns = {row[1] for row in self.db.execute('PRAGMA table_info(events)')}
-        for column in ('builder_gold', 'builder_elixir', 'resource_version'):
+        for column in ('builder_gold', 'builder_elixir', 'resource_version', 'upgrades'):
             if column not in columns:
                 self.db.execute(f'ALTER TABLE events ADD COLUMN {column} INTEGER DEFAULT 0')
         # Older resource totals mixed villages. Keep the history but do not assign those sums to Home.
@@ -42,7 +42,8 @@ class Statistics:
         self.baselines = {}
 
     def start(self, args):
-        task = 'Wall upgrades' if '--walls' in args else 'Farming' if any(x in args for x in ['--until-full', '--home', '--builder']) else 'Attacks'
+        task = ('Wall upgrades' if '--walls' in args else 'Building upgrades' if '--buildings' in args else
+                'Farming' if any(x in args for x in ['--until-full', '--home', '--builder']) else 'Attacks')
         with self.lock, self.db:
             run = self.db.execute('INSERT INTO runs(started,task,status) VALUES(?,?,?)', (self.clock(), task, 'running')).lastrowid
             self.baselines[run] = {}
@@ -90,16 +91,20 @@ class Statistics:
         bulk = re.fullmatch(r'(\d+) (?:tembok di-upgrade sekaligus dengan|walls upgraded at once with) (gold|elixir)', text)
         wall = re.fullmatch(r'(?:Tembok di-upgrade dengan|Wall upgraded with) (gold|elixir)', text)
         storage = re.fullmatch(r'(?:Gudang|Storage) (home|builder): (\{.{1,600}\})', text)
+        upgrade = re.fullmatch(r'(?:Bangunan di-upgrade|Building upgraded): (.{1,60}) (?:ke|to) level (\d{1,3})', text)
         if attack:
             self.record(run, 'attack', 'Home Village attack' if attack[1] == 'home' else 'Builder Base attack', attacks=1)
             return 'attack'
-        if wall or bulk:
+        if wall or bulk or upgrade:
             count = int(bulk[1]) if bulk else 1
             if count > 100000: return None
-            self.record(run, 'walls', f'{count:,} wall' + ('s' if count != 1 else '') + ' upgraded', walls=count)
+            if upgrade:
+                self.record(run, 'upgrade', f'{upgrade[1]} upgraded to level {upgrade[2]}', upgrades=1)
+            else:
+                self.record(run, 'walls', f'{count:,} wall' + ('s' if count != 1 else '') + ' upgraded', walls=count)
             # Spending must not make the next farming session's baseline hide its gains.
             with self.lock: self.baselines.setdefault(run, {}).clear()
-            return 'walls'
+            return 'upgrade' if upgrade else 'walls'
         if storage:
             try:
                 amounts = ast.literal_eval(storage[2])

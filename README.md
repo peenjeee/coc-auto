@@ -451,7 +451,7 @@ dashboard link.
 The language switch updates live logs, recent log history, setup problems and visible notifications immediately,
 without restarting the task. It changes display text only; CoC's language and screen detection are independent.
 
-**Stats:** resource gains, completed attacks, wall upgrades (bulk upgrades included), recoveries, run time, attacks
+**Stats:** resource gains, completed attacks, wall upgrades (bulk upgrades included), building upgrades, recoveries, run time, attacks
 per hour, run history and activity charts, for this run, 24 hours or 7 days. Home Gold/Elixir and Builder Gold/Elixir
 are counted apart. The numbers come from the task's own log and are kept in `.coc-auto/stats.sqlite3` next to the
 config, so closing the browser does not reset them. Resources are **measured storage increases**, never the loot
@@ -480,7 +480,7 @@ the local dashboard, the online one or neither. To set them up:
 | Recovery alerts | a recovery starts (a stuck screen, a closed game, low PC memory), at most once a minute |
 | Progress reports | every 15, 30 or 60 minutes while a task runs |
 
-Each message lists Home Gold/Elixir/Dark elixir, Builder Gold/Elixir, attacks, walls, recoveries, run time and
+Each message lists Home Gold/Elixir/Dark elixir, Builder Gold/Elixir, attacks, walls, building upgrades, recoveries, run time and
 attacks per hour. The user ID is mentioned only on run end, failure, recovery and the test, and nobody else (no
 roles, no @everyone). The URL is kept in `.coc-auto/discord.json` on the PC (not in git), never shown back in the
 dashboard; only `discord.com` webhook URLs are accepted. Messages go out from a small background queue, so the game

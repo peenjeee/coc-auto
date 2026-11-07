@@ -69,7 +69,7 @@ class DiscordHooks:
     def embed(kind, stats, ping_id=''):
         names={'test':'Webhook connected','started':'Run started','ended':'Run complete','stopped':'Run stopped','failed':'Run needs attention','recovery':'Recovering your village','summary':'Village progress'}
         totals=stats.get('totals',{})
-        fields=[{'name':name,'value':f"**{int(totals.get(key,0)):,}**",'inline':True} for key,name in [('gold','🪙 Home Gold'),('elixir','💧 Home Elixir'),('dark','🌑 Dark elixir'),('builder_gold','🟨 Builder Gold'),('builder_elixir','🟣 Builder Elixir'),('attacks','⚔️ Attacks'),('walls','🧱 Walls'),('recoveries','🔧 Recoveries')]]
+        fields=[{'name':name,'value':f"**{int(totals.get(key,0)):,}**",'inline':True} for key,name in [('gold','🪙 Home Gold'),('elixir','💧 Home Elixir'),('dark','🌑 Dark elixir'),('builder_gold','🟨 Builder Gold'),('builder_elixir','🟣 Builder Elixir'),('attacks','⚔️ Attacks'),('walls','🧱 Walls'),('upgrades','🏗️ Upgrades'),('recoveries','🔧 Recoveries')]]
         duration=int(stats.get('duration',0)); hours,minutes=divmod(duration//60,60)
         fields += [{'name':'Run time','value':f'{hours}h {minutes:02d}m','inline':True}, {'name':'Pace','value':f"{stats.get('attacks_per_hour',0):g} attacks / hr",'inline':True}]
         ping=ping_id if kind in ('failed','recovery','ended','stopped','test') else ''

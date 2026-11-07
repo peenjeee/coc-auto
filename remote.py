@@ -494,7 +494,7 @@ class Supervisor:
             try:
                 kind = self.statistics.consume(line, stats_run)
                 if kind == 'recovery' and self.discord.options['enabled']: self.discord.notify('recovery', self.statistics.snapshot(run_id=stats_run))
-                if kind in ('attack', 'walls') and self.discord.options['enabled']: self.discord.notify('summary', self.statistics.snapshot(run_id=stats_run))
+                if kind in ('attack', 'walls', 'upgrade') and self.discord.options['enabled']: self.discord.notify('summary', self.statistics.snapshot(run_id=stats_run))
             except Exception:
                 pass  # Telemetry must never stop the stdout reader and block the worker.
         with self.lock:
