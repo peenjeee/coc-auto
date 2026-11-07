@@ -96,13 +96,7 @@ def read_rows(frames: list, spec: dict, templates: dict, program: str) -> list[d
 
 def placed_rows(frames: list, spec: dict, templates: dict, program: str) -> list[tuple[dict, int]]:
     """read_rows with each row's place down the list: its card's top as the first frame would show it."""
-    region = spec['row']['region']
-    kept = []
-    for offset, image in zip(buildings.offsets(frames, region), frames):
-        for kind, y in buildings.items(image, region):
-            if not any(kind == other and abs(offset + y - place) <= buildings.SAME_ROW_PX for other, place, _, _ in kept):
-                kept.append((kind, offset + y, y, image))
-    ordered = sorted(kept, key=lambda item: item[1])
+    ordered = buildings.listed(frames, spec['row']['region'])
     jobs = [(buildings.band(image, buildings.TITLE_BAND, y), program, *buildings.TITLE_TEXT) if kind == 'title' else
             (buildings.band(image, NAME_BAND, y), program) for kind, _, y, image in ordered]
     # Tesseract takes about half a second to start, so the lines are read side by side.

@@ -11,7 +11,7 @@ import { setupSelects, refreshSelects } from './select.js';
 import { StatsPanel, previewStatistics } from './stats.js?v=9';
 import { DiscordPanel } from './discord.js?v=5';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=5';
+import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=6';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;

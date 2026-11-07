@@ -659,6 +659,7 @@ Object.assign(TEXT.en, {
   buildings_pick_hint_star: 'Tick the Star Laboratory research to do, first ticked first, each up to a level or Max, then save. The bot does not research by itself yet; the pick is kept on the device for when it does.',
   buildings_equipment: 'equipment', buildings_equipped: 'equipped', buildings_unequipped: 'not equipped',
   buildings_ore_shiny: 'shiny ore', buildings_ore_glowy: 'glowy ore', buildings_ore_starry: 'starry ore',
+  buildings_instant: 'instant',
 });
 Object.assign(TEXT.id, {
   buildings_tab_buildings: 'Bangunan', buildings_tab_lab: 'Laboratorium', buildings_tab_pets: 'Hewan',
@@ -684,4 +685,5 @@ Object.assign(TEXT.id, {
   buildings_pick_hint_star: 'Centang riset Lab Bintang yang ingin dikerjakan, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Bot belum meriset sendiri; pilihannya disimpan di perangkat untuk nanti.',
   buildings_equipment: 'peralatan', buildings_equipped: 'dipasang', buildings_unequipped: 'dilepas',
   buildings_ore_shiny: 'bijih kilau', buildings_ore_glowy: 'bijih cahaya', buildings_ore_starry: 'bijih bintang',
+  buildings_instant: 'langsung',
 });

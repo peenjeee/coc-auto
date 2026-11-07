@@ -1,8 +1,8 @@
 // Service worker for the installed dashboard. Pages and assets come from the network first, so a new version shows
 // at once; the cached copy is used only without a connection. Device data never passes here: it is a WebSocket to
 // the online relay, signed with the device key.
-const CACHE = 'coc-dashboard-v29';
-const SHELL = ['icons/stats/attacks.png', 'icons/stats/walls.webp', 'stats.js?v=9', 'discord.js?v=5', 'visible-poller.js?v=2', 'select.js', 'icons/resources/elixir_cart.png', './', 'index.html', 'style.css?v=buildings-6', 'app.js?v=buildings-6', 'buildings.js?v=5', 'i18n.js', 'realtime.js', 'deploy.js', 'settings.js?v=3',
+const CACHE = 'coc-dashboard-v30';
+const SHELL = ['icons/stats/attacks.png', 'icons/stats/walls.webp', 'stats.js?v=9', 'discord.js?v=5', 'visible-poller.js?v=2', 'select.js', 'icons/resources/elixir_cart.png', './', 'index.html', 'style.css?v=buildings-7', 'app.js?v=buildings-7', 'buildings.js?v=6', 'i18n.js', 'realtime.js', 'deploy.js', 'settings.js?v=3',
   'messages.js', 'messages_en.json',
   'icons/resources/builder_gold.webp', 'icons/resources/builder_elixir.webp', 'icons/resources/gold.png', 'icons/resources/elixir.png', 'icons/resources/dark_elixir.png', 'fonts/lilita-one-latin.woff2', 'config.js', 'favicon.svg', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 

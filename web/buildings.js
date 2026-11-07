@@ -204,7 +204,8 @@ export class BuildingsPanel {
       if (['in_progress', 'suggested', 'equipped'].includes(row.section)) name.append(element('em', t(`buildings_${row.section}`), `building-tag ${row.section}`));
       line.insertCell().textContent = Number.isInteger(row.next_level) ? `→ ${row.next_level}` : '–';
       const time = line.insertCell();
-      time.textContent = typeof row.time === 'string' ? row.time : '–';
+      // Hero equipment is upgraded at once; it has no timer to read.
+      time.textContent = typeof row.time === 'string' ? row.time : this.list === 'gear' ? t('buildings_instant') : '–';
       if (Number.isInteger(row.seconds)) this.clocks.push([time, row.seconds]);
       const cost = line.insertCell();
       const coins = COINS[VILLAGE[this.list]];

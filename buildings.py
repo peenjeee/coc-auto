@@ -328,10 +328,9 @@ def read_rows(frames: list, spec: dict, templates: dict, program: str, path: Pat
     return [row for row, _ in placed_rows(frames, spec, templates, program, path)]
 
 
-def placed_rows(frames: list, spec: dict, templates: dict, program: str,
-                path: Path = CATALOG) -> list[tuple[dict, int]]:
-    """read_rows with each row's place down the list: its card's top as the first frame would show it."""
-    region, digits, units = spec['row']['region'], templates['digits'], templates['units']
+def listed(frames: list, region: list) -> list[tuple[str, int, int, np.ndarray]]:
+    """Every title, bar and card of frames taken top to bottom, each once and in list order: (kind, place down the
+    list, y in its frame, that frame)."""
     kept = []
     for index, (offset, image) in enumerate(zip(offsets(frames, region), frames)):
         for kind, y in items(image, region):
@@ -340,7 +339,14 @@ def placed_rows(frames: list, spec: dict, templates: dict, program: str,
                 continue
             if not any(kind == other and abs(offset + y - place) <= SAME_ROW_PX for other, place, _, _ in kept):
                 kept.append((kind, offset + y, y, image))
-    ordered = sorted(kept, key=lambda item: item[1])
+    return sorted(kept, key=lambda item: item[1])
+
+
+def placed_rows(frames: list, spec: dict, templates: dict, program: str,
+                path: Path = CATALOG) -> list[tuple[dict, int]]:
+    """read_rows with each row's place down the list: its card's top as the first frame would show it."""
+    region, digits, units = spec['row']['region'], templates['digits'], templates['units']
+    ordered = listed(frames, region)
     jobs = [(band(image, TITLE_BAND, y), program, *TITLE_TEXT) if kind == 'title' else
             (band(image, BAR_NAME if kind == 'bar' else NAME_BAND, y), program) for kind, _, y, image in ordered]
     # Tesseract takes about half a second to start, so the lines are read side by side.
