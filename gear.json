@@ -23,12 +23,11 @@
     "henchmen_puppet": ["Henchmen Puppet", "Boneka Pengawal"],
     "dark_orb": ["Dark Orb", "Kristal Kegelapan"],
     "metal_pants": ["Metal Pants", "Celana Besi"],
-    "noble_iron": ["Noble Iron"],
     "flame_blower": ["Flame Blower", "Pelontar Api"],
-    "liontin_portal": ["Liontin Portal"],
-    "jantung_api": ["Jantung Api"],
-    "ransel_roket": ["Ransel Roket"],
-    "dumbel_sakti": ["Dumbel Sakti"],
-    "pemancar_kejut": ["Pemancar Kejut"]
+    "liontin_portal": ["Portal Pendant", "Liontin Portal"],
+    "jantung_api": ["Fire Heart", "Jantung Api"],
+    "ransel_roket": ["Rocket Backpack", "Ransel Roket"],
+    "dumbel_sakti": ["Noble Iron", "Dumbel Sakti"],
+    "pemancar_kejut": ["Stun Blaster", "Pemancar Kejut"]
   }
 }

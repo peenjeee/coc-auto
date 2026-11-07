@@ -504,5 +504,7 @@
  "tombol Go catatan hilang": "the note's Go button is gone",
  "Pengaturan Goblin ditolak: {}": "Goblin settings rejected: {}",
  "Pengaturan Goblin": "Goblin settings",
- "Pengaturan Goblin disimpan; berlaku saat Start berikutnya": "Goblin settings saved; they apply at the next Start"
+ "Pengaturan Goblin disimpan; berlaku saat Start berikutnya": "Goblin settings saved; they apply at the next Start",
+ "Popup tak dikenal ditutup dengan X di %s": "Unknown popup closed with its X at %s",
+ "{}: template tombol tutup hilang": "{}: close button template missing"
 }

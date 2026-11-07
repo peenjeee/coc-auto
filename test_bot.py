@@ -252,6 +252,25 @@ class BotTests(unittest.TestCase):
             self.make_bot(device, True).wait({'home_result'}, {'home_battle'})
         self.assertEqual(device.inputs, [])
 
+    def test_an_unknown_popup_is_closed_by_its_red_x_and_the_wait_goes_on(self):
+        device = Device({**self.frames, 'popup': np.zeros((90, 160, 3), dtype=np.uint8)}, 'popup')
+        device.tap = lambda point: (device.inputs.append(tuple(point)), setattr(device, 'state', 'home'))
+        runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0)
+        with patch('bot.UNKNOWN_CLOSE_SECONDS', 0), patch('bot.popup_close.close_button', return_value=((120, 12), 0.9)):
+            self.assertEqual(runner.wait({'home'}, set()), 'home')
+        self.assertEqual(device.inputs, [(120, 12)])
+
+    def test_no_x_is_tapped_around_a_battle_or_when_it_moves(self):
+        blank = np.zeros((90, 160, 3), dtype=np.uint8)
+        moving = iter([((120, 12), 0.9), ((60, 40), 0.9)] * 1000)
+        for found, expected in (({'return_value': ((120, 12), 0.9)}, ({'home_result'}, {'home_battle'})),
+                                ({'side_effect': lambda image: next(moving)}, ({'home'}, set()))):
+            device = Device({'unknown': blank}, 'unknown')
+            with self.subTest(expected=expected), patch('bot.UNKNOWN_CLOSE_SECONDS', 0), \
+                    patch('bot.popup_close.close_button', **found), self.assertRaises(bot.BotError):
+                self.make_bot(device, True).wait(*expected)
+            self.assertEqual(device.inputs, [])
+
     def test_unknown_screen_before_action_prevents_tap(self):
         device = Device({'home': np.zeros((90, 160, 3), dtype=np.uint8)})
         with self.assertRaises(bot.BotError):

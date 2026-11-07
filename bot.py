@@ -30,6 +30,7 @@ import numpy as np
 
 import game_update
 import ldplayer
+import popup_close
 
 RESOURCES = ('gold', 'elixir', 'dark')
 VILLAGE_GOALS = {'builder': ('gold', 'elixir', 'cart'), 'home': ('gold', 'elixir', 'dark')}
@@ -144,6 +145,9 @@ QUAKE_PER_POINT, QUAKE_MAX_POINTS = 4, 8
 LAUNCH_ATTEMPTS = 4
 # How long a wait sees only unknown frames before it asks whether the game is still in front.
 GAME_CHECK_SECONDS = 10
+# An unknown screen held this long with the game's red X on it is a popup the bot has not seen (a new season's offer,
+# an event); the X is looked for twice, this far apart, and must not have moved.
+UNKNOWN_CLOSE_SECONDS, UNKNOWN_CLOSE_RECHECK, UNKNOWN_CLOSE_DRIFT = 3, 0.5, 6
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm', 'wall_bulk_confirm',
                 'building_confirm', 'gear_confirm', 'locked_info', 'upgrade_locked')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', 'update_offer',
@@ -1843,6 +1847,9 @@ class Bot:
             except UnknownScreen:
                 # Usually a transition, but the launcher left by a closed game never matches either.
                 unknown_since = unknown_since or time.monotonic()
+                if time.monotonic() - unknown_since >= UNKNOWN_CLOSE_SECONDS and self.close_unknown_popup(targets | allowed):
+                    unknown_since = None
+                    continue
                 if time.monotonic() - unknown_since >= GAME_CHECK_SECONDS:
                     if not self.device.game_in_front():
                         raise GameClosed(f'CoC tertutup saat menunggu layar {"/".join(sorted(targets))}')
@@ -1896,6 +1903,22 @@ class Bot:
                 raise UnexpectedScreen(f'Layar tidak diharapkan saat menunggu: {state}')
             time.sleep(self.poll)
         raise WaitTimeout(f'Timeout menunggu layar {"/".join(sorted(targets))}; tidak mencoba input pemulihan')
+
+    def close_unknown_popup(self, expected: set) -> bool:
+        """Tap the red X of a popup the bot does not know, seen at the same place on two frames; never around a battle,
+        where a tap on the field deploys troops. Closing never buys anything; no other button is ever tapped."""
+        if not self.live or expected & {*BATTLE_STATES, *DEPLOY_SCREENS, *RESULT_SCREENS}:
+            return False
+        first = popup_close.close_button(self.device.capture())
+        if first is None:
+            return False
+        time.sleep(UNKNOWN_CLOSE_RECHECK if self.poll else 0)
+        second = popup_close.close_button(self.device.capture())
+        if second is None or abs(second[0][0] - first[0][0]) + abs(second[0][1] - first[0][1]) > UNKNOWN_CLOSE_DRIFT:
+            return False
+        LOG.info('Popup tak dikenal ditutup dengan X di %s', list(second[0]))
+        self.device.tap_many([list(second[0])])
+        return True
 
     def wait_battle(self, village: str, targets: set, allowed: set) -> str:
         """Wait for the battle to end; with --surrender give it up once it has run surrender_after seconds, with
