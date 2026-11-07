@@ -582,3 +582,24 @@ Object.assign(TEXT.id, {"dashboard_sending": "Mengirim…", "dashboard_queue_ful
 
 Object.assign(TEXT.en, {bulk_walls_description: 'Upgrades multiple walls at a time instead of one at a time.'});
 Object.assign(TEXT.id, {bulk_walls_description: 'Meningkatkan beberapa tembok sekaligus, bukan satu per satu.'});
+
+Object.assign(TEXT.en, {
+  buildings_title: 'buildings to upgrade',
+  buildings_hint: 'The bot opens the game\'s "Buildings & Heroes" list in the Home Village, scrolls it to the end, reads every row and closes it again. Nothing is upgraded or bought. Stop the bot first; a scan takes about a minute.',
+  buildings_scan: 'scan buildings',
+  buildings_empty: 'No rows were read.',
+  buildings_defense: 'defenses', buildings_army: 'army', buildings_resource: 'resources', buildings_trap: 'traps',
+  buildings_hero: 'heroes', buildings_other: 'other',
+  buildings_name: 'building', buildings_level: 'to level', buildings_time: 'time', buildings_cost: 'cost',
+  buildings_in_progress: 'upgrading', buildings_suggested: 'suggested',
+});
+Object.assign(TEXT.id, {
+  buildings_title: 'bangunan yang bisa di-upgrade',
+  buildings_hint: 'Bot membuka daftar "Bangunan dan Pahlawan" di Desa Utama, menggulirnya sampai habis, membaca setiap baris, lalu menutupnya lagi. Tidak ada yang di-upgrade atau dibeli. Hentikan bot dulu; satu scan sekitar satu menit.',
+  buildings_scan: 'scan bangunan',
+  buildings_empty: 'Tidak ada baris yang terbaca.',
+  buildings_defense: 'pertahanan', buildings_army: 'pasukan', buildings_resource: 'sumber daya', buildings_trap: 'jebakan',
+  buildings_hero: 'pahlawan', buildings_other: 'lainnya',
+  buildings_name: 'bangunan', buildings_level: 'ke level', buildings_time: 'waktu', buildings_cost: 'biaya',
+  buildings_in_progress: 'sedang di-upgrade', buildings_suggested: 'disarankan',
+});

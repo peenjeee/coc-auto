@@ -1,0 +1,67 @@
+{
+  "defense": {
+    "cannon": ["Cannon", "Meriam"],
+    "archer_tower": ["Archer Tower", "Menara Pemanah"],
+    "mortar": ["Mortar", "Mortir"],
+    "air_defense": ["Air Defense", "Pertahanan Udara"],
+    "wizard_tower": ["Wizard Tower", "Menara Penyihir"],
+    "air_sweeper": ["Air Sweeper", "Penyapu Udara"],
+    "hidden_tesla": ["Hidden Tesla", "Tesla Tersembunyi"],
+    "bomb_tower": ["Bomb Tower", "Menara Bom"],
+    "x_bow": ["X-Bow", "Busur X"],
+    "inferno_tower": ["Inferno Tower", "Menara Inferno"],
+    "eagle_artillery": ["Eagle Artillery", "Artileri Elang"],
+    "scattershot": ["Scattershot", "Katapel Tempur"],
+    "spell_tower": ["Spell Tower", "Menara Mantra"],
+    "monolith": ["Monolith", "Monolit"],
+    "ricochet_cannon": ["Ricochet Cannon", "Meriam Pantul"],
+    "multi_archer_tower": ["Multi-Archer Tower", "Menara Multi-Pemanah"],
+    "firespitter": ["Firespitter", "Penyembur Api"],
+    "multi_gear_tower": ["Multi-Gear Tower", "Menara Multi-Gir"],
+    "builders_hut": ["Builder's Hut", "Pondok Tukang"],
+    "crafting_station": ["Crafting Station", "Platform DIY"],
+    "wall": ["Wall", "Tembok"]
+  },
+  "trap": {
+    "bomb": ["Bomb", "Bom"],
+    "spring_trap": ["Spring Trap", "Perangkap Pegas"],
+    "air_bomb": ["Air Bomb", "Bom Udara"],
+    "giant_bomb": ["Giant Bomb", "Bom Raksasa"],
+    "seeking_air_mine": ["Seeking Air Mine", "Ranjau Udara Pencari"],
+    "skeleton_trap": ["Skeleton Trap", "Perangkap Tengkorak"],
+    "tornado_trap": ["Tornado Trap", "Perangkap Tornado"],
+    "giga_bomb": ["Giga Bomb", "Bom Giga"]
+  },
+  "army": {
+    "army_camp": ["Army Camp", "Kamp Militer"],
+    "barracks": ["Barracks", "Barak"],
+    "dark_barracks": ["Dark Barracks", "Barak Hitam"],
+    "laboratory": ["Laboratory", "Laboratorium"],
+    "spell_factory": ["Spell Factory", "Pabrik Mantra"],
+    "dark_spell_factory": ["Dark Spell Factory", "Pabrik Mantra Hitam"],
+    "workshop": ["Workshop", "Bengkel"],
+    "pet_house": ["Pet House", "Rumah Peliharaan"],
+    "blacksmith": ["Blacksmith", "Pandai Besi"],
+    "clan_castle": ["Clan Castle", "Kastel Klan"],
+    "hero_hall": ["Hero Hall", "Aula Pahlawan"]
+  },
+  "resource": {
+    "gold_mine": ["Gold Mine", "Tambang Emas"],
+    "elixir_collector": ["Elixir Collector", "Pengumpul Eliksir"],
+    "dark_elixir_drill": ["Dark Elixir Drill", "Pengeboran Eliksir Hitam"],
+    "gold_storage": ["Gold Storage", "Penyimpanan Emas"],
+    "elixir_storage": ["Elixir Storage", "Penyimpanan Eliksir"],
+    "dark_elixir_storage": ["Dark Elixir Storage", "Penyimpanan Eliksir Hitam"]
+  },
+  "hero": {
+    "barbarian_king": ["Barbarian King", "Raja Barbar"],
+    "archer_queen": ["Archer Queen", "Ratu Pemanah"],
+    "grand_warden": ["Grand Warden", "Wali Besar"],
+    "royal_champion": ["Royal Champion", "Juara Kerajaan"],
+    "minion_prince": ["Minion Prince", "Pangeran Minion"],
+    "dragon_duke": ["Dragon Duke", "Adipati Naga"]
+  },
+  "other": {
+    "town_hall": ["Town Hall", "Balai Kota"]
+  }
+}

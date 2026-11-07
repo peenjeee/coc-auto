@@ -11,6 +11,7 @@ import { setupSelects, refreshSelects } from './select.js';
 import { StatsPanel, previewStatistics } from './stats.js?v=8';
 import { DiscordPanel } from './discord.js?v=4';
 import { VisiblePoller } from './visible-poller.js?v=2';
+import { BuildingsPanel } from './buildings.js?v=1';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -38,6 +39,7 @@ let editor = null;
 let settings = null;
 let stats = null;
 let discord = null;
+let buildings = null;
 let settingsAsked = false;
 let currentNotice = null;
 let connectionProblem = null;
@@ -184,6 +186,7 @@ function handleResult(result, quiet = false) {
   if (result.code === 'stats_loaded') { stats.load(result.data); if (result.data.period === 'run') discord.stats(result.data); }
   else if (['discord_loaded','discord_saved','discord_tested'].includes(result.code)) { discord.load(result.data, result.code); refreshSelects(); }
   else if (result.code === 'deploy_loaded') editor.load(result.data);
+  else if (result.code === 'buildings_scanned') buildings.load(result.data);
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
@@ -286,12 +289,12 @@ class RelayLink {
     }
   }
 
-  send(body, sig, nonce) {
+  send(body, sig, nonce, wait = ACK_MS) {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.waiting.delete(nonce);
         resolve({ ok: false, code: 'no_answer' });
-      }, ACK_MS);
+      }, wait);
       this.waiting.set(nonce, (payload) => { clearTimeout(timer); resolve(payload); });
       if (!this.channel.send('cmd', { body, sig })) {
         clearTimeout(timer);
@@ -457,8 +460,9 @@ function setBusy(busy) {
   if (discord?.saved) { $('discord-test').disabled=!LOCAL||!discord.saved.configured||discord.dirty; $('discord-remove').disabled=!LOCAL||!discord.saved.configured; }
 }
 
-/** Send a signed command; quiet ones (loading on connect) only speak up when they fail. */
-async function send(action, args = {}, { quiet = false } = {}) {
+/** Send a signed command; quiet ones (loading on connect) only speak up when they fail. A command that works on the
+ * device for a while (the building scan) waits longer for its answer. */
+async function send(action, args = {}, { quiet = false, wait = ACK_MS } = {}) {
   if (!link) return;
   if (!online) {
     notify(() => t('cannot_run', { action, reason: t('offline_text') }), 'error');
@@ -469,7 +473,7 @@ async function send(action, args = {}, { quiet = false } = {}) {
   setBusy(true);
   if (!quiet) notify(() => t('sending', { action }));
   try {
-    handleResult(await link.send(body, await sign(body), nonce), quiet);
+    handleResult(await link.send(body, await sign(body), nonce, wait), quiet);
   } catch (error) {
     notify(() => t('send_failed', { error: error instanceof Error ? error.message : String(error) }), 'error');
   } finally {
@@ -522,6 +526,7 @@ function changeLanguage(language) {
   showState(lastState);
   editor.render();
   settings.render();
+  buildings.render();
   for (const row of $('log').children) row.textContent = translate(row.sourceMessage);
   renderNotice();
   renderConnectionProblem();
@@ -561,6 +566,7 @@ function init() {
   setupSelects();
   editor = new DeployEditor((screen, deploy, points) => send('set_deploy', { screen, deploy, points }));
   settings = new SettingsPanel(send);
+  buildings = new BuildingsPanel(send);
   changeLanguage();
   restoreOptions();
   refreshOptions();
@@ -611,6 +617,15 @@ function init() {
 
 
 const DEMO_DEPLOY = {"resolution": [1280, 720], "screens": {"home_scout": {"kind": "spells", "deploy": [125, 346], "points": [[380, 346], [290, 271], [290, 421], [500, 346], [410, 271], [410, 421], [620, 346], [530, 271], [530, 421], [740, 346], [650, 271], [650, 421]], "bar": [0, 598, 1280, 106]}, "home_ring": {"kind": "ring", "deploy": [125, 346], "points": [[141, 299], [243, 232], [356, 156], [470, 82], [810, 82], [924, 156], [1037, 232], [1139, 299], [1139, 391], [1037, 458], [924, 534], [243, 458], [141, 391]], "bar": [0, 598, 1280, 106]}, "home_spell_spread": {"kind": "spell_spread", "deploy": [125, 346], "points": [[640, 330], [490, 321], [521, 301], [555, 278], [589, 256], [691, 256], [725, 278], [759, 301], [795, 321], [795, 348], [759, 368], [725, 391], [640, 399], [521, 368], [490, 348]], "bar": [0, 598, 1280, 106]}, "home_quake": {"kind": "quake", "deploy": [125, 346], "points": [[640, 150], [960, 330], [640, 520], [320, 330]], "bar": [0, 598, 1280, 106]}, "builder_scout": {"kind": "points", "deploy": [150, 370], "points": [[345, 120], [850, 140], [1027, 264], [1000, 500], [380, 513], [238, 340]], "bar": [0, 588, 1280, 120]}, "builder_stage2": {"kind": "points", "deploy": [73, 299], "points": [[396, 92], [830, 51], [926, 134], [921, 457], [263, 359], [254, 205], [982, 308], [413, 489]], "bar": [0, 588, 1280, 120]}}};
+
+const DEMO_BUILDINGS = [
+  {id:'eagle_artillery',name:'Eagle Artillery',category:'defense',count:1,next_level:null,time:'17h 57m',cost:null,currency:null,section:'in_progress'},
+  {id:'barbarian_king',name:'Barbarian King',category:'hero',count:1,next_level:11,time:'11h',cost:5250,currency:'dark',section:'suggested'},
+  {id:'hero_hall',name:'Hero Hall',category:'army',count:1,next_level:10,time:'4d',cost:6500000,currency:'elixir',section:'suggested'},
+  {id:'archer_tower',name:'Archer Tower',category:'defense',count:3,next_level:8,time:'2h',cost:100000,currency:'gold',section:'other'},
+  {id:'gold_storage',name:'Gold Storage',category:'resource',count:4,next_level:16,time:'1d 12h',cost:2000000,currency:'elixir',section:'other'},
+  {id:'spring_trap',name:'Spring Trap',category:'trap',count:9,next_level:2,time:'30m 0s',cost:65000,currency:'gold',section:'other'},
+];
 
 let activeView = 'overview';
 
@@ -793,6 +808,7 @@ class DemoLink {
     else if (action === 'kill_ld') {this.state.state='idle';code='ld_off';}
     else if (action === 'restart_ld') {this.state.state='idle';code='ld_restarted';}
     else if (action === 'fit_display' || action === 'restore_display') {this.state.state='idle';code=action==='fit_display'?'display_ok':'display_unchanged';data=this.display();}
+    else if (action === 'scan_buildings') {code='buildings_scanned';data={rows:DEMO_BUILDINGS};}
     if (SETTINGS_ANSWERS.includes(code)) data={minimum:this.minimum,setup:{adb:'C:\\LDPlayer\\adb.exe',ldconsole:'C:\\LDPlayer\\ldconsole.exe',serial:'emulator-5554',ld_index:0,touch_device:'/dev/input/event4'},language:document.documentElement.lang,display:this.display()};
     return {ok:true,code,state:this.state,data};
   }

@@ -168,6 +168,22 @@ class SupervisorTests(unittest.TestCase):
                 self.assertEqual(self.device.calls, calls)
                 self.assertEqual(self.supervisor.state()['state'], 'idle')
 
+    def test_a_building_scan_waits_for_a_stopped_bot_and_answers_with_the_rows(self):
+        rows = [{'id': 'cannon', 'name': 'Cannon', 'category': 'defense', 'count': 5, 'next_level': 8,
+                 'time': '1h 30m', 'cost': 80000, 'currency': 'gold', 'section': 'other'}]
+        self.device.scan_buildings = Mock(return_value=rows)
+        self.supervisor.start(['--mode', 'home'])
+        self.assertTrue(until(lambda: self.supervisor.state()['state'] == 'running'))
+        # The scan taps the game, so it is refused under a running bot, which it never stops by itself.
+        refused = self.supervisor.command(*signed('scan_buildings'))
+        self.assertEqual((refused['ok'], refused['code']), (False, 'refused'))
+        self.device.scan_buildings.assert_not_called()
+        self.assertEqual(self.supervisor.state()['state'], 'running')
+        self.supervisor.stop()
+        result = self.supervisor.command(*signed('scan_buildings'))
+        self.assertEqual((result['ok'], result['code'], result['data']), (True, 'buildings_scanned', {'rows': rows}))
+        self.assertEqual(result['source_message'], 'Scan bangunan selesai: 1 baris')
+
     def test_unsigned_or_bad_commands_do_nothing(self):
         for body, sig, code in (signed('close_coc', key='coc_someone_else_entirely_0000000000') + ('unsigned',),
                                 signed('start', {'task': 'shell'}) + ('refused',)):

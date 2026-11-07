@@ -29,7 +29,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, the "defence layout blocked" warning, the inactivity and "another device" reloads, a lost connection, the game update offer, the Gold Pass offer and Google Play's "Rate this app" sheet are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
 | **Walls** | `--walls` spends stored gold and elixir on walls, cheapest level first, then farms both full and repeats until every wall is maxed. It never spends gems. |
-| **Web dashboard** | Live log, a live view of the LDPlayer screen and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, and move deploy pins over a real attack screen. A Stats page (resource gains, attacks, walls, run history) and Discord notifications. Indonesian or English; the switch also sets the bot's terminal language. Installable as an app. |
+| **Web dashboard** | Live log, a live view of the LDPlayer screen and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, move deploy pins over a real attack screen, and scan the Home Village's builder list for what can still be upgraded. A Stats page (resource gains, attacks, walls, run history) and Discord notifications. Indonesian or English; the switch also sets the bot's terminal language. Installable as an app. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
 | **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. A setup that cannot work (taps that cannot land, ADB debugging off, a loot minimum no opponent meets) stops the run with what to change. |
 
@@ -91,7 +91,8 @@ flowchart LR
 - ADB from LDPlayer (`adb.exe`) with **local ADB debugging** enabled in LDPlayer settings (the dashboard's "fit
   screen" turns it on)
 - A **64-bit** LDPlayer (LDPlayer 9 or newer): touch input is written as 64-bit Linux input events
-- Optional: Tesseract OCR — only a fallback when digit templates are not configured
+- Tesseract OCR for the dashboard's building scan (building names); for loot it is only a fallback when digit
+  templates are not configured
 
 The account:
 
@@ -169,7 +170,7 @@ language. The Builder Base scout screen is also recognised when Android's status
 | `touch_device`, `zoom_out.device` | The touchscreen node | Run `adb -s <serial> shell getevent -pl` and use the `/dev/input/eventN` whose block lists `ABS_MT_POSITION_X`. Set both keys to it; holds, pinches and fast taps go there. |
 | `minimum` | `0` (the default), or a loot filter that fits your Town Hall | `0` attacks every opponent as it comes without reading its loot, the fastest farm. To skip poor bases, `500000` gold and elixir suits high Town Halls; set it lower for a low Town Hall, or every opponent is skipped. `0` turns a resource off. If searching runs out of gold 3 attacks in a row, the bot stops (exit code 6) and asks you to lower it. |
 | `walls.home.gold_reserve` | Gold kept for searching | `200000` by default; lower it for a low Town Hall whose gold storage is small, or gold wall upgrades never pass it. |
-| `tesseract` | Only when `digits` is not set | Loot is read with the digit templates in `calibration/digits`. Tesseract is needed only if you remove `digits`. |
+| `tesseract` | Your Tesseract install, e.g. `C:\Program Files\Tesseract-OCR\tesseract.exe` | The building scan reads building names with it. Loot is read with the digit templates in `calibration/digits`; for loot Tesseract is needed only if you remove `digits`. |
 
 The LDPlayer rows (`adb`, `ldconsole`, `ld_index`, `serial`, `touch_device`) can also be filled from the
 [web dashboard](#web-dashboard): **auto-detect** under device settings finds the LDPlayer folder, the running instance,
@@ -474,6 +475,19 @@ Nothing changes until you press save. The device accepts only LDPlayer's own `ad
 paths, checks the rest like any calibration, saves to `config.local.json` (the previous one stays as
 `config.local.json.bak`), and the change applies at the next Start.
 
+**Buildings to upgrade:** "scan buildings" reads the game's own builder list ("Buildings & Heroes" / "Bangunan dan
+Pahlawan"), which shows only the buildings, traps and heroes the village has that its Town Hall still lets you
+upgrade, so it fits any Town Hall. The bot needs the Home Village on screen (a list left open is closed first; popups
+such as the inactivity reload are handled as in a run), opens the list, swipes it from its top to its end and closes
+it again. It never taps a row, an upgrade button or a confirm, so nothing is upgraded or bought. Each row comes back
+with its name, count ("Archer Tower x 4"), the level the upgrade reaches (the badge on the icon), time, cost and its
+resource (told by the coin), and its section: upgrading now, suggested or the rest. Names are matched in English and
+Indonesian against `buildings.json` (id and category: defenses, army, resources, traps, heroes, other); a name it
+does not know is kept as read, under other. Building names are read with Tesseract, the digits with the bot's own
+templates (`calibration/digits`, the timer letters in `calibration/units`, the badge's small digits in
+`calibration/badge`). The scan is refused while the bot is running, takes about a minute and works from the local and
+the online dashboard. Merges that are still locked (shown last with a padlock) are left out.
+
 **LDPlayer screen:** shows the instance's resolution and DPI next to the calibration (1280×720, DPI 240). "Fit
 screen" stops the bot, closes LDPlayer, waits for its virtual machine to stop, writes only the resolution, the DPI,
 ADB debugging (turned on) and ASTC texture decoding (turned off) into its instance file
@@ -707,7 +721,7 @@ How to change it:
 | `ldconsole`, `ld_index` | LDPlayer console and instance index, used to start a stopped emulator. |
 | `touch_device` | Raw touch input device, e.g. `/dev/input/event4`. |
 | `language` | Terminal, CLI help and calibration instruction language: `id` (default) or `en`. The dashboard's ID/EN switch saves it in `config.local.json`; supervised logs switch immediately without restarting the task. Each dashboard renders recent history in its own selected language. Game recognition is unchanged. |
-| `tesseract` | Tesseract executable; used for loot only when `digits` is not set. |
+| `tesseract` | Tesseract executable; reads building names for the building scan, and loot only when `digits` is not set. |
 | `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
 | `remote` | Web dashboard: the online relay's address and token (`relay_url`, `relay_key`), local `port` (8765), and the `dashboard` address printed in the terminal. |
 | `screens.<name>.anchors` | Two or more UI crops that must all match to identify a screen; optional `margin` for small UI shifts. |
@@ -780,7 +794,8 @@ LDPlayer memory restart and its ASTC setting, the until-full loop, walls (the ch
 dialog, bulk upgrades and their bar layouts, wall rings, `--wall-every`, `--wall-resource`), English game screens, the
 dashboard link (signed commands, settings, the bot as a child process, the local server, the relay client against a
 fake relay server and against the real `relay_server.py`), Stats and Discord notifications, opponent readiness after
-Next (with real loot-display crops in `fixtures/opponent-readiness/`), the English terminal messages, the LDPlayer
+Next (with real loot-display crops in `fixtures/opponent-readiness/`), the building scan (rows, badges, timers, prices
+and frames lined up, on real list crops in `fixtures/building-list-*.png`), the English terminal messages, the LDPlayer
 screen switch, and LDPlayer detection against fake tool output. They do not replace a live run on a real account.
 
 After editing `messages_en.json`, run `python messages.py` to synchronize the dashboard's catalog. The Python
@@ -800,7 +815,9 @@ relay_server.py        the online relay server the page and the PC meet on
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging, ASTC)
 game_update.py         Play Store Update button and installed game version, for the automatic game update
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
-web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, Stats and Discord panels, own relay client, ID/EN text, app manifest, service worker, icons and its font (fonts/)
+buildings.py           building scan: reads the builder list (names, counts, level badges, times, costs, sections)
+buildings.json         building names in English and Indonesian, with their id and category
+web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, building scan, Stats and Discord panels, own relay client, ID/EN text, app manifest, service worker, icons and its font (fonts/)
 deploy/                service files for hosting the page and the relay on a server (see deploy/README.md)
 calibrate.py           calibration CLI (screenshots only, never taps)
 scripts/               macOS setup script and a one-anchor calibration helper (see scripts/README.md)
@@ -813,6 +830,7 @@ test_relay_server.py   relay server protocol tests, with the real relay client
 test_opponent_readiness.py opponent readiness after Next, on real loot-display crops
 test_ldplayer.py       LDPlayer detection tests against fake tool output
 test_device_control.py screen switch tests
+test_buildings.py      building scan tests on real builder-list crops
 test_messages.py       every terminal message has its English text; translation of the log
 test_dashboard_features.py stats from the log, Discord settings and sender, stats commands
 test_web.mjs           dashboard text in both languages (node --test)

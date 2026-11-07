@@ -37,7 +37,7 @@ STOP_SECONDS = 20
 STREAM_PING_SECONDS = 15
 MAX_COMMAND_BYTES = 64 * 1024
 STATIC_FILES = {'/icons/stats/attacks.png': 'icons/stats/attacks.png',
-                '/icons/stats/walls.webp': 'icons/stats/walls.webp', '/stats.js': 'stats.js', '/discord.js': 'discord.js', '/visible-poller.js': 'visible-poller.js', '/select.js': 'select.js', '/icons/resources/elixir_cart.png': 'icons/resources/elixir_cart.png',
+                '/icons/stats/walls.webp': 'icons/stats/walls.webp', '/stats.js': 'stats.js', '/discord.js': 'discord.js', '/buildings.js': 'buildings.js', '/visible-poller.js': 'visible-poller.js', '/select.js': 'select.js', '/icons/resources/elixir_cart.png': 'icons/resources/elixir_cart.png',
                 '/icons/resources/builder_gold.webp': 'icons/resources/builder_gold.webp',
                 '/icons/resources/builder_elixir.webp': 'icons/resources/builder_elixir.webp',
                 '/icons/resources/gold.png': 'icons/resources/gold.png',
@@ -68,7 +68,7 @@ COMMAND_MAX_AGE_SECONDS = 120
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
                     'set_setup': 'setup_saved', 'set_language': 'language_saved'}
 ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
-           'fit_display', 'restore_display', *SETTINGS_ACTIONS)
+           'fit_display', 'restore_display', 'scan_buildings', *SETTINGS_ACTIONS)
 VILLAGE_CHOICES = ('home', 'builder', 'both')
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
 # Option name, CLI flag, range; zero means "no limit" and is left out, except for recoveries.
@@ -622,6 +622,12 @@ class Supervisor:
             return 'deploy_loaded', 'Titik deploy dimuat', data
         if action in SETTINGS_ACTIONS:
             return self.configure(action, options)
+        if action == 'scan_buildings':
+            # The scan taps the game (open, swipe, close the builder list); a running bot would fight it.
+            if self.running():
+                raise CommandRefused('hentikan bot dulu; scan bangunan mengetuk layar game')
+            rows = self.device.scan_buildings()
+            return 'buildings_scanned', f'Scan bangunan selesai: {len(rows)} baris', {'rows': rows}
         # Closing the game or the emulator under a running bot would only start its recovery.
         self.stop()
         if action == 'close_coc':

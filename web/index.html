@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#45a8ee">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=stats-discord-v8"><script type="module" src="app.js?v=live-1s"></script>
+<link rel="stylesheet" href="style.css?v=buildings-1"><script type="module" src="app.js?v=buildings-1"></script>
 </head><body>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <header class="site-header"><div class="header-inner">
@@ -187,6 +187,12 @@
               <button type="submit" class="primary" data-i18n="setup_save"></button>
             </div>
           </form>
+          <div class="group buildings">
+            <h3 data-i18n="buildings_title"></h3>
+            <p class="hint" data-i18n="buildings_hint"></p>
+            <div class="actions"><button id="buildings-scan" type="button" class="primary" data-i18n="buildings_scan"></button></div>
+            <div id="buildings-list" class="building-list" aria-live="polite"></div>
+          </div>
         </div>
         <p class="hint" data-i18n="deploy_note"></p>
       </section>

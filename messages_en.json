@@ -430,5 +430,10 @@
  "Setelan Discord disimpan": "Discord settings saved",
  "Pesan tes diantrekan": "Test message queued",
  "RELAY: server relay online di ws://{}:{}{}": "RELAY: online relay server at ws://{}:{}{}",
- "RELAY: token belum diatur; isi RELAY_TOKEN atau --token (samakan dengan config.json dan web/config.js)": "RELAY: token not set; set RELAY_TOKEN or --token (the same one as in config.json and web/config.js)"
+ "RELAY: token belum diatur; isi RELAY_TOKEN atau --token (samakan dengan config.json dan web/config.js)": "RELAY: token not set; set RELAY_TOKEN or --token (the same one as in config.json and web/config.js)",
+ "Scan bangunan selesai: {} baris": "Building scan done: {} rows",
+ "hentikan bot dulu; scan bangunan mengetuk layar game": "stop the bot first; the building scan taps the game screen",
+ "Scan bangunan hanya di Desa Utama; pindah ke Desa Utama dulu": "The building scan works in the Home Village only; switch to the Home Village first",
+ "Daftar bangunan bergeser terlalu jauh untuk disambung; scan dibatalkan": "The building list moved too far to piece together; scan cancelled",
+ "OCR gagal; scan bangunan dibatalkan": "OCR failed; building scan cancelled"
 }

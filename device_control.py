@@ -130,6 +130,14 @@ class DeviceActions:
         import bot
         self.adb().launch(bot.GAME_ACTIVITY)
 
+    def scan_buildings(self) -> list[dict]:
+        """Every row of the Home Village builder list; the list is only opened, swiped and closed."""
+        import bot
+        import buildings
+        config, root = bot.load_config(self.config_path), self.config_path.parent
+        bot.validate_walls(config, root, ('home',))
+        return buildings.scan(bot.Bot(config, root, self.adb(), live=True))
+
     def close_coc(self) -> None:
         self.adb().stop_game()
 
