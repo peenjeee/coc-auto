@@ -105,6 +105,16 @@ class BuildingListTests(unittest.TestCase):
         self.assertEqual(buildings.read_time(buildings.band(image, buildings.BAR_TIME, 71), self.templates['digits'],
                                              self.templates['units']), '21j 44m')
 
+    def test_light_beside_or_inside_a_badge_is_not_read_as_a_digit(self):
+        # A 3 joined by the icon's light (once cut in two), a 7 whose square met the icon's dark outline, and a face
+        # before a timer that reads as nothing at all.
+        import gear
+        badge = self.templates['badge']
+        self.assertEqual(buildings.read_badge(buildings.band(panel('gear-list-wide-three'), gear.BADGE_BAND, 261), badge), 3)
+        self.assertEqual(buildings.read_badge(buildings.band(panel('lab-list-wall-breaker'), buildings.BADGE_BAND, 575), badge), 7)
+        self.assertEqual(buildings.read_time(buildings.band(panel('lab-list-valkyrie-face-unread'), buildings.BAR_TIME, 71),
+                                             self.templates['digits'], self.templates['units']), '20j 25m')
+
     def test_a_bold_nine_is_told_from_a_five_by_its_counter(self):
         # "90 000" on the Star Laboratory list: its 9 scored too close to a 5 and the price was not read.
         price = self.config['walls']['builder']['row']['price']

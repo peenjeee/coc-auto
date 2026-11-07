@@ -75,7 +75,10 @@ TIME_SCALE, TIME_MIN_HEIGHT, TIME_LETTER_HEIGHT, TIME_GAP = 2, 0.45, 0.85, 1.0
 # helper face beside its timer reaches taller than any glyph.
 TIME_GLYPH_HEIGHT, TIME_GLYPH_ASPECT = (3, 10), 2.2
 # The level badge: a black square with a light rim; its digits have their own small font (calibration/badge).
-BADGE_SCALE, BADGE_DARK, BADGE_BRIGHT, BADGE_INK, BADGE_MIN_HEIGHT = 4, 70, 170, 120, 4
+BADGE_SCALE, BADGE_DARK, BADGE_BRIGHT, BADGE_INK, BADGE_MIN_HEIGHT, BADGE_CORE = 4, 70, 170, 120, 4, 200
+# The widest one digit's white gets, and the widest the black square is, in pixels at 1280x720 (a single digit
+# measured 2.75-5, the square 13-14).
+BADGE_ONE, BADGE_SQUARE = 5, 15
 BADGE_WIDE, BADGE_CUT = 6, (0.2, 0.55)
 OPEN_SECONDS = 30
 COUNT = re.compile(r'^(.*?)\s*[xX×]\s*(\d{1,3})$')
@@ -195,8 +198,9 @@ def read_time(image: np.ndarray, digits: dict, units: dict) -> str | None:
         number = None if '?' in number else number
         # A '1' is drawn a little shorter than the other digits, as short as a unit letter ("18j").
         found = (number or letter) if tall else (letter or number)
-        # A timer starts with a digit; anything before it is the helper's face beside a running bar's timer.
-        if not text and found is not None and not found.isdigit():
+        # A timer starts with a digit; a letter, or a short glyph that reads as nothing, before it is the helper's face
+        # beside a running bar's timer.
+        if not text and (found is None and not tall or found is not None and not found.isdigit()):
             continue
         if found is None:
             return None
@@ -216,14 +220,22 @@ def badge_glyphs(image: np.ndarray) -> list:
     if count < 2:
         return []
     x, y, w, h = squares[1 + int(np.argmax(squares[1:, cv2.CC_STAT_AREA])), :4]
+    # The icon's dark outline can join the square on its right; the square itself is never wider than this.
+    w = min(w, BADGE_SQUARE)
     gray = cv2.cvtColor(cv2.resize(image[y:y + h, x:x + w], None, fx=BADGE_SCALE, fy=BADGE_SCALE,
                                    interpolation=cv2.INTER_CUBIC), cv2.COLOR_BGR2GRAY)
     spans = []
     bright = (gray >= BADGE_BRIGHT).any(axis=0)
     for left, right in runs(bright):
-        # A digit has black on both sides; a bright column at the square's edge is its light rim.
-        if left == 0 or right == len(bright):
+        # A digit has black on both sides; a bright column within a pixel of the square's edge is its light rim.
+        if left < BADGE_SCALE or right > len(bright) - BADGE_SCALE:
             continue
+        # Light from the icon behind can join a digit's span or stand beside it; only the digits' own white tells.
+        core = np.flatnonzero(gray[:, left:right].max(axis=0) >= BADGE_CORE)
+        if not core.size:
+            continue
+        if right - left > BADGE_WIDE * BADGE_SCALE and core.size and core[-1] - core[0] < BADGE_ONE * BADGE_SCALE:
+            left, right = left + core[0], left + core[-1] + 1
         if right - left > BADGE_WIDE * BADGE_SCALE:
             weight = (gray[:, left:right] >= BADGE_INK).sum(axis=0) + gray[:, left:right].mean(axis=0) / 255
             low, high = int((right - left) * BADGE_CUT[0]), int((right - left) * BADGE_CUT[1])
