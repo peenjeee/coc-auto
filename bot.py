@@ -59,7 +59,7 @@ OCR_ALIGN_RATIO = 0.2
 OCR_MIN_CONFIDENCE = 50
 OCR_SCALES = (3, 4, 5)
 DIGIT_HEIGHT, DIGIT_WIDTH = 24, 20
-DIGIT_MIN_SCORE, DIGIT_MIN_MARGIN = 0.75, 0.15
+DIGIT_MIN_SCORE, DIGIT_MIN_MARGIN, HOLE_MIN_PIXELS = 0.75, 0.15, 3
 FRACTION_MIN_SCORE = 0.65
 # Builder-list prices are small, so they are doubled before reading, and red when the resource is short.
 PRICE_SCALE, PRICE_MAX_SATURATION = 2, 160
@@ -1682,14 +1682,25 @@ def card_empty(image: np.ndarray, slot: list) -> bool:
     return float(cv2.cvtColor(card, cv2.COLOR_BGR2HSV)[..., 1].mean()) < CARD_EMPTY_SATURATION
 
 
+def holes(glyph: np.ndarray) -> int:
+    """Closed counters in a glyph mask: '9' has one, '5' none."""
+    ink = (glyph > 0.5).astype(np.uint8)
+    count, labels = cv2.connectedComponents(1 - ink, connectivity=4)
+    border = {*labels[0], *labels[-1], *labels[:, 0], *labels[:, -1]}
+    return sum(1 for index in range(1, count) if index not in border and (labels == index).sum() >= HOLE_MIN_PIXELS)
+
+
 def classify(glyph: np.ndarray, templates: dict, min_score: float = DIGIT_MIN_SCORE) -> str | None:
-    """Digit for a glyph, or None when the best match is weak or too close to the second best."""
+    """Digit for a glyph, or None when the best match is weak or too close to the second best. A bold '9' can score
+    close to '5'; the counter only the '9' has settles those two."""
     scores = sorted(((float(cv2.matchTemplate(glyph, template, cv2.TM_CCOEFF_NORMED)[0, 0]), name[0])
                      for name, template in templates.items()), reverse=True)
     best, digit = scores[0]
-    second = next((score for score, other in scores[1:] if other != digit), -1.0)
-    if not math.isfinite(best) or best < min_score or best - second < DIGIT_MIN_MARGIN:
+    second, other = next(((score, name) for score, name in scores[1:] if name != digit), (-1.0, None))
+    if not math.isfinite(best) or best < min_score:
         return None
+    if best - second < DIGIT_MIN_MARGIN:
+        return ('9' if holes(glyph) else '5') if {digit, other} == {'9', '5'} else None
     return digit
 
 

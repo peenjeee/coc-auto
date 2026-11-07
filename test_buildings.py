@@ -84,6 +84,13 @@ class BuildingListTests(unittest.TestCase):
         self.assertEqual(self.card(image, cards[1]), (14, None, 1_000_000, 'elixir'))
         self.assertEqual(self.card(image, cards[4])[1:], ('8d', 150, 'elixir'))
 
+    def test_a_bold_nine_is_told_from_a_five_by_its_counter(self):
+        # "90 000" on the Star Laboratory list: its 9 scored too close to a 5 and the price was not read.
+        price = self.config['walls']['builder']['row']['price']
+        self.assertEqual(bot.row_price(panel('star-list-top'), price, 389 + buildings.NAME_CENTRE,
+                                       self.templates['digits']), 90_000)
+        self.assertEqual([bot.holes(self.templates['digits'][name]) for name in ('9', '5', '8', '0')], [1, 0, 2, 1])
+
     def test_running_upgrades_titles_and_cards_are_told_apart(self):
         image = panel('building-list-top')
         found = buildings.items(image, self.spec['row']['region'])
