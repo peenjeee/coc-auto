@@ -137,7 +137,8 @@ class DeviceActions:
         import buildings
         config, root = bot.load_config(self.config_path), self.config_path.parent
         bot.validate_walls(config, root, (buildings.LISTS[listing][0],))
-        return buildings.scan(bot.Bot(config, root, self.adb(), live=True), listing)
+        return buildings.scan(bot.Bot(config, root, self.adb(), live=True), listing,
+                              root / '.coc-auto' / 'scan-frames' / listing)
 
     def close_coc(self) -> None:
         self.adb().stop_game()

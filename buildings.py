@@ -60,6 +60,7 @@ TITLE_WORDS = {'other': ('other', 'lain'), 'suggested': ('sugg', 'saran')}
 COIN_MIN_PIXELS, DARK_MIN_PIXELS = 40, 90
 # Rows seen in two frames land within a few pixels of each other once the frames are lined up.
 SAME_ROW_PX = 12
+KEPT_LEFT = 936
 # From a card's top to below its level badge and price.
 CARD_DEPTH = 45
 # A strip near the bottom of the previous frame is looked up in the next one to tell how far the list moved; the
@@ -214,7 +215,11 @@ def badge_glyphs(image: np.ndarray) -> list:
     gray = cv2.cvtColor(cv2.resize(image[y:y + h, x:x + w], None, fx=BADGE_SCALE, fy=BADGE_SCALE,
                                    interpolation=cv2.INTER_CUBIC), cv2.COLOR_BGR2GRAY)
     spans = []
-    for left, right in runs((gray >= BADGE_BRIGHT).any(axis=0)):
+    bright = (gray >= BADGE_BRIGHT).any(axis=0)
+    for left, right in runs(bright):
+        # A digit has black on both sides; a bright column at the square's edge is its light rim.
+        if left == 0 or right == len(bright):
+            continue
         if right - left > BADGE_WIDE * BADGE_SCALE:
             weight = (gray[:, left:right] >= BADGE_INK).sum(axis=0) + gray[:, left:right].mean(axis=0) / 255
             low, high = int((right - left) * BADGE_CUT[0]), int((right - left) * BADGE_CUT[1])
@@ -407,9 +412,22 @@ def show_tab(runner: bot.Bot, x: int) -> np.ndarray:
     return runner.wait_still(bot.WALL_LIST_SETTLE_SECONDS if runner.poll else 0)
 
 
-def scan(runner: bot.Bot, listing: str = 'buildings') -> list[dict]:
+def keep_frames(folder: Path, frames: list) -> None:
+    """The list part of every frame a scan read (the fixtures' 344 px), replacing the last scan's: a row that did not
+    read can be looked at later without the game."""
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        for old in folder.glob('*.png'):
+            old.unlink()
+        for index, frame in enumerate(frames):
+            cv2.imwrite(str(folder / f'{index:02d}.png'), frame[:, KEPT_LEFT:])
+    except OSError as exc:
+        LOG.warning('Frame scan tidak tersimpan (%s)', exc)
+
+
+def scan(runner: bot.Bot, listing: str = 'buildings', keep: Path | None = None) -> list[dict]:
     """Open the builder list of listing's village (a LISTS key; the boat is taken when the other village shows) on
-    listing's tab, read it from its top to its end, and close it again."""
+    listing's tab, read it from its top to its end, and close it again; with keep, the frames are kept there."""
     import gear  # gear reads its rows with this module's helpers
     village, tab, path = LISTS[listing]
     spec = runner.config['walls'][village]
@@ -434,6 +452,8 @@ def scan(runner: bot.Bot, listing: str = 'buildings') -> list[dict]:
             # close_menus knows the list by the builders tab only, and the game may reopen the tab it was left on.
             show_tab(runner, builders)
         runner.close_menus()
+    if keep is not None:
+        keep_frames(keep, frames)
     rows = (gear.read_rows(frames, spec, templates, program) if listing == 'gear'
             else read_rows(frames, spec, templates, program, path))
     # A running upgrade's time left in seconds, so the dashboard can count it down until the next scan.

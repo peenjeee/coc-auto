@@ -84,6 +84,15 @@ class BuildingListTests(unittest.TestCase):
         self.assertEqual(self.card(image, cards[1]), (14, None, 1_000_000, 'elixir'))
         self.assertEqual(self.card(image, cards[4])[1:], ('8d', 150, 'elixir'))
 
+    def test_a_scan_keeps_the_list_part_of_its_frames_in_place_of_the_last_ones(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            kept = Path(folder) / 'lab'
+            buildings.keep_frames(kept, [np.zeros((720, 1280, 3), np.uint8)] * 3)
+            buildings.keep_frames(kept, [np.full((720, 1280, 3), 9, np.uint8)] * 2)
+            self.assertEqual(sorted(path.name for path in kept.glob('*.png')), ['00.png', '01.png'])
+            self.assertEqual(cv2.imread(str(kept / '00.png')).shape, (720, 344, 3))
+
     def test_a_bold_nine_is_told_from_a_five_by_its_counter(self):
         # "90 000" on the Star Laboratory list: its 9 scored too close to a 5 and the price was not read.
         price = self.config['walls']['builder']['row']['price']

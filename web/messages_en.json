@@ -482,5 +482,6 @@
  "Scan hewan selesai: {} baris": "Pet scan done: {} rows",
  "Scan peralatan pahlawan selesai: {} baris": "Hero equipment scan done: {} rows",
  "Scan bangunan Desa Malam selesai: {} baris": "Builder Base building scan done: {} rows",
- "Scan Lab Bintang selesai: {} baris": "Star Laboratory scan done: {} rows"
+ "Scan Lab Bintang selesai: {} baris": "Star Laboratory scan done: {} rows",
+ "Frame scan tidak tersimpan (%s)": "Scan frames not kept (%s)"
 }
