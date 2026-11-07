@@ -99,6 +99,12 @@ class BuildingListTests(unittest.TestCase):
         self.assertEqual(buildings.read_time(buildings.band(image, buildings.BAR_TIME, 71), self.templates['digits'],
                                              self.templates['units']), '4j 42m')
 
+    def test_the_researchers_face_before_a_timer_is_left_out(self):
+        # Valkyrie's "21j 44m" with the researcher's face on its left, read as a 'j' before the first digit.
+        image = panel('lab-list-valkyrie-face')
+        self.assertEqual(buildings.read_time(buildings.band(image, buildings.BAR_TIME, 71), self.templates['digits'],
+                                             self.templates['units']), '21j 44m')
+
     def test_a_bold_nine_is_told_from_a_five_by_its_counter(self):
         # "90 000" on the Star Laboratory list: its 9 scored too close to a 5 and the price was not read.
         price = self.config['walls']['builder']['row']['price']

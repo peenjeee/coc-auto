@@ -195,6 +195,9 @@ def read_time(image: np.ndarray, digits: dict, units: dict) -> str | None:
         number = None if '?' in number else number
         # A '1' is drawn a little shorter than the other digits, as short as a unit letter ("18j").
         found = (number or letter) if tall else (letter or number)
+        # A timer starts with a digit; anything before it is the helper's face beside a running bar's timer.
+        if not text and found is not None and not found.isdigit():
+            continue
         if found is None:
             return None
         text += found
