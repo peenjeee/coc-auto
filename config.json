@@ -2174,6 +2174,38 @@
           "max_score": 0.03
         }
       ],
+      "alt_anchors": [
+        [
+          {
+            "file": "calibration/wall-hammer-b6fafe3a343545f4aa4989149fc91bd8.png",
+            "search": [
+              0,
+              380,
+              1280,
+              340
+            ],
+            "scales": [
+              1.0,
+              1.1
+            ],
+            "max_score": 0.03
+          },
+          {
+            "file": "calibration/wall-bulk-more-label-3dd3f985bf6a41f1a1dcf6d7329a85de.png",
+            "search": [
+              0,
+              380,
+              1280,
+              340
+            ],
+            "scales": [
+              1.0,
+              1.1
+            ],
+            "max_score": 0.05
+          }
+        ]
+      ],
       "overrides": [
         "build_list",
         "home",
