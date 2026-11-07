@@ -139,14 +139,17 @@ class ScanTests(unittest.TestCase):
             wait=lambda targets, allowed, seconds: next(states),
             close_menus=lambda: calls.append('close'),
             open_build_list=lambda village, spec: calls.append(('open', village)) or 'opened',
-            scroll_list=scroll_list)
+            scroll_list=scroll_list, list_indonesian=lambda image: False)
 
     def test_the_list_is_read_from_its_top_to_its_end_then_closed(self):
         calls, runner = self.runner(['home'], ['second', 'third'])
         with patch.object(bot, 'executable', return_value='tesseract'), \
                 patch.object(buildings, 'load_templates', return_value={}), \
-                patch.object(buildings, 'read_rows', return_value=['rows']) as read:
-            self.assertEqual(buildings.scan(runner), ['rows'])
+                patch.object(buildings, 'read_rows', return_value=[{'section': 'in_progress', 'time': '1h 23m'},
+                                                                   {'section': 'other', 'time': '2h'}]) as read:
+            # A running upgrade comes with its time left in seconds, for the dashboard to count down.
+            self.assertEqual(buildings.scan(runner), [{'section': 'in_progress', 'time': '1h 23m', 'seconds': 4980},
+                                                      {'section': 'other', 'time': '2h'}])
         self.assertEqual(read.call_args.args[0], ['top', 'second', 'third'])
         down = ('swipe', ((1110, 560), (1110, 300)), True)
         self.assertEqual(calls, ['check_touch', ('open', 'home'), ('swipe', ((1110, 300), (1110, 560)), False),

@@ -367,7 +367,10 @@ def scan(runner: bot.Bot) -> list[dict]:
         frames = list_frames(runner, spec, image)
     finally:
         runner.close_menus()
-    return read_rows(frames, spec, templates, program)
+    indonesian = runner.list_indonesian(frames[0])
+    # A running upgrade's time left in seconds, so the dashboard can count it down until the next scan.
+    return [{**row, 'seconds': seconds(row['time'], indonesian)} if row['section'] == 'in_progress' else row
+            for row in read_rows(frames, spec, templates, program)]
 
 
 def seconds(text: object, indonesian: bool) -> int | None:

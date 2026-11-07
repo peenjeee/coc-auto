@@ -19,6 +19,15 @@ function element(tag, text, className) {
   return node;
 }
 
+/** Time left, in the game's own style: the two largest units (Indonesian units when the page is Indonesian). */
+function left(seconds) {
+  const [d, h, m, s] = document.documentElement.lang === 'id' ? ['h', 'j', 'm', 'd'] : ['d', 'h', 'm', 's'];
+  const days = Math.floor(seconds / 86400), hours = Math.floor(seconds / 3600) % 24, minutes = Math.floor(seconds / 60) % 60;
+  if (days) return `${days}${d} ${hours}${h}`;
+  if (hours) return `${hours}${h} ${minutes}${m}`;
+  return minutes ? `${minutes}${m}` : seconds > 0 ? `${Math.ceil(seconds)}${s}` : t('buildings_done');
+}
+
 /** A target and a row are the same building by catalog id, or by name for a row the catalog does not know. */
 function sameBuilding(target, row) {
   return target.id ? target.id === row.id : !row.id && String(target.name).toLowerCase() === String(row.name).toLowerCase();
@@ -41,7 +50,15 @@ export class BuildingsPanel {
   /** @param {{rows?: unknown}} data the rows the device read, top of the list first */
   load(data) {
     this.rows = Array.isArray(data?.rows) ? data.rows.filter((row) => row && typeof row === 'object') : [];
+    // Running upgrades count down from the scan; the next scan reads the game's own timers again.
+    this.scannedAt = Date.now();
+    this.ticker ??= setInterval(() => this.tick(), 30000);
     this.render();
+  }
+
+  tick() {
+    const passed = (Date.now() - this.scannedAt) / 1000;
+    for (const [cell, total] of this.clocks ?? []) cell.textContent = left(Math.max(0, total - passed));
   }
 
   /** @param {{targets?: unknown, keep_builders?: unknown} | undefined} saved the pick the device keeps */
@@ -58,6 +75,7 @@ export class BuildingsPanel {
 
   render() {
     this.renderPicked();
+    this.clocks = [];
     const list = $('buildings-list');
     list.textContent = '';
     if (!this.rows) return;
@@ -124,7 +142,9 @@ export class BuildingsPanel {
       if (Number(row.count) > 1) name.append(element('small', ` ×${row.count}`));
       if (['in_progress', 'suggested'].includes(row.section)) name.append(element('em', t(`buildings_${row.section}`), `building-tag ${row.section}`));
       line.insertCell().textContent = Number.isInteger(row.next_level) ? `→ ${row.next_level}` : '–';
-      line.insertCell().textContent = typeof row.time === 'string' ? row.time : '–';
+      const time = line.insertCell();
+      time.textContent = typeof row.time === 'string' ? row.time : '–';
+      if (Number.isInteger(row.seconds)) this.clocks.push([time, row.seconds]);
       const cost = line.insertCell();
       if (Number.isInteger(row.cost)) {
         cost.append(element('span', row.cost.toLocaleString('en-US')));
