@@ -540,6 +540,15 @@ upgrades cannot be ticked. **Keep builders free** leaves that many builders for 
 0–10 builders) and saves it to `config.local.json` as `buildings`; the saved pick comes back with the settings when
 the dashboard connects, and is listed in order above the scan. It applies at the next Start. The run setup's
 **upgrade buildings** task takes only the time limit and recoveries.
+The page has three sub-tabs, one for each of these tabs at the bottom of the game's list: **Buildings**,
+**Laboratory** ("Army Upgrades" / "Peningkatan Pasukan") and **Pets** ("Hero Pets" / "Hewan Pahlawan"). Each has its
+own scan button, its own last scan (kept in `.coc-auto/stats.sqlite3` like the buildings one) and its own pick. A
+Laboratory or Pets scan opens the list, taps that tab, reads it from its top to its end the same way, taps the
+buildings tab again and closes the list; pets still locked are left out. Research and pet names are matched against
+`research.json` (troops, dark troops, spells, dark spells, siege machines, pets), never `buildings.json`, so
+"Raksasa" (Giant) is not taken for "Bom Raksasa" (Giant Bomb). Their picks keep no builders free and are saved to
+`config.local.json` as `lab` and `pets`. Automatic research and pet upgrades are not built yet: those picks are only
+kept for now.
 
 Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
 the running bot), and everything the PC sends online is signed with it too, so nobody else on the channel can pose
@@ -863,6 +872,7 @@ game_update.py         Play Store Update button and installed game version, for 
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
 buildings.py           building scan (names, counts, level badges, times, costs, sections) and --buildings upgrades
 buildings.json         building names in English and Indonesian, with their id and category
+research.json          Laboratory research and pet names in English and Indonesian, with their id and category
 web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, building scan, Stats and Discord panels, own relay client, ID/EN text, app manifest, service worker, icons and its font (fonts/)
 deploy/                service files for hosting the page and the relay on a server (see deploy/README.md)
 calibrate.py           calibration CLI (screenshots only, never taps)

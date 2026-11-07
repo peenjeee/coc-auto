@@ -1,9 +1,15 @@
-// Building scan: every row of the game's builder list ("Buildings & Heroes") read on the device, grouped by
-// category. Rows are ticked here for the "Upgrade buildings" task, first ticked first, each up to a level or Max; the
-// scan itself upgrades nothing.
+// Building scan: every row of one of the game's builder list tabs ("Buildings & Heroes", Laboratory, pets) read on
+// the device, grouped by category. Rows are ticked here, first ticked first, each up to a level or Max: buildings for
+// the "Upgrade buildings" task, research and pets only kept for now. The scan itself upgrades nothing.
 import { t } from './i18n.js';
 
-const CATEGORIES = ['defense', 'army', 'resource', 'trap', 'hero', 'other'];
+// Each list's categories, in the order shown; a row the device could not name comes under other.
+const CATEGORIES = {
+  buildings: ['defense', 'army', 'resource', 'trap', 'hero', 'other'],
+  lab: ['troop', 'dark_troop', 'spell', 'dark_spell', 'siege', 'other'],
+  pets: ['pet', 'other'],
+};
+export const LISTS = Object.keys(CATEGORIES);
 const COINS = { gold: 'icons/resources/gold.png', elixir: 'icons/resources/elixir.png', dark: 'icons/resources/dark_elixir.png' };
 // The device opens, swipes and reads the whole list before it answers, which takes about a minute.
 export const SCAN_WAIT_MS = 180000;
@@ -36,24 +42,38 @@ function sameBuilding(target, row) {
 export class BuildingsPanel {
   /** @param {(action: string, args?: Record<string, unknown>, options?: Record<string, unknown>) => void} send */
   constructor(send) {
-    /** @type {Array<Record<string, unknown>> | null} */
-    this.rows = null;
-    /** @type {Array<{id: string | null, name: string, level: number | null}>} the pick, first one first */
-    this.targets = [];
-    $('buildings-scan').addEventListener('click', () => send('scan_buildings', {}, { wait: SCAN_WAIT_MS }));
+    /** @type {Record<string, {rows: Array<Record<string, unknown>> | null, scannedAt: number, targets: Array<{id: string | null, name: string, level: number | null}>}>}
+     * per list: the rows read (null while the device keeps no scan of it), when, and the pick, first one first */
+    this.lists = Object.fromEntries(LISTS.map((list) => [list, { rows: null, scannedAt: Date.now(), targets: [] }]));
+    this.list = 'buildings';
+    for (const tab of document.querySelectorAll('[data-list]')) {
+      tab.addEventListener('click', () => { this.list = tab.dataset.list; this.render(); });
+    }
+    $('buildings-scan').addEventListener('click', () => send('scan_buildings', { list: this.list }, { wait: SCAN_WAIT_MS }));
     $('buildings-save').addEventListener('click', () => {
       const keep = Number.parseInt($('buildings-keep').value, 10);
-      send('set_buildings', { buildings: { targets: this.targets, keep_builders: Number.isInteger(keep) ? Math.min(MAX_KEEP, Math.max(0, keep)) : 0 } });
+      // Only buildings leave builders free; research and pets have their own queues.
+      send('set_buildings', { list: this.list, buildings: this.list === 'buildings'
+        ? { targets: this.targets, keep_builders: Number.isInteger(keep) ? Math.min(MAX_KEEP, Math.max(0, keep)) : 0 }
+        : { targets: this.targets } });
     });
   }
 
-  /** @param {{rows?: unknown, scanned_at?: unknown}} data the rows the device read, top of the list first, and when
-   * (unix seconds); rows null when the device keeps no scan */
+  /** The list shown: its rows (null until a scan of it is known), when they were read and its pick. */
+  get rows() { return this.lists[this.list].rows; }
+  get scannedAt() { return this.lists[this.list].scannedAt; }
+  get targets() { return this.lists[this.list].targets; }
+  set targets(targets) { this.lists[this.list].targets = targets; }
+
+  /** @param {{list?: unknown, rows?: unknown, scanned_at?: unknown}} data the rows the device read from one list, top
+   * first, and when (unix seconds); rows null when the device keeps no scan of it */
   load(data) {
-    this.rows = Array.isArray(data?.rows) ? data.rows.filter((row) => row && typeof row === 'object') : null;
+    // A device from before the lab and pet lists answers for the buildings only.
+    const kept = this.lists[LISTS.includes(data?.list) ? data.list : 'buildings'];
+    kept.rows = Array.isArray(data?.rows) ? data.rows.filter((row) => row && typeof row === 'object') : null;
     // Running upgrades count down from the scan itself, so a scan kept on the device and reopened later shows the
     // time left now; the next scan reads the game's own timers again.
-    this.scannedAt = Number.isFinite(data?.scanned_at) ? data.scanned_at * 1000 : Date.now();
+    kept.scannedAt = Number.isFinite(data?.scanned_at) ? data.scanned_at * 1000 : Date.now();
     this.ticker ??= setInterval(() => this.tick(), 30000);
     this.render();
   }
@@ -63,22 +83,39 @@ export class BuildingsPanel {
     for (const [cell, total] of this.clocks ?? []) cell.textContent = left(Math.max(0, total - passed));
   }
 
-  /** @param {{targets?: unknown, keep_builders?: unknown} | undefined} saved the pick the device keeps */
+  /** @param {Record<string, {targets?: unknown, keep_builders?: unknown} | undefined> | undefined} saved the
+   * settings the device keeps, each list's pick under its name */
   select(saved) {
-    const targets = Array.isArray(saved?.targets) ? saved.targets : [];
-    this.targets = targets.filter((target) => target && typeof target.name === 'string').map((target) => ({
-      id: typeof target.id === 'string' ? target.id : null,
-      name: target.name,
-      level: Number.isInteger(target.level) ? target.level : null,
-    }));
-    $('buildings-keep').value = String(Number.isInteger(saved?.keep_builders) ? saved.keep_builders : 0);
+    for (const list of LISTS) {
+      const targets = Array.isArray(saved?.[list]?.targets) ? saved[list].targets : [];
+      this.lists[list].targets = targets.filter((target) => target && typeof target.name === 'string').map((target) => ({
+        id: typeof target.id === 'string' ? target.id : null,
+        name: target.name,
+        level: Number.isInteger(target.level) ? target.level : null,
+      }));
+    }
+    $('buildings-keep').value = String(Number.isInteger(saved?.buildings?.keep_builders) ? saved.buildings.keep_builders : 0);
     this.render();
   }
 
+  /** The shown list's own wording: key for buildings, key_lab or key_pets for the others. */
+  text(key) {
+    return t(this.list === 'buildings' ? key : `${key}_${this.list}`);
+  }
+
   render() {
+    for (const tab of document.querySelectorAll('[data-list]')) {
+      const selected = tab.dataset.list === this.list;
+      tab.classList.toggle('active', selected);
+      tab.setAttribute('aria-selected', String(selected));
+    }
+    $('buildings-title').textContent = this.text('buildings_title');
+    $('buildings-hint').textContent = this.text('buildings_hint');
+    $('buildings-pick-hint').textContent = this.text('buildings_pick_hint');
+    $('buildings-keep').closest('label').hidden = this.list !== 'buildings';
     this.renderPicked();
     this.clocks = [];
-    $('buildings-scan').textContent = t(this.rows ? 'buildings_rescan' : 'buildings_scan');
+    $('buildings-scan').textContent = this.rows ? t('buildings_rescan') : this.text('buildings_scan');
     const scanned = $('buildings-scanned');
     scanned.hidden = !this.rows;
     if (this.rows) scanned.textContent = t('buildings_scanned_at', { time: new Date(this.scannedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) });
@@ -89,8 +126,9 @@ export class BuildingsPanel {
       list.append(element('p', t('buildings_empty'), 'hint'));
       return;
     }
-    for (const category of CATEGORIES) {
-      const rows = this.rows.filter((row) => (CATEGORIES.includes(row.category) ? row.category : 'other') === category);
+    const categories = CATEGORIES[this.list];
+    for (const category of categories) {
+      const rows = this.rows.filter((row) => (categories.includes(row.category) ? row.category : 'other') === category);
       if (rows.length) list.append(this.group(category, rows));
     }
     this.tick();
@@ -140,7 +178,8 @@ export class BuildingsPanel {
     section.append(element('h4', `${t(`buildings_${category}`)} · ${rows.length}`));
     const table = element('table', undefined, 'building-table');
     const head = table.createTHead().insertRow();
-    for (const key of ['buildings_name', 'buildings_level', 'buildings_time', 'buildings_cost', 'buildings_target']) head.append(element('th', t(key)));
+    head.append(element('th', this.text('buildings_name')));
+    for (const key of ['buildings_level', 'buildings_time', 'buildings_cost', 'buildings_target']) head.append(element('th', t(key)));
     const body = table.createTBody();
     for (const row of rows) {
       const line = body.insertRow();

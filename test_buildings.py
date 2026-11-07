@@ -50,6 +50,24 @@ class BuildingListTests(unittest.TestCase):
                 row = buildings.named(text)
                 self.assertEqual((row['id'], row['category'], row['name'], row['count']), expected)
 
+    def test_lab_and_pet_names_match_their_own_catalog(self):
+        # Against the buildings catalog "Raksasa" (Giant) came out "Bom Raksasa", "Orang Barbar" "Raja Barbar".
+        for text, expected in (('Raksasa', ('giant', 'troop', 'Raksasa')),
+                               ('Orang Barbar', ('barbarian', 'troop', 'Orang Barbar')),
+                               ('PenvembuH', ('healer', 'troop', 'Penyembuh')),
+                               ('Mantra JeRrangkong', ('skeleton_spell', 'dark_spell', 'Mantra Jerangkong')),
+                               ('P.E.K.K.A', ('pekka', 'troop', 'P.E.K.K.A')),
+                               ('L.A.S.5.1', ('lassi', 'pet', 'L.A.S.S.I'))):
+            with self.subTest(text=text):
+                self.assertEqual(buildings.identify(text, buildings.RESEARCH), expected)
+
+    def test_a_short_name_the_line_reading_misses_is_read_as_one_word(self):
+        answers = iter([b'\n', b'Balon\n'])
+        with patch.object(buildings.subprocess, 'run',
+                          side_effect=lambda args, **options: SimpleNamespace(stdout=next(answers))) as run:
+            self.assertEqual(buildings.ocr_line(np.zeros((20, 198, 3), np.uint8), 'tesseract'), 'Balon')
+        self.assertEqual([call.args[0][4] for call in run.call_args_list], ['7', '8'])
+
     def test_a_card_gives_its_level_badge_timer_price_and_coin(self):
         image = panel('building-list-archer-towers')
         cards = [y for kind, y in buildings.items(image, self.spec['row']['region']) if kind == 'card']
@@ -115,6 +133,20 @@ class BuildingListTests(unittest.TestCase):
                                    'count': 7, 'next_level': 2, 'time': '8s', 'cost': 150, 'currency': 'gold',
                                    'section': 'suggested'})
 
+    @unittest.skipUnless(shutil.which(bot.load_config(ROOT / 'config.json').get('tesseract') or ''), 'needs Tesseract')
+    def test_the_lab_and_pet_tabs_read_with_their_own_catalog(self):
+        rows = buildings.read_rows([panel('lab-list-giant-barbarian')], self.spec, self.templates,
+                                   self.config['tesseract'], buildings.RESEARCH)
+        self.assertEqual([row['id'] for row in rows], ['baby_dragon', 'miner', 'jump_spell', 'healing_spell', 'giant',
+                                                       'barbarian', 'pekka', 'wizard', 'archer'])
+        self.assertEqual([(row['category'], row['cost'], row['currency']) for row in rows[4:6]],
+                         [('troop', 400_000, 'elixir'), ('troop', 400_000, 'elixir')])
+        # The pets: L.A.S.S.I upgrading, every other pet still locked behind the Pet House and left out.
+        pets = buildings.read_rows([panel('pet-list-lassi')], self.spec, self.templates, self.config['tesseract'],
+                                   buildings.RESEARCH)
+        self.assertEqual([(row['id'], row['category'], row['section'], row['time']) for row in pets],
+                         [('lassi', 'pet', 'in_progress', '13j 57m')])
+
 
 class ScanTests(unittest.TestCase):
     """The scan only opens the list, swipes it and closes it; the runner here has nothing else to call."""
@@ -133,21 +165,46 @@ class ScanTests(unittest.TestCase):
             wait=lambda targets, allowed, seconds: next(states),
             close_menus=lambda: calls.append('close'),
             open_build_list=lambda village, spec: calls.append(('open', village)) or 'opened',
-            scroll_list=scroll_list, list_indonesian=lambda image: False)
+            scroll_list=scroll_list, list_indonesian=lambda image: image == 'opened', live=True, poll=0,
+            device=SimpleNamespace(tap_many=lambda taps: calls.append(('tap', taps))),
+            wait_still=lambda seconds: 'tab')
 
     def test_the_list_is_read_from_its_top_to_its_end_then_closed(self):
         calls, runner = self.runner(['home'], ['second', 'third'])
         with patch.object(bot, 'executable', return_value='tesseract'), \
                 patch.object(buildings, 'load_templates', return_value={}), \
-                patch.object(buildings, 'read_rows', return_value=[{'section': 'in_progress', 'time': '1h 23m'},
+                patch.object(buildings, 'read_rows', return_value=[{'section': 'in_progress', 'time': '1h 23j'},
                                                                    {'section': 'other', 'time': '2h'}]) as read:
-            # A running upgrade comes with its time left in seconds, for the dashboard to count down.
-            self.assertEqual(buildings.scan(runner), [{'section': 'in_progress', 'time': '1h 23m', 'seconds': 4980},
+            # A running upgrade comes with its time left in seconds, for the dashboard to count down; the units
+            # are the language the list's header showed (Indonesian here: 'j' is hours).
+            self.assertEqual(buildings.scan(runner), [{'section': 'in_progress', 'time': '1h 23j', 'seconds': 169_200},
                                                       {'section': 'other', 'time': '2h'}])
         self.assertEqual(read.call_args.args[0], ['top', 'second', 'third'])
         down = ('swipe', ((1110, 560), (1110, 300)), True)
         self.assertEqual(calls, ['check_touch', ('open', 'home'), ('swipe', ((1110, 300), (1110, 560)), False),
                                  down, down, down, 'close'])
+
+    def test_the_lab_tab_is_read_and_the_builders_tab_shown_again_before_closing(self):
+        calls, runner = self.runner(['home'], ['second'])
+        with patch.object(bot, 'executable', return_value='tesseract'), \
+                patch.object(buildings, 'load_templates', return_value={}), \
+                patch.object(buildings, 'list_frames', wraps=buildings.list_frames) as frames, \
+                patch.object(buildings, 'read_rows', return_value=[{'section': 'in_progress', 'time': '2j'}]) as read:
+            self.assertEqual(buildings.scan(runner, 'lab'), [{'section': 'in_progress', 'time': '2j', 'seconds': 7200}])
+        # The lab's own frame starts the list, its rows named from the research catalog.
+        self.assertEqual(frames.call_args.args[2], 'tab')
+        self.assertEqual((read.call_args.args[0], read.call_args.args[4]), (['top', 'second'], buildings.RESEARCH))
+        down = ('swipe', ((1110, 560), (1110, 300)), True)
+        self.assertEqual(calls, ['check_touch', ('open', 'home'), ('tap', [[1062, 690]]),
+                                 ('swipe', ((1110, 300), (1110, 560)), False), down, down, ('tap', [[978, 690]]),
+                                 'close'])
+        # A swipe that fails on the pets tab still shows the builders tab before closing.
+        calls, runner = self.runner(['home'], [])
+        with patch.object(bot, 'executable', return_value='tesseract'), \
+                patch.object(buildings, 'load_templates', return_value={}), \
+                patch.object(runner, 'scroll_list', side_effect=bot.BotError('x')), self.assertRaises(bot.BotError):
+            buildings.scan(runner, 'pets')
+        self.assertEqual(calls[-3:], [('tap', [[1240, 690]]), ('tap', [[978, 690]]), 'close'])
 
     def test_a_list_left_open_is_closed_first_and_only_the_home_village_is_scanned(self):
         with patch.object(bot, 'executable', return_value='tesseract'), \

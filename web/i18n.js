@@ -634,3 +634,28 @@ Object.assign(TEXT.id, {
   upgrades_description: 'Scan bangunan desa yang bisa di-upgrade, pilih, lalu biarkan bot membuat tukang tetap sibuk.',
   buildings_rescan: 'scan ulang', buildings_scanned_at: 'Scan terakhir: {time}',
 });
+
+Object.assign(TEXT.en, {
+  buildings_tab_buildings: 'Buildings', buildings_tab_lab: 'Laboratory', buildings_tab_pets: 'Pets',
+  buildings_title_lab: 'Research to upgrade', buildings_title_pets: 'Pets to upgrade',
+  buildings_hint_lab: 'The bot opens the builder list in the Home Village, switches to its Laboratory tab ("Army Upgrades"), scrolls it to the end, reads every row, switches back and closes it. Nothing is researched or bought. Stop the bot first; a scan takes about a minute.',
+  buildings_hint_pets: 'The bot opens the builder list in the Home Village, switches to its pets tab ("Hero Pets"), reads every row, switches back and closes it. Pets still locked are left out. Nothing is upgraded or bought. Stop the bot first.',
+  buildings_scan_lab: 'scan laboratory', buildings_scan_pets: 'scan pets',
+  buildings_name_lab: 'research', buildings_name_pets: 'pet',
+  buildings_pick_hint_lab: 'Tick the research to do, first ticked first, each up to a level or Max, then save. The bot does not research by itself yet; the pick is kept on the device for when it does.',
+  buildings_pick_hint_pets: 'Tick the pets to upgrade, first ticked first, each up to a level or Max, then save. The bot does not upgrade pets by itself yet; the pick is kept on the device for when it does.',
+  buildings_troop: 'troops', buildings_dark_troop: 'dark troops', buildings_spell: 'spells', buildings_dark_spell: 'dark spells',
+  buildings_siege: 'siege machines', buildings_pet: 'pets',
+});
+Object.assign(TEXT.id, {
+  buildings_tab_buildings: 'Bangunan', buildings_tab_lab: 'Laboratorium', buildings_tab_pets: 'Hewan',
+  buildings_title_lab: 'Riset yang bisa di-upgrade', buildings_title_pets: 'Hewan yang bisa di-upgrade',
+  buildings_hint_lab: 'Bot membuka daftar tukang di Desa Utama, pindah ke tab Laboratorium ("Peningkatan Pasukan"), menggulirnya sampai habis, membaca setiap baris, lalu kembali dan menutupnya. Tidak ada yang diriset atau dibeli. Hentikan bot dulu; satu scan sekitar satu menit.',
+  buildings_hint_pets: 'Bot membuka daftar tukang di Desa Utama, pindah ke tab hewan ("Hewan Pahlawan"), membaca setiap baris, lalu kembali dan menutupnya. Hewan yang masih terkunci dilewati. Tidak ada yang di-upgrade atau dibeli. Hentikan bot dulu.',
+  buildings_scan_lab: 'scan laboratorium', buildings_scan_pets: 'scan hewan',
+  buildings_name_lab: 'riset', buildings_name_pets: 'hewan',
+  buildings_pick_hint_lab: 'Centang riset yang ingin dikerjakan, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Bot belum meriset sendiri; pilihannya disimpan di perangkat untuk nanti.',
+  buildings_pick_hint_pets: 'Centang hewan yang ingin di-upgrade, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Bot belum meng-upgrade hewan sendiri; pilihannya disimpan di perangkat untuk nanti.',
+  buildings_troop: 'pasukan', buildings_dark_troop: 'pasukan hitam', buildings_spell: 'mantra', buildings_dark_spell: 'mantra hitam',
+  buildings_siege: 'mesin pengepungan', buildings_pet: 'hewan',
+});

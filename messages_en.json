@@ -442,6 +442,7 @@
  "--buildings tidak bisa digabung dengan --walls/--until-full/--builder/--home": "--buildings cannot be combined with --walls/--until-full/--builder/--home",
  "--buildings butuh --live": "--buildings needs --live",
  "Pilihan bangunan perlu targets dan keep_builders": "The building selection needs targets and keep_builders",
+ "Pilihan riset perlu targets": "The lab or pet selection needs targets",
  "Target bangunan harus daftar berisi 0..{}": "Building targets must be a list of 0..{}",
  "Target bangunan perlu id, name dan level": "A building target needs id, name and level",
  "Bangunan tidak dikenal: {}": "Unknown building: {}",

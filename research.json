@@ -1,0 +1,81 @@
+{
+  "troop": {
+    "barbarian": ["Barbarian", "Orang Barbar"],
+    "archer": ["Archer", "Pemanah"],
+    "giant": ["Giant", "Raksasa"],
+    "goblin": ["Goblin", "Goblin"],
+    "wall_breaker": ["Wall Breaker", "Penghancur Tembok"],
+    "balloon": ["Balloon", "Balon"],
+    "wizard": ["Wizard", "Penyihir"],
+    "healer": ["Healer", "Penyembuh"],
+    "dragon": ["Dragon", "Naga"],
+    "pekka": ["P.E.K.K.A", "P.E.K.K.A"],
+    "baby_dragon": ["Baby Dragon", "Bayi Naga"],
+    "miner": ["Miner", "Penambang"],
+    "electro_dragon": ["Electro Dragon", "Naga Elektro"],
+    "yeti": ["Yeti", "Yeti"],
+    "dragon_rider": ["Dragon Rider", "Penunggang Naga"],
+    "electro_titan": ["Electro Titan", "Titan Elektro"],
+    "root_rider": ["Root Rider", "Penunggang Akar"],
+    "thrower": ["Thrower", "Pelempar"]
+  },
+  "dark_troop": {
+    "minion": ["Minion", "Minion"],
+    "hog_rider": ["Hog Rider", "Penunggang Babi"],
+    "valkyrie": ["Valkyrie", "Valkyrie"],
+    "golem": ["Golem", "Golem"],
+    "witch": ["Witch", "Nenek Sihir"],
+    "lava_hound": ["Lava Hound", "Anjing Lava"],
+    "bowler": ["Bowler", "Bowler"],
+    "ice_golem": ["Ice Golem", "Golem Es"],
+    "headhunter": ["Headhunter", "Pemburu"],
+    "apprentice_warden": ["Apprentice Warden", "Wali Muda"],
+    "druid": ["Druid", "Pawang"],
+    "furnace": ["Furnace", "Tungku"],
+    "nenek_puing": ["Nenek Puing"]
+  },
+  "spell": {
+    "lightning_spell": ["Lightning Spell", "Mantra Kilat"],
+    "healing_spell": ["Healing Spell", "Mantra Penyembuh"],
+    "rage_spell": ["Rage Spell", "Mantra Amarah"],
+    "jump_spell": ["Jump Spell", "Mantra Lompat"],
+    "freeze_spell": ["Freeze Spell", "Mantra Pembeku"],
+    "clone_spell": ["Clone Spell", "Mantra Klona"],
+    "invisibility_spell": ["Invisibility Spell", "Mantra Penghilang"],
+    "recall_spell": ["Recall Spell", "Mantra Pemanggil"],
+    "revive_spell": ["Revive Spell", "Mantra Pembangkit"],
+    "totem_spell": ["Totem Spell", "Mantra Totem"],
+    "anarki_spell": ["Mantra Anarki"]
+  },
+  "dark_spell": {
+    "poison_spell": ["Poison Spell", "Mantra Racun"],
+    "earthquake_spell": ["Earthquake Spell", "Mantra Gempa Bumi"],
+    "haste_spell": ["Haste Spell", "Mantra Gesit"],
+    "skeleton_spell": ["Skeleton Spell", "Mantra Jerangkong"],
+    "bat_spell": ["Bat Spell", "Mantra Kelelawar"],
+    "overgrowth_spell": ["Overgrowth Spell", "Mantra Tumbuh Lebat"],
+    "ice_block_spell": ["Ice Block Spell", "Mantra Kristal Es"]
+  },
+  "siege": {
+    "wall_wrecker": ["Wall Wrecker", "Pelantak Tubruk"],
+    "battle_blimp": ["Battle Blimp", "Zeppelin Tempur"],
+    "stone_slammer": ["Stone Slammer", "Pengangkut Batu"],
+    "siege_barracks": ["Siege Barracks", "Barak Pengepungan"],
+    "log_launcher": ["Log Launcher", "Peluncur Sang Kayu"],
+    "flame_flinger": ["Flame Flinger", "Katapel Api"],
+    "battle_drill": ["Battle Drill", "Penggali Tempur"],
+    "troop_launcher": ["Troop Launcher", "Pelontar Peleton"]
+  },
+  "pet": {
+    "lassi": ["L.A.S.S.I", "L.A.S.S.I"],
+    "electro_owl": ["Electro Owl", "Burung Hantu Elektro"],
+    "mighty_yak": ["Mighty Yak", "Kerbau Perkasa"],
+    "unicorn": ["Unicorn", "Unicorn"],
+    "frosty": ["Frosty", "Gading Es"],
+    "diggy": ["Diggy", "Tenggiling"],
+    "poison_lizard": ["Poison Lizard", "Kadal Beracun"],
+    "phoenix": ["Phoenix", "Feniks"],
+    "spirit_fox": ["Spirit Fox", "Rubah Roh"],
+    "angry_jelly": ["Angry Jelly", "Ubur Tempur"]
+  }
+}

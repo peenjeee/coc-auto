@@ -73,6 +73,8 @@ ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_scree
 # Reads that run outside the control lock (a slow one must not hold up Stop) and stay out of the log.
 READ_ONLY = ('get_screen', 'get_stats', 'get_discord', 'get_buildings')
 VILLAGE_CHOICES = ('home', 'builder', 'both')
+# The builder list's tabs a scan reads (buildings.LISTS); each keeps its own last scan and its own pick.
+SCAN_LISTS = ('buildings', 'lab', 'pets')
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
 # Option name, CLI flag, range; zero means "no limit" and is left out, except for recoveries.
 LIMITS = (('searches', '--searches', 0, 1_000_000), ('hours', '--hours', 0, 1000),
@@ -398,14 +400,16 @@ class Settings:
         import buildings
         config = self.config()
         minimum = config.get('minimum') or {}
-        try:
-            chosen = buildings.selection(config.get('buildings'))
-        except bot.BotError:
-            # Never saved, or edited by hand into something --buildings refuses: the panel starts empty.
-            chosen = {'targets': [], 'keep_builders': 0}
+        picks = {}
+        for listing in SCAN_LISTS:
+            try:
+                picks[listing] = buildings.selection(config.get(listing), listing)
+            except bot.BotError:
+                # Never saved, or edited by hand into something --buildings refuses: the panel starts empty.
+                picks[listing] = {'targets': [], 'keep_builders': 0} if listing == 'buildings' else {'targets': []}
         return {'minimum': {key: minimum.get(key, 0) for key in MINIMUM_KEYS},
                 'setup': {name: config.get(name) for name in SETUP_FIELDS}, 'language': config.get('language', 'id'),
-                'buildings': chosen}
+                **picks}
 
     def detect(self) -> dict:
         return self.detector(self.config())
@@ -423,12 +427,14 @@ class Settings:
         save_local(self.config_path, {'language': language}, self.root, 'Bahasa')
         return language
 
-    def write_buildings(self, chosen: object) -> None:
-        """The buildings --buildings upgrades, first one first, each up to its level, and the builders it leaves."""
+    def write_buildings(self, chosen: object, listing: str = 'buildings') -> None:
+        """One list's pick (a SCAN_LISTS name, saved under that key), first one first, each up to its level: the
+        buildings --buildings upgrades and the builders it leaves, or the lab's or the pets' (no run upgrades those
+        yet)."""
         import bot
         import buildings
         try:
-            changes = {'buildings': buildings.selection(chosen)}
+            changes = {listing: buildings.selection(chosen, listing)}
         except bot.BotError as exc:
             raise CommandRefused(f'Pilihan bangunan ditolak: {exc}') from exc
         save_local(self.config_path, changes, self.root, 'Pilihan bangunan')
@@ -646,14 +652,16 @@ class Supervisor:
         if action in SETTINGS_ACTIONS:
             return self.configure(action, options)
         if action == 'scan_buildings':
+            listing = choice(options, 'list', SCAN_LISTS, 'buildings')
             # The scan taps the game (open, swipe, close the builder list); a running bot would fight it.
             if self.running():
                 raise CommandRefused('hentikan bot dulu; scan bangunan mengetuk layar game')
-            scan = {'scanned_at': time.time(), 'rows': self.device.scan_buildings()}
+            scan = {'list': listing, 'scanned_at': time.time(), 'rows': self.device.scan_buildings(listing)}
             self.keep_scan(scan)
             return 'buildings_scanned', f'Scan bangunan selesai: {len(scan["rows"])} baris', scan
         if action == 'get_buildings':
-            return 'buildings_loaded', '', self.statistics.last_scan('home', 'buildings')
+            listing = choice(options, 'list', SCAN_LISTS, 'buildings')
+            return 'buildings_loaded', '', {'list': listing, **self.statistics.last_scan('home', listing)}
         # Closing the game or the emulator under a running bot would only start its recovery.
         self.stop()
         if action == 'close_coc':
@@ -693,7 +701,7 @@ class Supervisor:
             messages.use(self.settings.write_language(options.get('language')))
             message = 'Bahasa tampilan disimpan; log langsung memakainya'
         elif action == 'set_buildings':
-            self.settings.write_buildings(options.get('buildings'))
+            self.settings.write_buildings(options.get('buildings'), choice(options, 'list', SCAN_LISTS, 'buildings'))
             message = 'Pilihan bangunan disimpan; berlaku saat Start berikutnya'
         else:
             message = 'Pengaturan dimuat'
@@ -708,9 +716,9 @@ class Supervisor:
             return None
 
     def keep_scan(self, scan: dict) -> None:
-        """Keep the last building scan, so a dashboard opened later shows it without scanning again."""
+        """Keep the last scan of each list, so a dashboard opened later shows it without scanning again."""
         try:
-            self.statistics.keep_scan('home', 'buildings', scan['rows'], scan['scanned_at'])
+            self.statistics.keep_scan('home', scan['list'], scan['rows'], scan['scanned_at'])
         except sqlite3.Error as exc:  # The rows still reach the dashboard; only a later reopen would miss them.
             self.log(f'REMOTE: hasil scan bangunan tidak tersimpan ({exc})')
 

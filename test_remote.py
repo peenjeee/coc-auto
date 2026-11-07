@@ -234,7 +234,7 @@ class BuildingScanTests(unittest.TestCase):
         # Kept in the stats database next to the config, so a restarted bot still has it.
         reopened = remote.Statistics(self.database)
         self.addCleanup(reopened.db.close)
-        self.assertEqual(reopened.last_scan('home', 'buildings'), scanned['data'])
+        self.assertEqual({'list': 'buildings', **reopened.last_scan('home', 'buildings')}, scanned['data'])
         self.seen.clear()
         held, release = threading.Event(), threading.Event()
 
@@ -261,13 +261,33 @@ class BuildingScanTests(unittest.TestCase):
         supervisor.command(*signed('scan_buildings'))
         second = supervisor.command(*signed('scan_buildings'))
         self.assertEqual(supervisor.command(*signed('get_buildings'))['data'],
-                         {'scanned_at': second['data']['scanned_at'], 'rows': []})
+                         {'list': 'buildings', 'scanned_at': second['data']['scanned_at'], 'rows': []})
         self.assertEqual([tuple(row) for row in supervisor.statistics.db.execute('SELECT village, list FROM scans')],
                          [('home', 'buildings')])
 
+    def test_each_list_keeps_its_own_scan_and_an_unknown_list_is_refused(self):
+        supervisor = self.supervisor()
+        lab = [{**self.ROWS[0], 'id': 'giant', 'name': 'Raksasa', 'category': 'troop'}]
+        self.device.scan_buildings = Mock(side_effect=lambda listing: {'buildings': self.ROWS, 'lab': lab}[listing])
+        supervisor.command(*signed('scan_buildings'))
+        scanned = supervisor.command(*signed('scan_buildings', {'list': 'lab'}))
+        self.assertEqual((scanned['code'], scanned['data']['list'], scanned['data']['rows']),
+                         ('buildings_scanned', 'lab', lab))
+        self.assertEqual([call.args for call in self.device.scan_buildings.call_args_list], [('buildings',), ('lab',)])
+        self.assertEqual(supervisor.command(*signed('get_buildings', {'list': 'lab'}))['data'], scanned['data'])
+        self.assertEqual(supervisor.command(*signed('get_buildings'))['data']['rows'], self.ROWS)
+        self.assertEqual(supervisor.command(*signed('get_buildings', {'list': 'pets'}))['data'],
+                         {'list': 'pets', 'rows': None})
+        for action in ('scan_buildings', 'get_buildings'):
+            for bad in ('gear', 'BUILDINGS', '', None, 1, ['lab']):
+                result = supervisor.command(*signed(action, {'list': bad}))
+                with self.subTest(action=action, bad=bad):
+                    self.assertEqual((result['ok'], result['code']), (False, 'refused'))
+        self.assertEqual(self.device.scan_buildings.call_count, 2)
+
     def test_a_missing_or_malformed_saved_scan_gives_no_rows(self):
         supervisor = self.supervisor()
-        self.assertEqual(supervisor.command(*signed('get_buildings'))['data'], {'rows': None})
+        self.assertEqual(supervisor.command(*signed('get_buildings'))['data'], {'list': 'buildings', 'rows': None})
         for scanned_at, rows in ((1.0, '{not json'), (1.0, '{}'), (1.0, '[1]'), (1.0, None), (1.0, 7),
                                  ('today', '[]'), (None, '[]'), (float('inf'), '[]')):
             with supervisor.statistics.db:
@@ -275,7 +295,7 @@ class BuildingScanTests(unittest.TestCase):
                                                  (scanned_at, rows))
             result = supervisor.command(*signed('get_buildings'))
             with self.subTest(scanned_at=scanned_at, rows=rows):
-                self.assertEqual((result['ok'], result['data']), (True, {'rows': None}))
+                self.assertEqual((result['ok'], result['data']), (True, {'list': 'buildings', 'rows': None}))
 
     def test_a_database_from_before_scans_were_kept_still_opens_and_keeps_them(self):
         self.database.parent.mkdir()
@@ -284,7 +304,7 @@ class BuildingScanTests(unittest.TestCase):
                           "INSERT INTO runs VALUES (1, 10, 20, 'Farming', 'completed');")
         old.close()
         supervisor = self.supervisor()
-        self.assertEqual(supervisor.command(*signed('get_buildings'))['data'], {'rows': None})
+        self.assertEqual(supervisor.command(*signed('get_buildings'))['data'], {'list': 'buildings', 'rows': None})
         self.device.scan_buildings = Mock(return_value=self.ROWS)
         supervisor.command(*signed('scan_buildings'))
         self.assertEqual(supervisor.command(*signed('get_buildings'))['data']['rows'], self.ROWS)
@@ -469,6 +489,31 @@ class SettingsTests(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
                 self.settings.write_buildings(bad)
         self.assertEqual(self.config.with_name('config.local.json').read_text(encoding='utf-8'), saved)
+
+    def test_lab_and_pet_picks_are_saved_under_their_own_key_without_builders(self):
+        self.assertEqual((self.settings.read()['lab'], self.settings.read()['pets']), ({'targets': []}, {'targets': []}))
+        lab = {'targets': [{'id': 'giant', 'name': 'Raksasa', 'level': 5},
+                           {'id': None, 'name': 'Nenek Baru', 'level': None}]}
+        pets = {'targets': [{'id': 'lassi', 'name': 'L.A.S.S.I', 'level': None}]}
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), settings=self.settings)
+        self.addCleanup(supervisor.statistics.db.close)
+        result = supervisor.command(*signed('set_buildings', {'list': 'lab', 'buildings': lab}))
+        self.assertEqual((result['ok'], result['code'], result['data']['lab']), (True, 'buildings_saved', lab))
+        self.settings.write_buildings(pets, 'pets')
+        local = json.loads(self.config.with_name('config.local.json').read_text(encoding='utf-8'))
+        self.assertEqual(local, {'lab': lab, 'pets': pets})
+        self.assertEqual(self.settings.read()['buildings'], {'targets': [], 'keep_builders': 0})
+        target = {'id': 'giant', 'name': 'Raksasa', 'level': None}
+        for bad in ({'targets': [target], 'keep_builders': 0}, {'targets': [{**target, 'id': 'archer_tower'}]},
+                    {'targets': [{**target, 'level': 0}]}, {'targets': [target, target]}, {'targets': {}}):
+            with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
+                self.settings.write_buildings(bad, 'lab')
+        # Each list is checked against its own catalog: the Giant is no building.
+        with self.assertRaises(remote.CommandRefused):
+            self.settings.write_buildings({'targets': [target], 'keep_builders': 0})
+        refused = supervisor.command(*signed('set_buildings', {'list': 'gear', 'buildings': pets}))
+        self.assertEqual((refused['ok'], refused['code']), (False, 'refused'))
+        self.assertEqual(json.loads(self.config.with_name('config.local.json').read_text(encoding='utf-8')), local)
 
     def test_a_minimum_the_bot_cannot_read_is_refused(self):
         config = self.stored()

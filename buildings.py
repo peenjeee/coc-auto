@@ -1,5 +1,6 @@
 """The game's builder list ("Buildings & Heroes", "Bangunan dan Pahlawan") read top to bottom: the name, count, level
-badge, time and cost of every row, named from buildings.json. A scan only opens, swipes and closes the list.
+badge, time and cost of every row, named from buildings.json; its Laboratory and pet tabs, named from research.json,
+read the same way. A scan only opens, swipes and closes the list.
 --buildings (run) upgrades the buildings picked in the dashboard from it, paying only gold, elixir or dark elixir at
 the price the list showed."""
 from __future__ import annotations
@@ -22,6 +23,14 @@ import messages
 
 LOG = logging.getLogger(__name__)
 CATALOG = Path(__file__).with_name('buildings.json')
+# Lab and pet names stay out of the buildings catalog: "Raksasa" (Giant) would match "Bom Raksasa" (Giant Bomb).
+RESEARCH = Path(__file__).with_name('research.json')
+# The list's tabs along its bottom (y TAB_Y): its x and the catalog its rows are named from. Hero equipment has a tab
+# too, not read here.
+LISTS = {'buildings': (978, CATALOG), 'lab': (1062, RESEARCH), 'pets': (1240, RESEARCH)}
+TAB_Y = 690
+# Tesseract reads the small capitals' S and I as digits ("L.A.S.5.1").
+OCR_DIGITS = str.maketrans('51', 'si')
 UNITS, BADGE_DIGITS = 'calibration/units', 'calibration/badge'
 SECTIONS = ('in_progress', 'suggested', 'other')
 # A card's right edge is plain card brown, brighter than the gaps, titles and running bars between cards; its text
@@ -65,22 +74,26 @@ WAIT_MAX_SECONDS, WAIT_MARGIN_SECONDS = 600, 5
 MAX_TARGETS, MAX_LEVEL, MAX_KEEP_BUILDERS, NAME_MAX = 100, 200, 10, 40
 
 
-@lru_cache(maxsize=1)
-def catalog() -> dict:
-    """Lowercased English and Indonesian name -> (id, category, name as written)."""
+def cleaned(text: str) -> str:
+    return re.sub(r"[^a-z' -]", '', text.lower().translate(OCR_DIGITS)).strip()
+
+
+@lru_cache(maxsize=None)
+def catalog(path: Path = CATALOG) -> dict:
+    """English and Indonesian name, cleaned like a read one ("L.A.S.S.I" is "lassi") -> (id, category, name as
+    written)."""
     names = {}
-    for category, buildings in json.loads(CATALOG.read_text(encoding='utf-8')).items():
-        for key, spellings in buildings.items():
+    for category, entries in json.loads(path.read_text(encoding='utf-8')).items():
+        for key, spellings in entries.items():
             for spelling in spellings:
-                names[spelling.lower()] = (key, category, spelling)
+                names[cleaned(spelling)] = (key, category, spelling)
     return names
 
 
-def identify(text: str) -> tuple:
+def identify(text: str, path: Path = CATALOG) -> tuple:
     """(id, category, name) of the closest catalog name; an unknown name stays as read, with no id, under other."""
-    cleaned = re.sub(r"[^a-z' -]", '', text.lower()).strip()
-    found = difflib.get_close_matches(cleaned, list(catalog()), n=1, cutoff=NAME_MIN_RATIO)
-    return catalog()[found[0]] if found else (None, 'other', text)
+    found = difflib.get_close_matches(cleaned(text), list(catalog(path)), n=1, cutoff=NAME_MIN_RATIO)
+    return catalog(path)[found[0]] if found else (None, 'other', text)
 
 
 def split_count(text: str) -> tuple[str, int]:
@@ -112,12 +125,18 @@ def ocr_line(image: np.ndarray, program: str, min_value: int = 200, max_saturati
     ok, encoded = cv2.imencode('.png', cv2.copyMakeBorder(page, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255))
     if not ok:
         raise bot.BotError('Tidak bisa menyiapkan crop OCR')
-    try:
-        result = subprocess.run([program, 'stdin', 'stdout', '--psm', '7', '-l', 'eng'], input=encoded.tobytes(),
-                                capture_output=True, check=True, timeout=15, shell=False)
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise bot.BotError('OCR gagal; scan bangunan dibatalkan') from exc
-    return ' '.join(result.stdout.decode('utf-8', 'replace').split())
+    text = ''
+    # A short name alone on the line ("Balon", "Minion") can come back empty as a line; it reads as one word.
+    for mode in ('7', '8'):
+        try:
+            result = subprocess.run([program, 'stdin', 'stdout', '--psm', mode, '-l', 'eng'], input=encoded.tobytes(),
+                                    capture_output=True, check=True, timeout=15, shell=False)
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise bot.BotError('OCR gagal; scan bangunan dibatalkan') from exc
+        text = ' '.join(result.stdout.decode('utf-8', 'replace').split())
+        if text:
+            break
+    return text
 
 
 def time_glyphs(image: np.ndarray) -> list[tuple[np.ndarray, bool]]:
@@ -278,9 +297,9 @@ def title_section(text: str, seen: int) -> str:
     return SECTIONS[1 + min(seen, 1)]
 
 
-def named(text: str) -> dict:
+def named(text: str, path: Path = CATALOG) -> dict:
     words, count = split_count(text)
-    key, category, name = identify(words)
+    key, category, name = identify(words, path)
     return {'id': key, 'name': name, 'category': category, 'count': count}
 
 
@@ -292,13 +311,14 @@ def offsets(frames: list, region: list) -> list[int]:
     return found
 
 
-def read_rows(frames: list, spec: dict, templates: dict, program: str) -> list[dict]:
+def read_rows(frames: list, spec: dict, templates: dict, program: str, path: Path = CATALOG) -> list[dict]:
     """Every row of the list from frames taken top to bottom, each once: id, name, category, count, next_level,
-    time, cost, currency and section."""
-    return [row for row, _ in placed_rows(frames, spec, templates, program)]
+    time, cost, currency and section, named from the catalog at path."""
+    return [row for row, _ in placed_rows(frames, spec, templates, program, path)]
 
 
-def placed_rows(frames: list, spec: dict, templates: dict, program: str) -> list[tuple[dict, int]]:
+def placed_rows(frames: list, spec: dict, templates: dict, program: str,
+                path: Path = CATALOG) -> list[tuple[dict, int]]:
     """read_rows with each row's place down the list: its card's top as the first frame would show it."""
     region, digits, units = spec['row']['region'], templates['digits'], templates['units']
     kept = []
@@ -318,12 +338,12 @@ def placed_rows(frames: list, spec: dict, templates: dict, program: str) -> list
             section = title_section(text, titles)
             titles += 1
         elif kind == 'bar':
-            rows.append(({**named(text), 'next_level': None,
+            rows.append(({**named(text, path), 'next_level': None,
                           'time': read_time(band(image, BAR_TIME, y), digits, units), 'cost': None, 'currency': None,
                           'section': 'in_progress'}, place))
         else:
             cost = bot.row_price(image, spec['row']['price'], y + NAME_CENTRE, digits)
-            rows.append(({**named(text),
+            rows.append(({**named(text, path),
                           'next_level': read_badge(band(image, BADGE_BAND, y), templates['badge']),
                           'time': read_time(band(image, TIME_BAND, y), digits, units),
                           'cost': None if np.isinf(cost) else int(cost),
@@ -342,8 +362,17 @@ def list_frames(runner: bot.Bot, spec: dict, image: np.ndarray) -> list:
     return frames
 
 
-def scan(runner: bot.Bot) -> list[dict]:
-    """Open the Home Village builder list, read it from its top to its end, and close it again."""
+def show_tab(runner: bot.Bot, x: int) -> np.ndarray:
+    """Tap one of the open list's tabs; the frame once the list holds still."""
+    if runner.live:
+        runner.device.tap_many([[x, TAB_Y]])
+    return runner.wait_still(bot.WALL_LIST_SETTLE_SECONDS if runner.poll else 0)
+
+
+def scan(runner: bot.Bot, listing: str = 'buildings') -> list[dict]:
+    """Open the Home Village builder list on the tab of listing (a LISTS key), read it from its top to its end, and
+    close it again."""
+    tab, path = LISTS[listing]
     spec = runner.config['walls']['home']
     program = bot.executable(runner.config.get('tesseract'), 'Tesseract')
     templates = load_templates(runner.root, runner.config)
@@ -356,14 +385,19 @@ def scan(runner: bot.Bot) -> list[dict]:
     if state != 'home':
         raise bot.BotError('Scan bangunan hanya di Desa Utama; pindah ke Desa Utama dulu')
     image = runner.open_build_list('home', spec)
+    # The list opens on the builders tab, whose header tells the language.
+    indonesian = runner.list_indonesian(image)
+    builders = LISTS['buildings'][0]
     try:
-        frames = list_frames(runner, spec, image)
+        frames = list_frames(runner, spec, image if tab == builders else show_tab(runner, tab))
     finally:
+        if tab != builders:
+            # close_menus knows the list by the builders tab only, and the game may reopen the tab it was left on.
+            show_tab(runner, builders)
         runner.close_menus()
-    indonesian = runner.list_indonesian(frames[0])
     # A running upgrade's time left in seconds, so the dashboard can count it down until the next scan.
     return [{**row, 'seconds': seconds(row['time'], indonesian)} if row['section'] == 'in_progress' else row
-            for row in read_rows(frames, spec, templates, program)]
+            for row in read_rows(frames, spec, templates, program, path)]
 
 
 def seconds(text: object, indonesian: bool) -> int | None:
@@ -377,17 +411,20 @@ def seconds(text: object, indonesian: bool) -> int | None:
     return sum(int(number) * units[unit] for number, unit in parts)
 
 
-def selection(value: object) -> dict:
-    """The dashboard's pick, checked: targets in priority order, each {id, name, level} (id None for a row the
-    catalog does not know, matched by name; level None upgrades for as long as the building is listed), and how many
-    builders to leave free. Walls have --walls."""
-    if not isinstance(value, dict) or set(value) != {'targets', 'keep_builders'}:
-        raise bot.BotError('Pilihan bangunan perlu targets dan keep_builders')
-    keep, targets = value['keep_builders'], value['targets']
-    bot.integer(keep, 0, MAX_KEEP_BUILDERS, 'keep_builders')
+def selection(value: object, listing: str = 'buildings') -> dict:
+    """The dashboard's pick from one list (a LISTS key), checked: targets in priority order, each {id, name, level}
+    (id None for a row the catalog does not know, matched by name; level None upgrades for as long as the row is
+    listed), and for buildings how many builders to leave free. Walls have --walls."""
+    builders = listing == 'buildings'
+    if not isinstance(value, dict) or set(value) != ({'targets', 'keep_builders'} if builders else {'targets'}):
+        raise bot.BotError('Pilihan bangunan perlu targets dan keep_builders' if builders else
+                           'Pilihan riset perlu targets')
+    targets = value['targets']
+    if builders:
+        bot.integer(value['keep_builders'], 0, MAX_KEEP_BUILDERS, 'keep_builders')
     if not isinstance(targets, list) or len(targets) > MAX_TARGETS:
         raise bot.BotError(f'Target bangunan harus daftar berisi 0..{MAX_TARGETS}')
-    known = {key for key, _, _ in catalog().values()} - {'wall'}
+    known = {key for key, _, _ in catalog(LISTS[listing][1]).values()} - {'wall'}
     checked, seen = [], set()
     for target in targets:
         if not isinstance(target, dict) or set(target) != {'id', 'name', 'level'}:
@@ -404,7 +441,7 @@ def selection(value: object) -> dict:
             raise bot.BotError(f'Bangunan dipilih dua kali: {name}')
         seen.add(mark)
         checked.append({'id': key, 'name': name.strip(), 'level': level})
-    return {'targets': checked, 'keep_builders': keep}
+    return {'targets': checked, 'keep_builders': value['keep_builders']} if builders else {'targets': checked}
 
 
 def validate(config: dict, root: Path) -> dict:

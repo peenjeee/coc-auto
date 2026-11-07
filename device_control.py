@@ -130,13 +130,14 @@ class DeviceActions:
         import bot
         self.adb().launch(bot.GAME_ACTIVITY)
 
-    def scan_buildings(self) -> list[dict]:
-        """Every row of the Home Village builder list; the list is only opened, swiped and closed."""
+    def scan_buildings(self, listing: str = 'buildings') -> list[dict]:
+        """Every row of one Home Village builder list tab (buildings.LISTS); the list is only opened, swiped, switched
+        between its tabs and closed."""
         import bot
         import buildings
         config, root = bot.load_config(self.config_path), self.config_path.parent
         bot.validate_walls(config, root, ('home',))
-        return buildings.scan(bot.Bot(config, root, self.adb(), live=True))
+        return buildings.scan(bot.Bot(config, root, self.adb(), live=True), listing)
 
     def close_coc(self) -> None:
         self.adb().stop_game()

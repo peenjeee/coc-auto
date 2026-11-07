@@ -11,7 +11,7 @@ import { setupSelects, refreshSelects } from './select.js';
 import { StatsPanel, previewStatistics } from './stats.js?v=9';
 import { DiscordPanel } from './discord.js?v=5';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel } from './buildings.js?v=3';
+import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=4';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -151,7 +151,7 @@ function setOnline(isOnline, reason) {
         await send('get_settings', {}, { quiet: true });
         await send('get_deploy', {}, { quiet: true });
         await send('get_discord', {}, { quiet: true });
-        await send('get_buildings', {}, { quiet: true });
+        for (const list of BUILDING_LISTS) await send('get_buildings', { list }, { quiet: true });
       }, 0);
     }
   }
@@ -191,7 +191,7 @@ function handleResult(result, quiet = false) {
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
-    buildings.select(result.data.buildings);
+    buildings.select(result.data);
     if (result.code === 'settings_loaded' && !initialDisplayChecked) {
       initialDisplayChecked = true;
       if (!settings.displayMatches()) switchView('settings');
@@ -632,6 +632,18 @@ const DEMO_BUILDINGS = [
   {id:'gold_storage',name:'Gold Storage',category:'resource',count:4,next_level:16,time:'1d 12h',cost:2000000,currency:'elixir',section:'other'},
   {id:'spring_trap',name:'Spring Trap',category:'trap',count:9,next_level:2,time:'30m 0s',cost:65000,currency:'gold',section:'other'},
 ];
+const DEMO_LAB = [
+  {id:'valkyrie',name:'Valkyrie',category:'dark_troop',count:1,next_level:6,time:'1d',cost:15750,currency:'dark',section:'suggested'},
+  {id:'balloon',name:'Balloon',category:'troop',count:1,next_level:10,time:'3d 12h',cost:5000000,currency:'elixir',section:'suggested'},
+  {id:'giant',name:'Giant',category:'troop',count:1,next_level:5,time:'6h',cost:400000,currency:'elixir',section:'other'},
+  {id:'poison_spell',name:'Poison Spell',category:'dark_spell',count:1,next_level:4,time:'1d',cost:10750,currency:'dark',section:'other'},
+  {id:'freeze_spell',name:'Freeze Spell',category:'spell',count:1,next_level:3,time:'18h',cost:850000,currency:'elixir',section:'other'},
+  {id:'wall_wrecker',name:'Wall Wrecker',category:'siege',count:1,next_level:2,time:'1d',cost:1250000,currency:'elixir',section:'other'},
+];
+const DEMO_PETS = [
+  {id:'lassi',name:'L.A.S.S.I',category:'pet',count:1,next_level:null,time:'13h 57m',seconds:50220,cost:null,currency:null,section:'in_progress'},
+];
+const DEMO_SCANS = {buildings:DEMO_BUILDINGS, lab:DEMO_LAB, pets:DEMO_PETS};
 
 let activeView = 'overview';
 
@@ -651,7 +663,7 @@ function switchView(view) {
   screenPoller.sync();
   stats?.sync();
   if (view === 'settings' && online && link) send('get_discord', {}, {quiet:true});
-  if (view === 'buildings' && online && link && !buildings.rows) send('get_buildings', {}, {quiet:true});
+  if (view === 'buildings' && online && link && !buildings.rows) send('get_buildings', {list: buildings.list}, {quiet:true});
 }
 function updateRunMetrics() {
   if (!lastState) return;
@@ -794,7 +806,8 @@ class DemoLink {
   constructor() {
     this.state = {state:'running', args:['--walls','home','--first','builder','--max-recoveries','20','--live'], host:'LDPlayer 01', since:Date.now()/1000-1147};
     this.minimum = {gold:1000000,elixir:1000000,dark:0};
-    this.buildings = {targets:[{id:'archer_tower',name:'Archer Tower',level:8},{id:'spring_trap',name:'Spring Trap',level:null}],keep_builders:1};
+    this.picks = {buildings:{targets:[{id:'archer_tower',name:'Archer Tower',level:8},{id:'spring_trap',name:'Spring Trap',level:null}],keep_builders:1},
+      lab:{targets:[{id:'giant',name:'Giant',level:null}]}, pets:{targets:[]}};
     this.discord = {configured:false,enabled:false,ping_id:'',events:['ended','recovery','summary'],interval:30,status:'Not connected'};
   }
   async send(body) {
@@ -812,16 +825,16 @@ class DemoLink {
     else if (action === 'set_minimum') {this.minimum=args.minimum;code='minimum_saved';}
     else if (action === 'set_setup') code='setup_saved';
     else if (action === 'set_language') code='language_saved';
-    else if (action === 'set_buildings') {this.buildings=args.buildings;code='buildings_saved';}
+    else if (action === 'set_buildings') {this.picks[args.list]=args.buildings;code='buildings_saved';}
     else if (action === 'detect_setup') {code='setup_detected';data={folders:['Demo LDPlayer installation'],instances:[{index:0,name:'Demo device',running:true}],resolution:[1280,720],problems:[]};}
     else if (action === 'open_coc') code='coc_opened';
     else if (action === 'close_coc') {this.state.state='idle';code='coc_closed';}
     else if (action === 'kill_ld') {this.state.state='idle';code='ld_off';}
     else if (action === 'restart_ld') {this.state.state='idle';code='ld_restarted';}
     else if (action === 'fit_display' || action === 'restore_display') {this.state.state='idle';code=action==='fit_display'?'display_ok':'display_unchanged';data=this.display();}
-    else if (action === 'scan_buildings') {code='buildings_scanned';data={scanned_at:Date.now()/1000,rows:DEMO_BUILDINGS};}
-    else if (action === 'get_buildings') {code='buildings_loaded';data={scanned_at:Date.now()/1000-240,rows:DEMO_BUILDINGS};}
-    if (SETTINGS_ANSWERS.includes(code)) data={minimum:this.minimum,setup:{adb:'C:\\LDPlayer\\adb.exe',ldconsole:'C:\\LDPlayer\\ldconsole.exe',serial:'emulator-5554',ld_index:0,touch_device:'/dev/input/event4'},language:document.documentElement.lang,display:this.display(),buildings:this.buildings};
+    else if (action === 'scan_buildings') {code='buildings_scanned';data={list:args.list,scanned_at:Date.now()/1000,rows:DEMO_SCANS[args.list]};}
+    else if (action === 'get_buildings') {code='buildings_loaded';data={list:args.list,scanned_at:Date.now()/1000-240,rows:DEMO_SCANS[args.list]};}
+    if (SETTINGS_ANSWERS.includes(code)) data={minimum:this.minimum,setup:{adb:'C:\\LDPlayer\\adb.exe',ldconsole:'C:\\LDPlayer\\ldconsole.exe',serial:'emulator-5554',ld_index:0,touch_device:'/dev/input/event4'},language:document.documentElement.lang,display:this.display(),...this.picks};
     return {ok:true,code,state:this.state,data};
   }
   display() {return {current:{width:1280,height:720,dpi:240},target:{width:1280,height:720,dpi:240},saved:false};}
@@ -851,6 +864,7 @@ async function openDemo() {
   editor.load(structuredClone(DEMO_DEPLOY));
   handleResult(await link.send(JSON.stringify({action:'get_settings',args:{}})),true);
   handleResult(await link.send(JSON.stringify({action:'get_discord',args:{}})),true);
+  for (const list of BUILDING_LISTS) handleResult(await link.send(JSON.stringify({action:'get_buildings',args:{list}})),true);
   discord.stats(previewStatistics());
   if (new URLSearchParams(location.search).get('tab') === 'stats') switchView('stats');
 }
