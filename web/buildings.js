@@ -47,11 +47,13 @@ export class BuildingsPanel {
     });
   }
 
-  /** @param {{rows?: unknown}} data the rows the device read, top of the list first */
+  /** @param {{rows?: unknown, scanned_at?: unknown}} data the rows the device read, top of the list first, and when
+   * (unix seconds); rows null when the device keeps no scan */
   load(data) {
-    this.rows = Array.isArray(data?.rows) ? data.rows.filter((row) => row && typeof row === 'object') : [];
-    // Running upgrades count down from the scan; the next scan reads the game's own timers again.
-    this.scannedAt = Date.now();
+    this.rows = Array.isArray(data?.rows) ? data.rows.filter((row) => row && typeof row === 'object') : null;
+    // Running upgrades count down from the scan itself, so a scan kept on the device and reopened later shows the
+    // time left now; the next scan reads the game's own timers again.
+    this.scannedAt = Number.isFinite(data?.scanned_at) ? data.scanned_at * 1000 : Date.now();
     this.ticker ??= setInterval(() => this.tick(), 30000);
     this.render();
   }
@@ -76,6 +78,10 @@ export class BuildingsPanel {
   render() {
     this.renderPicked();
     this.clocks = [];
+    $('buildings-scan').textContent = t(this.rows ? 'buildings_rescan' : 'buildings_scan');
+    const scanned = $('buildings-scanned');
+    scanned.hidden = !this.rows;
+    if (this.rows) scanned.textContent = t('buildings_scanned_at', { time: new Date(this.scannedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) });
     const list = $('buildings-list');
     list.textContent = '';
     if (!this.rows) return;
@@ -87,6 +93,7 @@ export class BuildingsPanel {
       const rows = this.rows.filter((row) => (CATEGORIES.includes(row.category) ? row.category : 'other') === category);
       if (rows.length) list.append(this.group(category, rows));
     }
+    this.tick();
   }
 
   renderPicked() {

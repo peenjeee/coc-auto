@@ -322,8 +322,8 @@ python bot.py --buildings --live
 python bot.py --buildings --hours 8 --live
 ```
 
-`--buildings` upgrades the Home Village buildings picked under **Device settings → Buildings to upgrade** in the
-dashboard (saved as `buildings` in `config.local.json`: the targets in priority order, each `{"id", "name", "level"}`
+`--buildings` upgrades the Home Village buildings picked on the dashboard's **Upgrade** page (saved as `buildings` in
+`config.local.json`: the targets in priority order, each `{"id", "name", "level"}`
 with `level` `null` for Max, and `keep_builders`). Each round it reads the free builders from the village's "1/6"
 counter (`building_upgrade.free_builders`) and the gold, elixir and dark elixir on hand from the resource bars
 (`capacity.home`), then opens the builder list and reads every row like the scan. It takes the first target, in the
@@ -433,12 +433,12 @@ It shows the key and waits for **Start** from the dashboard. `python bot.py --ke
 dashboard can control the PC only while `--agent` (or any other bot command) is running there.
 
 The dashboard (Indonesian or English, switch in the title bar; the switch also sets the bot's terminal language,
-`language` in config, and on connecting the dashboard puts the device on the language it is shown in) has four
+`language` in config, and on connecting the dashboard puts the device on the language it is shown in) has five
 pages. **Overview** shows whether the PC is online, the bot's state, run time, task and recoveries, the run setup,
 a **Live view** of the LDPlayer screen and the **Activity** log. The live view is captured only while the page is
 open and in view and its switch (in the panel's title, on by default) is on, once a second on the local and the
 online dashboard (online, each frame crosses the relay); every frame replaces the last and none is stored. With the
-switch off, **Refresh** still takes one frame. **Stats**, **Deployment** and **Device settings** are below. The run setup
+switch off, **Refresh** still takes one frame. **Stats**, **Upgrade**, **Deployment** and **Device settings** are below. The run setup
 covers every command above: the task, villages, resources to spend or fill, the Home Village loot minimum and
 `--first`, then **Run limits** (`--bulk-walls`, attacks, searches, time, upgrades, `--wall-every`, recoveries),
 **Army & deployment** (the army templates, ring or stack per village, `--quake`) and **Battle behavior**
@@ -507,26 +507,6 @@ Nothing changes until you press save. The device accepts only LDPlayer's own `ad
 paths, checks the rest like any calibration, saves to `config.local.json` (the previous one stays as
 `config.local.json.bak`), and the change applies at the next Start.
 
-**Buildings to upgrade:** "scan buildings" reads the game's own builder list ("Buildings & Heroes" / "Bangunan dan
-Pahlawan"), which shows only the buildings, traps and heroes the village has that its Town Hall still lets you
-upgrade, so it fits any Town Hall. The bot needs the Home Village on screen (a list left open is closed first; popups
-such as the inactivity reload are handled as in a run), opens the list, swipes it from its top to its end and closes
-it again. It never taps a row, an upgrade button or a confirm, so nothing is upgraded or bought. Each row comes back
-with its name, count ("Archer Tower x 4"), the level the upgrade reaches (the badge on the icon), time, cost and its
-resource (told by the coin), and its section: upgrading now, suggested or the rest. Names are matched in English and
-Indonesian against `buildings.json` (id and category: defenses, army, resources, traps, heroes, other); a name it
-does not know is kept as read, under other. Building names are read with Tesseract, the digits with the bot's own
-templates (`calibration/digits`, the timer letters in `calibration/units`, the badge's small digits in
-`calibration/badge`). The scan is refused while the bot is running, takes about a minute and works from the local and
-the online dashboard. Merges that are still locked (shown last with a padlock) are left out.
-After a scan, tick the rows the **upgrade buildings** task (`--buildings`) should upgrade: the first ticked goes first
-(its number shows beside the name), and each ticked row takes the level to stop at, or stays empty for Max. Running
-upgrades cannot be ticked. **Keep builders free** leaves that many builders for something else, walls for example.
-**Save selection** sends the pick to the device, which checks it (known building ids, walls excluded; levels 1–200;
-0–10 builders) and saves it to `config.local.json` as `buildings`; the saved pick comes back with the settings when
-the dashboard connects, and is listed in order above the scan. It applies at the next Start. The run setup's
-**upgrade buildings** task takes only the time limit and recoveries.
-
 **LDPlayer screen:** shows the instance's resolution and DPI next to the calibration (1280×720, DPI 240). "Fit
 screen" stops the bot, closes LDPlayer, waits for its virtual machine to stop, writes only the resolution, the DPI,
 ADB debugging (turned on) and ASTC texture decoding (turned off) into its instance file
@@ -537,6 +517,29 @@ with it off); CoC looks the same either way. Restoring your screen leaves ADB de
 Your own resolution and DPI are kept in `~/.coc-auto/display.json` and are put back when you leave the dashboard link
 with **Ctrl+C**, when a `--no-remote` run ends, or with "restore my screen". LDPlayer is restarted for a restore only
 if it is running.
+
+**Upgrade** (its own page, after Stats): "Scan buildings" reads the game's own builder list ("Buildings & Heroes" /
+"Bangunan dan Pahlawan"), which shows only the buildings, traps and heroes the village has that its Town Hall still lets you
+upgrade, so it fits any Town Hall. The bot needs the Home Village on screen (a list left open is closed first; popups
+such as the inactivity reload are handled as in a run), opens the list, swipes it from its top to its end and closes
+it again. It never taps a row, an upgrade button or a confirm, so nothing is upgraded or bought. Each row comes back
+with its name, count ("Archer Tower x 4"), the level the upgrade reaches (the badge on the icon), time, cost and its
+resource (told by the coin), and its section: upgrading now, suggested or the rest. Names are matched in English and
+Indonesian against `buildings.json` (id and category: defenses, army, resources, traps, heroes, other); a name it
+does not know is kept as read, under other. Building names are read with Tesseract, the digits with the bot's own
+templates (`calibration/digits`, the timer letters in `calibration/units`, the badge's small digits in
+`calibration/badge`). The scan is refused while the bot is running, takes about a minute and works from the local and
+the online dashboard. Merges that are still locked (shown last with a padlock) are left out.
+The last scan is kept on the PC, in the same `.coc-auto/stats.sqlite3` as the stats (next to the config, not in git),
+and shown again when the dashboard is reopened, with its date and time; running upgrades count down from that scan,
+and **Scan again** reads the list afresh and replaces it.
+After a scan, tick the rows the **upgrade buildings** task (`--buildings`) should upgrade: the first ticked goes first
+(its number shows beside the name), and each ticked row takes the level to stop at, or stays empty for Max. Running
+upgrades cannot be ticked. **Keep builders free** leaves that many builders for something else, walls for example.
+**Save selection** sends the pick to the device, which checks it (known building ids, walls excluded; levels 1–200;
+0–10 builders) and saves it to `config.local.json` as `buildings`; the saved pick comes back with the settings when
+the dashboard connects, and is listed in order above the scan. It applies at the next Start. The run setup's
+**upgrade buildings** task takes only the time limit and recoveries.
 
 Security: commands are signed with the API key (HMAC-SHA256, valid for 2 minutes, never reused, never older than
 the running bot), and everything the PC sends online is signed with it too, so nobody else on the channel can pose

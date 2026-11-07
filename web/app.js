@@ -11,7 +11,7 @@ import { setupSelects, refreshSelects } from './select.js';
 import { StatsPanel, previewStatistics } from './stats.js?v=8';
 import { DiscordPanel } from './discord.js?v=4';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel } from './buildings.js?v=2';
+import { BuildingsPanel } from './buildings.js?v=3';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -151,6 +151,7 @@ function setOnline(isOnline, reason) {
         await send('get_settings', {}, { quiet: true });
         await send('get_deploy', {}, { quiet: true });
         await send('get_discord', {}, { quiet: true });
+        await send('get_buildings', {}, { quiet: true });
       }, 0);
     }
   }
@@ -186,7 +187,7 @@ function handleResult(result, quiet = false) {
   if (result.code === 'stats_loaded') { stats.load(result.data); if (result.data.period === 'run') discord.stats(result.data); }
   else if (['discord_loaded','discord_saved','discord_tested'].includes(result.code)) { discord.load(result.data, result.code); refreshSelects(); }
   else if (result.code === 'deploy_loaded') editor.load(result.data);
-  else if (result.code === 'buildings_scanned') buildings.load(result.data);
+  else if (['buildings_scanned', 'buildings_loaded'].includes(result.code)) buildings.load(result.data);
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
@@ -624,7 +625,7 @@ function init() {
 const DEMO_DEPLOY = {"resolution": [1280, 720], "screens": {"home_scout": {"kind": "spells", "deploy": [125, 346], "points": [[380, 346], [290, 271], [290, 421], [500, 346], [410, 271], [410, 421], [620, 346], [530, 271], [530, 421], [740, 346], [650, 271], [650, 421]], "bar": [0, 598, 1280, 106]}, "home_ring": {"kind": "ring", "deploy": [125, 346], "points": [[141, 299], [243, 232], [356, 156], [470, 82], [810, 82], [924, 156], [1037, 232], [1139, 299], [1139, 391], [1037, 458], [924, 534], [243, 458], [141, 391]], "bar": [0, 598, 1280, 106]}, "home_spell_spread": {"kind": "spell_spread", "deploy": [125, 346], "points": [[640, 330], [490, 321], [521, 301], [555, 278], [589, 256], [691, 256], [725, 278], [759, 301], [795, 321], [795, 348], [759, 368], [725, 391], [640, 399], [521, 368], [490, 348]], "bar": [0, 598, 1280, 106]}, "home_quake": {"kind": "quake", "deploy": [125, 346], "points": [[640, 150], [960, 330], [640, 520], [320, 330]], "bar": [0, 598, 1280, 106]}, "builder_scout": {"kind": "points", "deploy": [150, 370], "points": [[345, 120], [850, 140], [1027, 264], [1000, 500], [380, 513], [238, 340]], "bar": [0, 588, 1280, 120]}, "builder_stage2": {"kind": "points", "deploy": [73, 299], "points": [[396, 92], [830, 51], [926, 134], [921, 457], [263, 359], [254, 205], [982, 308], [413, 489]], "bar": [0, 588, 1280, 120]}}};
 
 const DEMO_BUILDINGS = [
-  {id:'eagle_artillery',name:'Eagle Artillery',category:'defense',count:1,next_level:null,time:'17h 57m',cost:null,currency:null,section:'in_progress'},
+  {id:'eagle_artillery',name:'Eagle Artillery',category:'defense',count:1,next_level:null,time:'17h 57m',seconds:64620,cost:null,currency:null,section:'in_progress'},
   {id:'barbarian_king',name:'Barbarian King',category:'hero',count:1,next_level:11,time:'11h',cost:5250,currency:'dark',section:'suggested'},
   {id:'hero_hall',name:'Hero Hall',category:'army',count:1,next_level:10,time:'4d',cost:6500000,currency:'elixir',section:'suggested'},
   {id:'archer_tower',name:'Archer Tower',category:'defense',count:3,next_level:8,time:'2h',cost:100000,currency:'gold',section:'other'},
@@ -644,12 +645,13 @@ function switchView(view) {
   }
   for (const panel of document.querySelectorAll('.page-panel')) panel.hidden = panel.id !== `view-${view}`;
   $('device-controls').hidden = view !== 'settings';
-  const key = view === 'stats' ? 'stats' : view === 'deploy' ? 'deployment' : view === 'settings' ? 'settings' : 'overview';
+  const key = view === 'stats' ? 'stats' : view === 'buildings' ? 'upgrades' : view === 'deploy' ? 'deployment' : view === 'settings' ? 'settings' : 'overview';
   $('page-title').textContent = t(`${key}_title`);
   $('page-description').textContent = t(`${key}_description`);
   screenPoller.sync();
   stats?.sync();
   if (view === 'settings' && online && link) send('get_discord', {}, {quiet:true});
+  if (view === 'buildings' && online && link && !buildings.rows) send('get_buildings', {}, {quiet:true});
 }
 function updateRunMetrics() {
   if (!lastState) return;
@@ -817,7 +819,8 @@ class DemoLink {
     else if (action === 'kill_ld') {this.state.state='idle';code='ld_off';}
     else if (action === 'restart_ld') {this.state.state='idle';code='ld_restarted';}
     else if (action === 'fit_display' || action === 'restore_display') {this.state.state='idle';code=action==='fit_display'?'display_ok':'display_unchanged';data=this.display();}
-    else if (action === 'scan_buildings') {code='buildings_scanned';data={rows:DEMO_BUILDINGS};}
+    else if (action === 'scan_buildings') {code='buildings_scanned';data={scanned_at:Date.now()/1000,rows:DEMO_BUILDINGS};}
+    else if (action === 'get_buildings') {code='buildings_loaded';data={scanned_at:Date.now()/1000-240,rows:DEMO_BUILDINGS};}
     if (SETTINGS_ANSWERS.includes(code)) data={minimum:this.minimum,setup:{adb:'C:\\LDPlayer\\adb.exe',ldconsole:'C:\\LDPlayer\\ldconsole.exe',serial:'emulator-5554',ld_index:0,touch_device:'/dev/input/event4'},language:document.documentElement.lang,display:this.display(),buildings:this.buildings};
     return {ok:true,code,state:this.state,data};
   }

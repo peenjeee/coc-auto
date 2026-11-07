@@ -16,6 +16,7 @@ import re
 import secrets
 import signal
 import socket
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -68,7 +69,9 @@ COMMAND_MAX_AGE_SECONDS = 120
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
                     'set_setup': 'setup_saved', 'set_language': 'language_saved', 'set_buildings': 'buildings_saved'}
 ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
-           'fit_display', 'restore_display', 'scan_buildings', *SETTINGS_ACTIONS)
+           'fit_display', 'restore_display', 'scan_buildings', 'get_buildings', *SETTINGS_ACTIONS)
+# Reads that run outside the control lock (a slow one must not hold up Stop) and stay out of the log.
+READ_ONLY = ('get_screen', 'get_stats', 'get_discord', 'get_buildings')
 VILLAGE_CHOICES = ('home', 'builder', 'both')
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
 # Option name, CLI flag, range; zero means "no limit" and is left out, except for recoveries.
@@ -564,8 +567,7 @@ class Supervisor:
                 command = open_command(self.key, body, sig, self.seen, self.started)
             if command['action'] in ('set_discord', 'test_discord') and not local:
                 raise CommandRefused('Atur Discord dari dashboard lokal')
-            if command['action'] in ('get_screen', 'get_stats', 'get_discord'):
-                # A slow screenshot must not hold the lock needed to stop the worker.
+            if command['action'] in READ_ONLY:
                 code, message, data = self.carry_out(command['action'], command['args'])
             else:
                 with self.control:
@@ -582,7 +584,7 @@ class Supervisor:
                       'message': text if text.startswith('Perintah ditolak') else f'Perintah ditolak: {text}'}
         except Exception as exc:  # A failed adb/ldconsole call is reported to the dashboard, never fatal here.
             result = {'ok': False, 'code': 'failed', 'message': f'Gagal: {exc}'}
-        if command is None or command['action'] not in ('get_screen', 'get_stats', 'get_discord'):
+        if command is None or command['action'] not in READ_ONLY:
             self.log(f'REMOTE: {result["message"]}')
         result["source_message"] = result["message"]
         result["message"] = messages.translate(result["message"])
@@ -647,8 +649,11 @@ class Supervisor:
             # The scan taps the game (open, swipe, close the builder list); a running bot would fight it.
             if self.running():
                 raise CommandRefused('hentikan bot dulu; scan bangunan mengetuk layar game')
-            rows = self.device.scan_buildings()
-            return 'buildings_scanned', f'Scan bangunan selesai: {len(rows)} baris', {'rows': rows}
+            scan = {'scanned_at': time.time(), 'rows': self.device.scan_buildings()}
+            self.keep_scan(scan)
+            return 'buildings_scanned', f'Scan bangunan selesai: {len(scan["rows"])} baris', scan
+        if action == 'get_buildings':
+            return 'buildings_loaded', '', self.statistics.last_scan('home', 'buildings')
         # Closing the game or the emulator under a running bot would only start its recovery.
         self.stop()
         if action == 'close_coc':
@@ -701,6 +706,13 @@ class Supervisor:
         except Exception as exc:  # The rest of the settings still load; the panel shows the screen as unknown.
             self.log(f'REMOTE: layar LDPlayer tidak terbaca ({exc})')
             return None
+
+    def keep_scan(self, scan: dict) -> None:
+        """Keep the last building scan, so a dashboard opened later shows it without scanning again."""
+        try:
+            self.statistics.keep_scan('home', 'buildings', scan['rows'], scan['scanned_at'])
+        except sqlite3.Error as exc:  # The rows still reach the dashboard; only a later reopen would miss them.
+            self.log(f'REMOTE: hasil scan bangunan tidak tersimpan ({exc})')
 
 
 def event(kind: str, data: object) -> bytes:

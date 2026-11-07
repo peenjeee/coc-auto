@@ -3,6 +3,7 @@ Opponent loot offers are deliberately excluded. Resource gains are positive stor
 """
 import ast
 import json
+import math
 from pathlib import Path
 import re
 import sqlite3
@@ -26,7 +27,9 @@ class Statistics:
             dark INTEGER DEFAULT 0, walls INTEGER DEFAULT 0, attacks INTEGER DEFAULT 0,
             recoveries INTEGER DEFAULT 0, searches INTEGER DEFAULT 0, errors INTEGER DEFAULT 0);
             CREATE INDEX IF NOT EXISTS events_time ON events(ts);
-            CREATE INDEX IF NOT EXISTS events_run ON events(run);''')
+            CREATE INDEX IF NOT EXISTS events_run ON events(run);
+            CREATE TABLE IF NOT EXISTS scans (village TEXT, list TEXT, scanned_at REAL, rows TEXT,
+            PRIMARY KEY(village, list));''')
         columns = {row[1] for row in self.db.execute('PRAGMA table_info(events)')}
         for column in ('builder_gold', 'builder_elixir', 'resource_version'):
             if column not in columns:
@@ -59,6 +62,26 @@ class Statistics:
             keys = list(values)
             self.db.execute(f"INSERT INTO events(run,ts,kind,detail,resource_version{''.join(','+k for k in keys)}) VALUES({','.join('?' for _ in range(5+len(keys)))})",
                 [run, self.clock(), kind, detail[:160], 1, *values.values()])
+
+    def keep_scan(self, village, listing, rows, scanned_at):
+        """Keep only the latest scan of one in-game list, e.g. the Home Village builder list ('home', 'buildings')."""
+        with self.lock, self.db:
+            self.db.execute('INSERT OR REPLACE INTO scans(village,list,scanned_at,rows) VALUES(?,?,?,?)',
+                            (village, listing, scanned_at, json.dumps(rows)))
+
+    def last_scan(self, village, listing):
+        """The latest scan of that list; rows None when there is none or it does not read back as one."""
+        with self.lock:
+            row = self.db.execute('SELECT scanned_at,rows FROM scans WHERE village=? AND list=?', (village, listing)).fetchone()
+        try:
+            rows = json.loads(row['rows']) if row else None
+        except (TypeError, ValueError):
+            rows = None
+        scanned_at = row['scanned_at'] if row else None
+        if (isinstance(rows, list) and all(isinstance(item, dict) for item in rows)
+                and isinstance(scanned_at, (int, float)) and math.isfinite(scanned_at)):
+            return {'scanned_at': scanned_at, 'rows': rows}
+        return {'rows': None}
 
     def consume(self, line, run):
         if run is None: return None

@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -180,8 +181,10 @@ class SupervisorTests(unittest.TestCase):
         self.device.scan_buildings.assert_not_called()
         self.assertEqual(self.supervisor.state()['state'], 'running')
         self.supervisor.stop()
+        before = time.time()
         result = self.supervisor.command(*signed('scan_buildings'))
-        self.assertEqual((result['ok'], result['code'], result['data']), (True, 'buildings_scanned', {'rows': rows}))
+        self.assertEqual((result['ok'], result['code'], result['data']['rows']), (True, 'buildings_scanned', rows))
+        self.assertGreaterEqual(result['data']['scanned_at'], before)
         self.assertEqual(result['source_message'], 'Scan bangunan selesai: 1 baris')
 
     def test_unsigned_or_bad_commands_do_nothing(self):
@@ -203,6 +206,89 @@ class SupervisorTests(unittest.TestCase):
         body = json.dumps({'action': 'open_coc', 'args': {}, 'ts': self.supervisor.started - 5, 'nonce': 'early'})
         self.assertEqual(self.supervisor.command(body, remote.sign(KEY, body))['code'], 'unsigned')
         self.assertEqual(self.device.calls, [])
+
+
+class BuildingScanTests(unittest.TestCase):
+    ROWS = [{'id': 'cannon', 'name': 'Cannon', 'category': 'defense', 'count': 5, 'next_level': 8,
+             'time': '1h 30m', 'cost': 80000, 'currency': 'gold', 'section': 'other'}]
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.folder = Path(self.temp.name)
+        self.database = self.folder / '.coc-auto' / 'stats.sqlite3'
+        self.device = FakeDevice()
+        self.seen = []
+
+    def supervisor(self):
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], self.device,
+                                       settings=SimpleNamespace(config_path=self.folder / 'config.json'))
+        self.addCleanup(supervisor.statistics.db.close)  # Windows cannot delete an open database file
+        supervisor.subscribe(lambda kind, data: self.seen.append((kind, data)))
+        return supervisor
+
+    def test_the_last_scan_is_kept_and_read_back_online_without_the_control_lock_or_the_log(self):
+        supervisor = self.supervisor()
+        self.device.scan_buildings = Mock(return_value=self.ROWS)
+        scanned = supervisor.command(*signed('scan_buildings'))
+        # Kept in the stats database next to the config, so a restarted bot still has it.
+        reopened = remote.Statistics(self.database)
+        self.addCleanup(reopened.db.close)
+        self.assertEqual(reopened.last_scan('home', 'buildings'), scanned['data'])
+        self.seen.clear()
+        held, release = threading.Event(), threading.Event()
+
+        def hold():
+            with supervisor.control:
+                held.set()
+                release.wait(5)
+        holder = threading.Thread(target=hold, daemon=True)
+        holder.start()
+        self.assertTrue(held.wait(5))
+        try:
+            loaded = supervisor.command(*signed('get_buildings'), local=False)
+            # Answered while another command holds the control lock.
+            self.assertTrue(holder.is_alive())
+        finally:
+            release.set()
+        self.assertEqual((loaded['ok'], loaded['code'], loaded['data']), (True, 'buildings_loaded', scanned['data']))
+        self.assertEqual(self.seen, [])
+        self.device.scan_buildings.assert_called_once()
+
+    def test_a_new_scan_replaces_the_one_kept(self):
+        supervisor = self.supervisor()
+        self.device.scan_buildings = Mock(side_effect=[self.ROWS, []])
+        supervisor.command(*signed('scan_buildings'))
+        second = supervisor.command(*signed('scan_buildings'))
+        self.assertEqual(supervisor.command(*signed('get_buildings'))['data'],
+                         {'scanned_at': second['data']['scanned_at'], 'rows': []})
+        self.assertEqual([tuple(row) for row in supervisor.statistics.db.execute('SELECT village, list FROM scans')],
+                         [('home', 'buildings')])
+
+    def test_a_missing_or_malformed_saved_scan_gives_no_rows(self):
+        supervisor = self.supervisor()
+        self.assertEqual(supervisor.command(*signed('get_buildings'))['data'], {'rows': None})
+        for scanned_at, rows in ((1.0, '{not json'), (1.0, '{}'), (1.0, '[1]'), (1.0, None), (1.0, 7),
+                                 ('today', '[]'), (None, '[]'), (float('inf'), '[]')):
+            with supervisor.statistics.db:
+                supervisor.statistics.db.execute("INSERT OR REPLACE INTO scans VALUES ('home', 'buildings', ?, ?)",
+                                                 (scanned_at, rows))
+            result = supervisor.command(*signed('get_buildings'))
+            with self.subTest(scanned_at=scanned_at, rows=rows):
+                self.assertEqual((result['ok'], result['data']), (True, {'rows': None}))
+
+    def test_a_database_from_before_scans_were_kept_still_opens_and_keeps_them(self):
+        self.database.parent.mkdir()
+        old = sqlite3.connect(self.database)
+        old.executescript("CREATE TABLE runs (id INTEGER PRIMARY KEY, started REAL, ended REAL, task TEXT, status TEXT);"
+                          "INSERT INTO runs VALUES (1, 10, 20, 'Farming', 'completed');")
+        old.close()
+        supervisor = self.supervisor()
+        self.assertEqual(supervisor.command(*signed('get_buildings'))['data'], {'rows': None})
+        self.device.scan_buildings = Mock(return_value=self.ROWS)
+        supervisor.command(*signed('scan_buildings'))
+        self.assertEqual(supervisor.command(*signed('get_buildings'))['data']['rows'], self.ROWS)
+        self.assertEqual([tuple(row) for row in supervisor.statistics.db.execute('SELECT task FROM runs')], [('Farming',)])
 
 
 REPO = Path(remote.__file__).resolve().parent

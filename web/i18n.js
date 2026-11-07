@@ -584,7 +584,7 @@ Object.assign(TEXT.en, {bulk_walls_description: 'Upgrades multiple walls at a ti
 Object.assign(TEXT.id, {bulk_walls_description: 'Meningkatkan beberapa tembok sekaligus, bukan satu per satu.'});
 
 Object.assign(TEXT.en, {
-  buildings_title: 'buildings to upgrade',
+  buildings_title: 'Buildings to upgrade',
   buildings_hint: 'The bot opens the game\'s "Buildings & Heroes" list in the Home Village, scrolls it to the end, reads every row and closes it again. Nothing is upgraded or bought. Stop the bot first; a scan takes about a minute.',
   buildings_scan: 'scan buildings',
   buildings_empty: 'No rows were read.', buildings_done: 'done',
@@ -594,7 +594,7 @@ Object.assign(TEXT.en, {
   buildings_in_progress: 'upgrading', buildings_suggested: 'suggested',
 });
 Object.assign(TEXT.id, {
-  buildings_title: 'bangunan yang bisa di-upgrade',
+  buildings_title: 'Bangunan yang bisa di-upgrade',
   buildings_hint: 'Bot membuka daftar "Bangunan dan Pahlawan" di Desa Utama, menggulirnya sampai habis, membaca setiap baris, lalu menutupnya lagi. Tidak ada yang di-upgrade atau dibeli. Hentikan bot dulu; satu scan sekitar satu menit.',
   buildings_scan: 'scan bangunan',
   buildings_empty: 'Tidak ada baris yang terbaca.', buildings_done: 'selesai',
@@ -611,6 +611,9 @@ Object.assign(TEXT.en, {
   buildings_keep: 'keep builders free', buildings_save: 'save selection',
   buildings_picked: 'Picked, in order: {list}', buildings_picked_none: 'Nothing picked yet; scan, then tick rows.',
   code_buildings_saved: 'Building selection saved; it applies at the next Start.',
+  nav_buildings: 'Upgrade', upgrades_title: 'Building upgrades',
+  upgrades_description: 'Scan your village\'s upgradable buildings, pick them and let the bot keep your builders busy.',
+  buildings_rescan: 'scan again', buildings_scanned_at: 'Last scan: {time}',
 });
 Object.assign(TEXT.id, {
   task_buildings: 'upgrade bangunan',
@@ -619,4 +622,7 @@ Object.assign(TEXT.id, {
   buildings_keep: 'sisakan tukang bebas', buildings_save: 'simpan pilihan',
   buildings_picked: 'Dipilih, berurutan: {list}', buildings_picked_none: 'Belum ada yang dipilih; scan, lalu centang baris.',
   code_buildings_saved: 'Pilihan bangunan disimpan; berlaku saat Start berikutnya.',
+  nav_buildings: 'Upgrade', upgrades_title: 'Upgrade bangunan',
+  upgrades_description: 'Scan bangunan desa yang bisa di-upgrade, pilih, lalu biarkan bot membuat tukang tetap sibuk.',
+  buildings_rescan: 'scan ulang', buildings_scanned_at: 'Scan terakhir: {time}',
 });
