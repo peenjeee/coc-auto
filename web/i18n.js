@@ -603,3 +603,20 @@ Object.assign(TEXT.id, {
   buildings_name: 'bangunan', buildings_level: 'ke level', buildings_time: 'waktu', buildings_cost: 'biaya',
   buildings_in_progress: 'sedang di-upgrade', buildings_suggested: 'disarankan',
 });
+
+Object.assign(TEXT.en, {
+  task_buildings: 'upgrade buildings',
+  buildings_pick_hint: 'Tick the rows the "upgrade buildings" task should upgrade: the first ticked goes first. Set the level to stop at, or leave it empty for Max (as long as the building is listed). It pays only gold, elixir or dark elixir at the price the list shows, never gems.',
+  buildings_pick: 'upgrade', buildings_target: 'up to level', buildings_max: 'Max',
+  buildings_keep: 'keep builders free', buildings_save: 'save selection',
+  buildings_picked: 'Picked, in order: {list}', buildings_picked_none: 'Nothing picked yet; scan, then tick rows.',
+  code_buildings_saved: 'Building selection saved; it applies at the next Start.',
+});
+Object.assign(TEXT.id, {
+  task_buildings: 'upgrade bangunan',
+  buildings_pick_hint: 'Centang baris yang di-upgrade tugas "upgrade bangunan": yang dicentang pertama dikerjakan dulu. Isi level berhentinya, atau kosongkan untuk Maks (selama bangunan masih ada di daftar). Hanya dibayar gold, elixir atau dark elixir seharga di daftar, tidak pernah gem.',
+  buildings_pick: 'upgrade', buildings_target: 'sampai level', buildings_max: 'Maks',
+  buildings_keep: 'sisakan tukang bebas', buildings_save: 'simpan pilihan',
+  buildings_picked: 'Dipilih, berurutan: {list}', buildings_picked_none: 'Belum ada yang dipilih; scan, lalu centang baris.',
+  code_buildings_saved: 'Pilihan bangunan disimpan; berlaku saat Start berikutnya.',
+});

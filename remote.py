@@ -66,7 +66,7 @@ KEY_FILE = Path('.coc-auto') / 'device.json'
 COMMAND_MAX_AGE_SECONDS = 120
 # Settings action -> its answer code; every one answers with the settings as they are now (or what was found).
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
-                    'set_setup': 'setup_saved', 'set_language': 'language_saved'}
+                    'set_setup': 'setup_saved', 'set_language': 'language_saved', 'set_buildings': 'buildings_saved'}
 ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
            'fit_display', 'restore_display', 'scan_buildings', *SETTINGS_ACTIONS)
 VILLAGE_CHOICES = ('home', 'builder', 'both')
@@ -85,6 +85,7 @@ TASK_OPTIONS = {
     'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', *ATTACK_OPTIONS},
     'attack': {'village', 'cycles', 'searches', *ATTACK_OPTIONS},
     'dry': {'village'},
+    'buildings': {'hours', 'minutes', 'max_recoveries'},
 }
 # Deploy editor tab -> the deploy screen it is drawn on and the pins it moves: Home Village spells, its --ring
 # troop and spell pins and --quake pins, Builder Base troop points.
@@ -220,6 +221,8 @@ def build_args(options: dict) -> list[str]:
         resource = choice(options, 'wall_resource', ('gold', 'elixir', 'both'), 'both')
         if resource != 'both':
             args += ['--wall-resource', resource]
+    elif task == 'buildings':
+        args = ['--buildings']
     else:
         dark = options.get('dark', False)
         if not isinstance(dark, bool):
@@ -388,10 +391,18 @@ class Settings:
         return bot.load_config(self.config_path)
 
     def read(self) -> dict:
+        import bot
+        import buildings
         config = self.config()
         minimum = config.get('minimum') or {}
+        try:
+            chosen = buildings.selection(config.get('buildings'))
+        except bot.BotError:
+            # Never saved, or edited by hand into something --buildings refuses: the panel starts empty.
+            chosen = {'targets': [], 'keep_builders': 0}
         return {'minimum': {key: minimum.get(key, 0) for key in MINIMUM_KEYS},
-                'setup': {name: config.get(name) for name in SETUP_FIELDS}, 'language': config.get('language', 'id')}
+                'setup': {name: config.get(name) for name in SETUP_FIELDS}, 'language': config.get('language', 'id'),
+                'buildings': chosen}
 
     def detect(self) -> dict:
         return self.detector(self.config())
@@ -408,6 +419,16 @@ class Settings:
             raise CommandRefused('Bahasa harus id atau en')
         save_local(self.config_path, {'language': language}, self.root, 'Bahasa')
         return language
+
+    def write_buildings(self, chosen: object) -> None:
+        """The buildings --buildings upgrades, first one first, each up to its level, and the builders it leaves."""
+        import bot
+        import buildings
+        try:
+            changes = {'buildings': buildings.selection(chosen)}
+        except bot.BotError as exc:
+            raise CommandRefused(f'Pilihan bangunan ditolak: {exc}') from exc
+        save_local(self.config_path, changes, self.root, 'Pilihan bangunan')
 
     def write_setup(self, setup: object) -> None:
         import bot
@@ -666,6 +687,9 @@ class Supervisor:
             # Only presentation changes; the running worker continues emitting canonical messages.
             messages.use(self.settings.write_language(options.get('language')))
             message = 'Bahasa tampilan disimpan; log langsung memakainya'
+        elif action == 'set_buildings':
+            self.settings.write_buildings(options.get('buildings'))
+            message = 'Pilihan bangunan disimpan; berlaku saat Start berikutnya'
         else:
             message = 'Pengaturan dimuat'
         return code, message, {**self.settings.read(), 'display': self.display_data()}

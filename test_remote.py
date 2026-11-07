@@ -361,6 +361,29 @@ class SettingsTests(unittest.TestCase):
                 self.settings.write_minimum(minimum)
         self.assertEqual(self.config.read_text(encoding='utf-8'), original)
 
+    def test_the_building_pick_is_saved_read_back_and_checked(self):
+        self.assertEqual(self.settings.read()['buildings'], {'targets': [], 'keep_builders': 0})
+        chosen = {'targets': [{'id': 'archer_tower', 'name': 'Archer Tower', 'level': 21},
+                              {'id': None, 'name': 'Mystery Machine', 'level': None}], 'keep_builders': 1}
+        self.settings.write_buildings(chosen)
+        self.assertEqual(self.stored()['buildings'], chosen)
+        self.assertEqual(self.settings.read()['buildings'], chosen)
+        saved = self.config.with_name('config.local.json').read_text(encoding='utf-8')
+        target = {'id': 'archer_tower', 'name': 'Archer Tower', 'level': 21}
+        for bad in (None, [], {'targets': [target]}, {'targets': [target], 'keep_builders': -1},
+                    {'targets': [target], 'keep_builders': 11}, {'targets': [target], 'keep_builders': True},
+                    {'targets': [{**target, 'id': 'gem_mine'}], 'keep_builders': 0},
+                    {'targets': [{**target, 'id': 'wall', 'name': 'Wall'}], 'keep_builders': 0},
+                    {'targets': [{**target, 'level': 0}], 'keep_builders': 0},
+                    {'targets': [{**target, 'level': 201}], 'keep_builders': 0},
+                    {'targets': [{**target, 'level': '21'}], 'keep_builders': 0},
+                    {'targets': [{**target, 'name': ''}], 'keep_builders': 0},
+                    {'targets': [{'id': 'archer_tower', 'name': 'Archer Tower'}], 'keep_builders': 0},
+                    {'targets': [target, {**target, 'level': 5}], 'keep_builders': 0}):
+            with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
+                self.settings.write_buildings(bad)
+        self.assertEqual(self.config.with_name('config.local.json').read_text(encoding='utf-8'), saved)
+
     def test_a_minimum_the_bot_cannot_read_is_refused(self):
         config = self.stored()
         del config['screens']['home_scout']['loot']['dark']
@@ -658,6 +681,15 @@ class BuildArgsTests(unittest.TestCase):
         self.assertEqual(remote.build_args({'task': 'attack', 'village': 'home', 'cycles': 3}),
                          ['--mode', 'home', '--cycles', '3', '--live'])
         self.assertEqual(remote.build_args({'task': 'dry', 'village': 'both'}), ['--mode', 'both'])
+
+    def test_building_upgrades_take_only_their_limits(self):
+        self.assertEqual(remote.build_args({'task': 'buildings'}), ['--buildings', '--live'])
+        self.assertEqual(remote.build_args({'task': 'buildings', 'hours': 2, 'minutes': 30, 'max_recoveries': 5}),
+                         ['--buildings', '--hours', '2', '--minutes', '30', '--max-recoveries', '5', '--live'])
+        # It never attacks, picks a village or touches walls.
+        for bad in ({'first': 'home'}, {'searches': 10}, {'surrender': 'home'}, {'walls': 'home'}, {'quake': True}):
+            with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
+                remote.build_args({'task': 'buildings', **bad})
 
     def test_recoveries_are_passed_on(self):
         self.assertEqual(remote.build_args({'task': 'walls', 'walls': 'home', 'max_recoveries': 5}),

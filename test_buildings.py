@@ -155,5 +155,233 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(calls[-1], 'close')
 
 
+def row(name, key, next_level=2, cost=150, currency='gold', section='other', time='8s', count=1):
+    return {'id': key, 'name': name, 'category': 'resource', 'count': count, 'next_level': next_level, 'time': time,
+            'cost': cost, 'currency': currency, 'section': section}
+
+
+AMOUNTS = {'gold': 1000, 'elixir': 1000, 'dark': 100}
+
+
+class PickTests(unittest.TestCase):
+    def test_the_first_target_in_priority_order_that_is_affordable_wins(self):
+        mine, bomb = row('Gold Mine', 'gold_mine'), row('Bomb', 'bomb', cost=500)
+        placed = [(mine, 10), (bomb, 60)]
+        targets = [{'id': 'bomb', 'name': 'Bomb', 'level': None}, {'id': 'gold_mine', 'name': 'Gold Mine', 'level': 5}]
+        self.assertEqual(buildings.pick(placed, targets, AMOUNTS), ((bomb, 60), True))
+        # Short of gold for the bomb: the next target goes first, the bomb stays for later.
+        self.assertEqual(buildings.pick(placed, targets, {**AMOUNTS, 'gold': 200}), ((mine, 10), True))
+        self.assertEqual(buildings.pick(placed, targets, {**AMOUNTS, 'gold': 100}), (None, True))
+        # Its own resource counts: a dark elixir cost is not paid from gold.
+        king = row('Barbarian King', 'barbarian_king', cost=5250, currency='dark')
+        target = [{'id': 'barbarian_king', 'name': 'Barbarian King', 'level': None}]
+        self.assertEqual(buildings.pick([(king, 0)], target, {**AMOUNTS, 'gold': 10 ** 9}), (None, True))
+        self.assertEqual(buildings.pick([(king, 0)], target, {**AMOUNTS, 'dark': 5250}), ((king, 0), True))
+
+    def test_a_level_target_is_reached_once_the_next_level_passes_it(self):
+        target = [{'id': 'gold_mine', 'name': 'Gold Mine', 'level': 2}]
+        self.assertEqual(buildings.pick([(row('Gold Mine', 'gold_mine', 2), 0)], target, AMOUNTS)[0][1], 0)
+        self.assertEqual(buildings.pick([(row('Gold Mine', 'gold_mine', 3), 0)], target, AMOUNTS), (None, False))
+        # Max keeps going while the building is listed; a level that was not read is never guessed past.
+        self.assertIsNotNone(buildings.pick([(row('Gold Mine', 'gold_mine', 30), 0)],
+                                            [{**target[0], 'level': None}], AMOUNTS)[0])
+        self.assertEqual(buildings.pick([(row('Gold Mine', 'gold_mine', None), 0)], target, AMOUNTS), (None, True))
+        # Not listed at all: maxed or gone, so nothing is left.
+        self.assertEqual(buildings.pick([(row('Bomb', 'bomb'), 0)], target, AMOUNTS), (None, False))
+
+    def test_running_unread_and_refused_rows_are_left_for_later(self):
+        target = [{'id': 'gold_mine', 'name': 'Gold Mine', 'level': None}]
+        running = row('Gold Mine', 'gold_mine', None, None, None, 'in_progress', '20m')
+        self.assertEqual(buildings.pick([(running, 0)], target, AMOUNTS), (None, True))
+        for unread in (row('Gold Mine', 'gold_mine', cost=None), row('Gold Mine', 'gold_mine', currency=None)):
+            self.assertEqual(buildings.pick([(unread, 0)], target, AMOUNTS), (None, True))
+        mine = row('Gold Mine', 'gold_mine')
+        self.assertEqual(buildings.pick([(mine, 0)], target, AMOUNTS, {buildings.row_key(mine)}), (None, True))
+
+    def test_a_row_the_catalog_does_not_know_is_matched_by_its_name(self):
+        unknown = row('Mystery Machine', None)
+        target = [{'id': None, 'name': 'mystery machine', 'level': None}]
+        self.assertEqual(buildings.pick([(unknown, 7)], target, AMOUNTS), ((unknown, 7), True))
+        # A catalog building of that name is another building.
+        self.assertEqual(buildings.pick([({**unknown, 'id': 'gold_mine'}, 7)], target, AMOUNTS), (None, False))
+
+
+class TimerTests(unittest.TestCase):
+    def test_timers_read_in_either_language(self):
+        for text, indonesian, expected in (('1h 23m', False, 4980), ('4d 7h', False, 370_800),
+                                           ('30m 0s', False, 1800), ('8s', False, 8), ('2h 12j', True, 216_000),
+                                           ('3j', True, 10_800), ('8d', True, 8), ('45m', True, 2700)):
+            with self.subTest(text=text):
+                self.assertEqual(buildings.seconds(text, indonesian), expected)
+        for text, indonesian in (('2j', False), ('8s', True), ('1h23m', False), ('', False), (None, False),
+                                 ('1h 23m x', False)):
+            with self.subTest(text=text):
+                self.assertIsNone(buildings.seconds(text, indonesian))
+
+    def test_the_wait_ends_with_the_soonest_running_upgrade_and_ten_minutes_at_most(self):
+        rows = [row('A', None, section='in_progress', time='1h 23m'), row('B', None, section='in_progress', time='8s'),
+                row('C', None, time='1s')]
+        self.assertEqual(buildings.pause_seconds(rows, False), 8 + buildings.WAIT_MARGIN_SECONDS)
+        self.assertEqual(buildings.pause_seconds(rows[:1], False), buildings.WAIT_MAX_SECONDS)
+        self.assertEqual(buildings.pause_seconds([row('A', None, section='in_progress', time=None)], False),
+                         buildings.WAIT_MAX_SECONDS)
+
+
+class UpgradeDialogTests(unittest.TestCase):
+    """The building upgrade dialog, from real frames: confirmed only for the row's own price and resource."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.config = bot.load_config(ROOT / 'config.json')
+        cls.runner = bot.Bot(cls.config, ROOT, None)
+        cls.gold = cv2.imread(str(ROOT / 'fixtures' / 'building-confirm-gold.png'))
+        cls.dark = np.zeros((720, 1280, 3), np.uint8)
+        cls.dark[570:690, 790:1170] = cv2.imread(str(ROOT / 'fixtures' / 'building-confirm-dark-button.png'))
+
+    def test_the_dialog_is_its_own_screen_and_the_wall_dialog_stays_the_wall_one(self):
+        self.assertEqual(self.runner.detector.detect(self.gold), 'building_confirm')
+        wall = cv2.imread(str(ROOT / 'fixtures' / 'wall-confirm-sale-gold.png'))
+        self.assertEqual(self.runner.detector.detect(wall), 'wall_confirm')
+
+    def test_only_the_rows_price_and_resource_are_confirmed(self):
+        collector = row('Elixir Collector', 'elixir_collector', cost=150, currency='gold', count=7)
+        self.assertIsNone(buildings.refusal(self.runner, self.gold, collector))
+        king = row('Barbarian King', 'barbarian_king', 11, 5250, 'dark')
+        self.assertIsNone(buildings.refusal(self.runner, self.dark, king))
+        for wrong in ({'cost': 300}, {'cost': None}, {'currency': 'elixir'}, {'currency': 'gems'},
+                      {'currency': None}):
+            with self.subTest(wrong=wrong):
+                self.assertIsNotNone(buildings.refusal(self.runner, self.gold, {**collector, **wrong}))
+        self.assertIsNotNone(buildings.refusal(self.runner, self.dark, {**king, 'currency': 'gold'}))
+        self.assertIsNotNone(buildings.refusal(self.runner, np.zeros_like(self.gold), collector))
+
+    def runner_for(self, refusals):
+        calls = []
+        answers = iter(refusals)
+
+        def guarded_tap(states, location):
+            calls.append(('tap', tuple(sorted(states)), location(None) if callable(location) else location))
+        runner = SimpleNamespace(
+            config=self.config, poll=0, guarded_tap=guarded_tap,
+            wait=lambda targets, allowed, seconds: calls.append(('wait', tuple(sorted(targets)))),
+            wait_still=lambda seconds: 'dialog', action=lambda state, name: calls.append(('action', state, name)),
+            check_gems=lambda spec: calls.append('gems'))
+        return calls, runner, patch.object(buildings, 'refusal', lambda runner, image, row: next(answers))
+
+    def test_a_dialog_that_does_not_match_is_closed_and_never_confirmed(self):
+        spec = self.config['walls']['home']
+        confirm = self.config['screens']['building_confirm']['actions']['confirm']
+        mine = row('Gold Mine', 'gold_mine')
+        # Wrong at once, or wrong in the frame the confirm tap would follow.
+        for refusals in (['harga beda'], [None, 'harga beda']):
+            calls, runner, refusal = self.runner_for(refusals)
+            with self.subTest(refusals=refusals), refusal, patch.object(buildings, 'find_card', return_value=300):
+                self.assertFalse(buildings.upgrade(runner, spec, ['frame'], 300, mine, 'tesseract'))
+                self.assertIn(('action', 'building_confirm', 'close'), calls)
+                self.assertNotIn(('tap', ('building_confirm',), confirm), calls)
+                self.assertNotIn('gems', calls)
+        calls, runner, refusal = self.runner_for([None, None])
+        with refusal, patch.object(buildings, 'find_card', return_value=300):
+            self.assertTrue(buildings.upgrade(runner, spec, ['frame'], 300, mine, 'tesseract'))
+        self.assertEqual(calls[0], ('tap', ('build_list',), [spec['row']['tap_x'], 300 + buildings.NAME_CENTRE]))
+        self.assertIn(('tap', ('building_confirm',), confirm), calls)
+        self.assertEqual(calls[-1], 'gems')
+
+
+class RunTests(unittest.TestCase):
+    """The --buildings loop with the screens faked: when it waits, what it upgrades and when it stops."""
+
+    def run_loop(self, chosen, homes, lists, upgrades):
+        calls = []
+        runner = SimpleNamespace(
+            config={'walls': {'home': {}}, 'tesseract': 'tesseract'}, root=ROOT, poll=1, stop_at=None, progress=0,
+            check_limits=lambda: None, refresh_if_low_memory=lambda: None, open_build_list=lambda village, spec: None,
+            list_indonesian=lambda image: False, close_menus=lambda: calls.append('close'))
+        tried = []
+
+        def upgrade(runner, spec, frames, place, chosen_row, program):
+            tried.append(chosen_row['name'])
+            result = next(upgrades)
+            if isinstance(result, Exception):
+                raise result
+            return result
+        with patch.object(bot, 'executable', return_value='tesseract'), \
+                patch.object(buildings, 'load_templates', return_value={}), \
+                patch.object(buildings, 'home', side_effect=homes), \
+                patch.object(buildings, 'list_frames', return_value=['frame']), \
+                patch.object(buildings, 'placed_rows', side_effect=lists), \
+                patch.object(buildings, 'upgrade', upgrade), \
+                patch.object(buildings.time, 'sleep', lambda seconds: calls.append(('sleep', seconds))):
+            done = buildings.run(runner, chosen)
+        return done, tried, calls, runner
+
+    def test_spare_builders_are_kept_then_the_target_is_upgraded_until_reached(self):
+        chosen = {'targets': [{'id': 'gold_mine', 'name': 'Gold Mine', 'level': 2}], 'keep_builders': 1}
+        mine, running = row('Gold Mine', 'gold_mine', 2), row('Cannon', 'cannon', None, None, None, 'in_progress', '8s')
+        lists = [[(mine, 10), (running, 0)], [(mine, 10)], [(row('Gold Mine', 'gold_mine', 3), 10)]]
+        homes = [(1, AMOUNTS), (2, AMOUNTS), (1, AMOUNTS), (1, AMOUNTS)]
+        with self.assertLogs('buildings', 'INFO') as logs:
+            done, tried, calls, runner = self.run_loop(chosen, homes, lists, iter([True]))
+        self.assertEqual((done, tried, runner.progress), (1, ['Gold Mine'], 1))
+        # One builder free and one kept: wait until the cannon is done.
+        self.assertEqual([call for call in calls if call != 'close'], [('sleep', 8 + buildings.WAIT_MARGIN_SECONDS)])
+        self.assertTrue(any('Bangunan di-upgrade: Gold Mine ke level 2' in line for line in logs.output))
+        self.assertTrue(any('selesai' in line for line in logs.output))
+
+    def test_a_refused_dialog_lets_the_next_target_go_first(self):
+        chosen = {'targets': [{'id': 'bomb', 'name': 'Bomb', 'level': None},
+                              {'id': 'gold_mine', 'name': 'Gold Mine', 'level': None}], 'keep_builders': 0}
+        both = [(row('Bomb', 'bomb'), 0), (row('Gold Mine', 'gold_mine'), 50)]
+        homes = [(2, AMOUNTS), (2, AMOUNTS), (1, AMOUNTS), (1, AMOUNTS)]
+        done, tried, _, _ = self.run_loop(chosen, homes, [both, both, []], iter([False, True]))
+        self.assertEqual((done, tried), (1, ['Bomb', 'Gold Mine']))
+        # Builders all busy after all (the gem offer was closed with X): skipped like a refusal.
+        done, tried, _, _ = self.run_loop(chosen, homes, [both, both, []],
+                                          iter([bot.NoFreeBuilder('Semua tukang sibuk'), True]))
+        self.assertEqual((done, tried), (1, ['Bomb', 'Gold Mine']))
+
+    def test_the_time_limit_stops_a_wait_short(self):
+        runner = SimpleNamespace(stop_at=buildings.time.monotonic() + 30, poll=1)
+        with patch.object(buildings.time, 'sleep') as sleep:
+            buildings.pause(runner, 600, 'x')
+        self.assertLessEqual(sleep.call_args.args[0], 30)
+
+
+class CommandLineTests(unittest.TestCase):
+    def test_buildings_needs_live_and_runs_on_its_own(self):
+        for argv in (['--buildings'], ['--buildings', '--live', '--walls', 'home'],
+                     ['--buildings', '--live', '--until-full'], ['--buildings', '--live', '--home', 'gold'],
+                     ['--buildings', '--live', '--builder', 'gold'], ['--buildings', '--live', '--max-upgrades', '3']):
+            with self.subTest(argv=argv), patch('sys.argv', ['bot.py', *argv, '--no-remote']):
+                self.assertEqual(bot.main(), 1)
+
+    def test_buildings_runs_its_pick_under_the_recovery(self):
+        chosen = {'targets': [{'id': 'bomb', 'name': 'Bomb', 'level': None}], 'keep_builders': 0}
+        with patch('sys.argv', ['bot.py', '--buildings', '--live', '--hours', '2', '--no-remote']), \
+                patch('bot.load_config'), patch('bot.validate_config'), patch('bot.executable'), patch('bot.ADB'), \
+                patch('bot.Bot') as runner, patch('bot.fit_screen', return_value=False), \
+                patch.object(buildings, 'validate', return_value=chosen):
+            self.assertEqual(bot.main(), 0)
+        self.assertEqual(runner.call_args.kwargs['minutes'], 120)
+        job = runner.return_value.run_until_full_resilient.call_args.kwargs['job']
+        with patch.object(buildings, 'run', return_value=2) as run:
+            self.assertEqual(job(0), 2)
+        run.assert_called_once_with(runner.return_value, chosen)
+
+    def test_the_pick_is_checked_before_a_run(self):
+        config = bot.load_config(ROOT / 'config.json')
+        target = {'id': 'gold_mine', 'name': 'Gold Mine', 'level': 2}
+        chosen = {'targets': [target], 'keep_builders': 1}
+        self.assertEqual(buildings.validate({**config, 'buildings': chosen}, ROOT), chosen)
+        for bad in ({'targets': [], 'keep_builders': 0}, {'targets': [{**target, 'id': 'nope'}], 'keep_builders': 0}):
+            with self.subTest(bad=bad), self.assertRaises(bot.BotError):
+                buildings.validate({**config, 'buildings': bad}, ROOT)
+        with self.assertRaises(bot.BotError):
+            buildings.validate({key: value for key, value in config.items() if key != 'buildings'}, ROOT)
+        with self.assertRaises(bot.BotError):
+            buildings.validate({**config, 'buildings': chosen, 'building_upgrade': {'free_builders': [0, 0, 1, 1]}},
+                               ROOT)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -11,7 +11,7 @@ import { setupSelects, refreshSelects } from './select.js';
 import { StatsPanel, previewStatistics } from './stats.js?v=8';
 import { DiscordPanel } from './discord.js?v=4';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel } from './buildings.js?v=1';
+import { BuildingsPanel } from './buildings.js?v=2';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -176,7 +176,7 @@ function resultText(result) {
   return text === key ? translate(String(result.source_message ?? result.message ?? '')) : text;
 }
 
-const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved', 'language_saved'];
+const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved', 'language_saved', 'buildings_saved'];
 const DISPLAY_ANSWERS = ['display_fitted', 'display_ok', 'display_restored', 'display_unchanged'];
 
 function handleResult(result, quiet = false) {
@@ -190,6 +190,7 @@ function handleResult(result, quiet = false) {
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
+    buildings.select(result.data.buildings);
     if (result.code === 'settings_loaded' && !initialDisplayChecked) {
       initialDisplayChecked = true;
       if (!settings.displayMatches()) switchView('settings');
@@ -333,6 +334,8 @@ function readOptions() {
   if (task === 'walls' || task === 'farm') {
     const selected = data.get('target_village') || 'home';
     options.first = selected === 'both' ? data.get('first') : selected;
+  }
+  if (['walls', 'farm', 'buildings'].includes(task)) {
     for (const name of ['hours', 'minutes']) if (number(name)) options[name] = number(name);
     options.max_recoveries = number('max_recoveries', 20);
   }
@@ -367,6 +370,8 @@ function previewArgs(options) {
     args = ['--walls', options.walls];
     if (options.bulk_walls) args.push('--bulk-walls');
     if (options.wall_resource) args.push('--wall-resource', options.wall_resource);
+  } else if (options.task === 'buildings') {
+    args = ['--buildings'];
   } else {
     args = [];
     for (const village of ['builder', 'home']) {
@@ -652,11 +657,11 @@ function updateRunMetrics() {
   const running = lastState.state === 'running';
   const seconds = running && lastState.since ? Math.max(0, Math.floor(Date.now()/1000-lastState.since)) : 0;
   $('run-duration').textContent = running ? `${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}` : '—';
-  const task = args.includes('--walls') ? 'task_walls' : args.includes('--until-full') || args.includes('--home') || args.includes('--builder') ? 'task_farm' : args.includes('--live') ? 'task_attack' : 'task_dry';
+  const task = args.includes('--walls') ? 'task_walls' : args.includes('--buildings') ? 'task_buildings' : args.includes('--until-full') || args.includes('--home') || args.includes('--builder') ? 'task_farm' : args.includes('--live') ? 'task_attack' : 'task_dry';
   $('current-task').textContent = args.length ? t(task) : '—';
   $('start').querySelector('[data-i18n]').textContent = t(running ? 'restart_run' : 'start');
   const villageIndex = args.indexOf('--walls');
-  const target = villageIndex >= 0 ? args[villageIndex + 1] : args.includes('--until-full') ? 'both' : args.includes('--home') && !args.includes('--builder') ? 'home' : args.includes('--builder') && !args.includes('--home') ? 'builder' : args.includes('--mode') ? args[args.indexOf('--mode') + 1] : 'both';
+  const target = villageIndex >= 0 ? args[villageIndex + 1] : args.includes('--buildings') ? 'home' : args.includes('--until-full') ? 'both' : args.includes('--home') && !args.includes('--builder') ? 'home' : args.includes('--builder') && !args.includes('--home') ? 'builder' : args.includes('--mode') ? args[args.indexOf('--mode') + 1] : 'both';
   $('task-village').textContent = running ? (target === 'home' ? t('home_village') : target === 'builder' ? t('builder_village') : `${t('home_village')} + ${t('builder_village')}`) : t('metric_task_note');
   const index = args.indexOf('--max-recoveries');
   const budget = index >= 0 ? args[index+1] : '20';
@@ -664,7 +669,7 @@ function updateRunMetrics() {
   for (const row of $('log').children) {
     const match = row.textContent.match(/(?:recovery|pemulihan) (\d+)\/(\d+)/i);
     if (match) recovery = Number(match[1]);
-    if (/(?:Attack finished|Serangan selesai|Wall upgraded|Tembok di-upgrade)/i.test(row.textContent)) recovery = 0;
+    if (/(?:Attack finished|Serangan selesai|Wall upgraded|Tembok di-upgrade|Building upgraded|Bangunan di-upgrade)/i.test(row.textContent)) recovery = 0;
   }
   $('recovery-value').textContent = running ? `${recovery} / ${budget}` : '—';
 }
@@ -733,6 +738,8 @@ function syncVillageControls() {
     if (enabled && !inputs.some(input => input.checked)) inputs[0].setCustomValidity(t('choose_resource'));
   }
   for (const label of form.querySelectorAll('.resource-village-label')) label.hidden = target !== 'both';
+  // Buildings are upgraded in the Home Village only and never attack, so village and loot choices do not apply.
+  form.querySelector('.target-section').hidden = task === 'buildings';
   form.querySelector('.first-village').hidden = target !== 'both' || !['farm','walls'].includes(task);
   const minimum = $('minimum-fields');
   minimum.hidden = target === 'builder' || task === 'dry';
@@ -785,6 +792,7 @@ class DemoLink {
   constructor() {
     this.state = {state:'running', args:['--walls','home','--first','builder','--max-recoveries','20','--live'], host:'LDPlayer 01', since:Date.now()/1000-1147};
     this.minimum = {gold:1000000,elixir:1000000,dark:0};
+    this.buildings = {targets:[{id:'archer_tower',name:'Archer Tower',level:8},{id:'spring_trap',name:'Spring Trap',level:null}],keep_builders:1};
     this.discord = {configured:false,enabled:false,ping_id:'',events:['ended','recovery','summary'],interval:30,status:'Not connected'};
   }
   async send(body) {
@@ -802,6 +810,7 @@ class DemoLink {
     else if (action === 'set_minimum') {this.minimum=args.minimum;code='minimum_saved';}
     else if (action === 'set_setup') code='setup_saved';
     else if (action === 'set_language') code='language_saved';
+    else if (action === 'set_buildings') {this.buildings=args.buildings;code='buildings_saved';}
     else if (action === 'detect_setup') {code='setup_detected';data={folders:['Demo LDPlayer installation'],instances:[{index:0,name:'Demo device',running:true}],resolution:[1280,720],problems:[]};}
     else if (action === 'open_coc') code='coc_opened';
     else if (action === 'close_coc') {this.state.state='idle';code='coc_closed';}
@@ -809,7 +818,7 @@ class DemoLink {
     else if (action === 'restart_ld') {this.state.state='idle';code='ld_restarted';}
     else if (action === 'fit_display' || action === 'restore_display') {this.state.state='idle';code=action==='fit_display'?'display_ok':'display_unchanged';data=this.display();}
     else if (action === 'scan_buildings') {code='buildings_scanned';data={rows:DEMO_BUILDINGS};}
-    if (SETTINGS_ANSWERS.includes(code)) data={minimum:this.minimum,setup:{adb:'C:\\LDPlayer\\adb.exe',ldconsole:'C:\\LDPlayer\\ldconsole.exe',serial:'emulator-5554',ld_index:0,touch_device:'/dev/input/event4'},language:document.documentElement.lang,display:this.display()};
+    if (SETTINGS_ANSWERS.includes(code)) data={minimum:this.minimum,setup:{adb:'C:\\LDPlayer\\adb.exe',ldconsole:'C:\\LDPlayer\\ldconsole.exe',serial:'emulator-5554',ld_index:0,touch_device:'/dev/input/event4'},language:document.documentElement.lang,display:this.display(),buildings:this.buildings};
     return {ok:true,code,state:this.state,data};
   }
   display() {return {current:{width:1280,height:720,dpi:240},target:{width:1280,height:720,dpi:240},saved:false};}

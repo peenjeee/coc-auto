@@ -2222,6 +2222,45 @@
       ],
       "overrides": [
         "build_list",
+        "wall_selected",
+        "building_confirm"
+      ],
+      "actions": {
+        "confirm": [
+          896,
+          628
+        ],
+        "close": [
+          1131,
+          56
+        ]
+      }
+    },
+    "building_confirm": {
+      "anchors": [
+        {
+          "roi": [
+            1104,
+            30,
+            56,
+            54
+          ],
+          "file": "calibration/building_confirm-close-6fc60c22b47f410db7fcd11cf9fdca7c.png",
+          "margin": 8
+        },
+        {
+          "roi": [
+            1022,
+            592,
+            108,
+            18
+          ],
+          "file": "calibration/building_confirm-time-label-d3e2e39daf164582b3a667ce50dd4db7.png",
+          "margin": 8
+        }
+      ],
+      "overrides": [
+        "build_list",
         "wall_selected"
       ],
       "actions": {
@@ -3211,6 +3250,17 @@
           44
         ]
       }
+    }
+  },
+  "building_upgrade": {
+    "free_builders": [
+      1130,
+      540,
+      70,
+      30
+    ],
+    "icons": {
+      "dark": "calibration/building-icon-dark-470a6c55fee24cc092922d026ece3f0c.png"
     }
   },
   "remote": {

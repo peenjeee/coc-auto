@@ -47,7 +47,7 @@ ACTIONS = {
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',), 'gold_pass': ('close',),
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
-    'wall_bulk_confirm': ('confirm', 'close'),
+    'wall_bulk_confirm': ('confirm', 'close'), 'building_confirm': ('confirm', 'close'),
     'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
     'idle': ('reload',), 'builders_busy': ('close',), 'update_offer': ('update',), 'disconnected': ('retry',),
     'other_device': ('reload',), 'home_battle': ('surrender',), 'builder_battle': ('surrender',),
@@ -142,7 +142,8 @@ QUAKE_PER_POINT, QUAKE_MAX_POINTS = 4, 8
 LAUNCH_ATTEMPTS = 4
 # How long a wait sees only unknown frames before it asks whether the game is still in front.
 GAME_CHECK_SECONDS = 10
-MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm', 'wall_bulk_confirm')
+MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm', 'wall_bulk_confirm',
+                'building_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', 'update_offer',
                     'surrender_confirm', 'maintenance', *MENU_SCREENS)
 # The battle clock runs at 1x until its last minute, when the 4x button appears; past two minutes little is saved.
@@ -3848,6 +3849,9 @@ def main() -> int:
     parser.add_argument('--walls', choices=('home', 'builder', 'both'),
                         help=messages.translate('Habiskan gold+elixir yang ada untuk upgrade tembok, farming sampai penuh, ulangi '
                              'sampai semua tembok maksimal; tidak pernah memakai gem'))
+    parser.add_argument('--buildings', action='store_true',
+                        help=messages.translate('Upgrade bangunan Desa Utama yang dipilih di dashboard sampai level '
+                                                'targetnya, menjaga tukang tetap sibuk; tidak pernah memakai gem'))
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
                         help=messages.translate('Dengan --live: batas pemulihan (crash, DC, layar macet) tanpa kemajuan; dihitung ulang '
                              'setelah serangan selesai atau tembok di-upgrade'))
@@ -3920,8 +3924,9 @@ def main() -> int:
         integer(args.wall_every, 0, 1000, 'wall_every')
         until_full = args.until_full or args.builder is not None or args.home is not None
         minutes = args.hours * 60 + args.minutes
-        if minutes and not (args.walls or (until_full and args.live)):
-            raise BotError('--hours/--minutes hanya untuk --until-full/--builder/--home/--walls dengan --live')
+        if minutes and not (args.walls or args.buildings or (until_full and args.live)):
+            raise BotError('--hours/--minutes hanya untuk --until-full/--builder/--home/--walls/--buildings dengan '
+                           '--live')
         if args.max_upgrades and not args.walls:
             raise BotError('--max-upgrades hanya untuk --walls')
         if args.bulk_walls and not args.walls:
@@ -3948,9 +3953,11 @@ def main() -> int:
         config = load_config(args.config)
         if args.walls and until_full:
             raise BotError('--walls tidak bisa digabung dengan --until-full/--builder/--home')
+        if args.buildings and (args.walls or until_full):
+            raise BotError('--buildings tidak bisa digabung dengan --walls/--until-full/--builder/--home')
         walls = wall_order(args.walls, args.first) if args.walls else ()
         goals = parse_goals(config, args.builder, args.home, args.first, args.dark) if until_full else None
-        villages = walls or tuple(goals or ())
+        villages = walls or tuple(goals or ()) or (('home',) if args.buildings else ())
         mode = (villages[0] if len(villages) == 1 else 'both') if villages else args.mode
         validate_config(config, args.config.parent, mode)
         validate_surrender(config, surrender)
@@ -3986,6 +3993,11 @@ def main() -> int:
             validate_walls(config, args.config.parent, walls)
             if args.bulk_walls and 'wall_bulk_confirm' not in config['screens']:
                 raise BotError('--bulk-walls butuh kalibrasi: wall_bulk_confirm')
+        if args.buildings:
+            if not args.live:
+                raise BotError('--buildings butuh --live')
+            import buildings
+            chosen = buildings.validate(config, args.config.parent)
         adb = executable(config.get('adb'), 'ADB')
         # Loot is read with Tesseract only when no digit templates are configured.
         if mode != 'builder' and any(config.get('minimum', {}).values()) and not config.get('digits'):
@@ -4006,6 +4018,9 @@ def main() -> int:
             runner.recover()
         if walls:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
+        elif args.buildings:
+            runner.run_until_full_resilient(args.searches, args.max_recoveries,
+                                            job=lambda _: buildings.run(runner, chosen))
         elif until_full and args.live:
             runner.run_until_full_resilient(args.searches, args.max_recoveries)
         elif args.live:
@@ -4051,4 +4066,7 @@ def main() -> int:
 
 
 if __name__ == '__main__':
+    # buildings.py imports this file as bot; run as a script it is __main__, and a second copy would raise errors of
+    # other classes than the ones the recovery here catches.
+    sys.modules.setdefault('bot', sys.modules[__name__])
     raise SystemExit(main())

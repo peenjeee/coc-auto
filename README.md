@@ -12,8 +12,8 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 > [!WARNING]
 > Automating Clash of Clans violates Supercell's Terms of Service. **Your account can be banned.**
 > There is no anti-ban or detection evasion. Use it only on an account you are willing to lose.
-> The bot never buys anything, never spends gems, never upgrades anything but walls (and only with `--walls`),
-> and never logs in for you.
+> The bot never buys anything, never spends gems, never upgrades anything but walls (with `--walls`) and the
+> buildings you picked (with `--buildings`), and never logs in for you.
 
 ---
 
@@ -29,6 +29,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, the "defence layout blocked" warning, the inactivity and "another device" reloads, a lost connection, the game update offer, the Gold Pass offer and Google Play's "Rate this app" sheet are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
 | **Walls** | `--walls` spends stored gold and elixir on walls, cheapest level first, then farms both full and repeats until every wall is maxed. It never spends gems. |
+| **Buildings** | `--buildings` keeps the Home Village builders busy on the buildings picked in the dashboard, first pick first, each up to its target level (or Max), paying only gold, elixir or dark elixir at the price the list shows. It never spends gems. |
 | **Web dashboard** | Live log, a live view of the LDPlayer screen and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, move deploy pins over a real attack screen, and scan the Home Village's builder list for what can still be upgraded. A Stats page (resource gains, attacks, walls, run history) and Discord notifications. Indonesian or English; the switch also sets the bot's terminal language. Installable as an app. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
 | **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. A setup that cannot work (taps that cannot land, ADB debugging off, a loot minimum no opponent meets) stops the run with what to change. |
@@ -312,6 +313,36 @@ number of digits stops the run for good, without any recovery. A count with othe
 as a misread: nothing is tapped and recovery reads it again. In the Home Village it also keeps a gold reserve (`walls.home.gold_reserve`, 200,000) for opponent searches, which cost gold: a gold upgrade that would dip below it is closed and that session continues with elixir. A village needs a
 `walls.<village>` calibration before `--walls` accepts it.
 
+### Upgrading buildings
+
+```bash
+python bot.py --buildings --live
+```
+```bash
+python bot.py --buildings --hours 8 --live
+```
+
+`--buildings` upgrades the Home Village buildings picked under **Device settings → Buildings to upgrade** in the
+dashboard (saved as `buildings` in `config.local.json`: the targets in priority order, each `{"id", "name", "level"}`
+with `level` `null` for Max, and `keep_builders`). Each round it reads the free builders from the village's "1/6"
+counter (`building_upgrade.free_builders`) and the gold, elixir and dark elixir on hand from the resource bars
+(`capacity.home`), then opens the builder list and reads every row like the scan. It takes the first target, in the
+order picked, with a row that is not upgrading now, whose next level does not pass the target level (any level for
+Max) and whose cost is covered by the resource on hand, as long as more builders are free than `keep_builders`
+(for example 1 to leave a builder for walls). A row is matched by its catalog id, or by its name as read for a building
+the catalog does not know. Tapping that row opens the game's upgrade dialog (`building_confirm`, the same dialog as a
+wall's). The confirm button is tapped only when its price equals the row's cost and that price is white (green during
+a sale) beside that row's gold, elixir or dark elixir icon; this is checked again in the very frame the tap follows.
+A gem price never matches, and the dialog's magic item button ("Hammer of Building") is never tapped. Anything else
+closes the dialog with X, logs why, and lets the next target go first until the next wait. After an upgrade the
+free builder count is read again, and `Bangunan di-upgrade: <name> ke level <n>` ("Building upgraded: …") is logged.
+The gem count is read before and after each upgrade, as for walls. When nothing can be done (no builder to spare,
+nothing affordable) it closes the list and waits until the soonest running upgrade in the list is done (the timer
+read in either language: Indonesian `j` is hours, `h` days and `d` seconds), 10 minutes at most, then looks again;
+`--hours`/`--minutes` stop it, in the village. Once every target has passed its level (or left the list) and none is
+upgrading, it stops with exit code 0. It never attacks or farms. The gem offer and "all builders busy" popups are
+closed with X, as for walls.
+
 ### CLI options — `bot.py`
 
 | Option | Default | Description |
@@ -326,7 +357,8 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
 | `--first {builder,home}` | `builder` | Which village to work on first when both are chosen. |
 | `--walls {home,builder,both}` | – | Spend the stored gold and elixir on walls, then farm both full and repeat until every wall is maxed. Never uses gems. Needs `--live`; not with `--until-full`/`--builder`/`--home`. |
-| `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes; hours 0–1000, minutes 0–60,000). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. With `--until-full`/`--builder`/`--home` it needs `--live`. |
+| `--buildings` | off | Upgrade the Home Village buildings picked in the dashboard, first pick first, each up to its target level, leaving `keep_builders` free; waits for builders and stops once every target is reached. Never uses gems. Needs `--live` and a saved pick; not with `--walls`/`--until-full`/`--builder`/`--home`. |
+| `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls`/`--buildings` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes; hours 0–1000, minutes 0–60,000). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. With `--until-full`/`--builder`/`--home` it needs `--live`. |
 | `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded (0–100,000). `0` means no limit. |
 | `--bulk-walls` | off | `--walls` only: upgrade many walls of the picked level with one Oke through "Tingkatkan Lebih Banyak", as many as the resource pays for, instead of one at a time. Both villages. Needs the `wall_bulk_confirm` screen calibrated (bundled). |
 | `--wall-every N` | `0` | `--walls` only: go back to the walls after every N attacks instead of waiting for full storage (0–1000). `0` waits until full. |
@@ -339,7 +371,7 @@ as a misread: nothing is tapped and recovery reads it again. In the Home Village
 | `--stack [home\|builder\|both]` | home | Troops on the one deploy point `D`. Home Village: the default dragon plan. Builder Base: the hero and its ability, then every camp on `D` (full Witches). |
 | `--ring [home\|builder\|both]` | builder | Builder Base: every camp in one go, each on the next spread point (the default). Home Village fast attack: every hero dropped at `D` then each ability, the siege machine, the spells (skeletons over the middle of the base, eight at once, one per finger), then each troop card streaming out of eight fingers held at once on ring pins round the map edge, moving one pin on each second until the card greys out. Without a touch device the troops are tapped instead, exactly the `xN` count read from the card. The Home Village ring needs its ring pins (`home_scout.auto.ring`, set in the deploy editor). A village cannot be given to both `--ring` and `--stack`. |
 | `--quake` | off | Home Village: the spells go four on each quake pin in turn (four earthquakes break the walls there), one per finger with `--ring`, at most the `xN` count read from the card. Needs the quake pins (`home_scout.auto.quake`, set in the deploy editor). |
-| `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) a `--live` run (`--until-full`, `--walls` or `--cycles`) may make without progress (0–1000). The count starts again after every finished attack or upgraded wall. |
+| `--max-recoveries N` | `20` | How many recoveries (restarting LDPlayer or CoC, settling a stalled screen) a `--live` run (`--until-full`, `--walls`, `--buildings` or `--cycles`) may make without progress (0–1000). The count starts again after every finished attack, upgraded wall or upgraded building. |
 | `--live` | off | Allow real taps. Without it the bot only observes. |
 | `--agent` | off | Run no task: show the device's API key and wait for **Start** from the web dashboard. |
 | `--key` | off | Only show this PC's API key and the dashboard addresses, then exit. Nothing is started. |
@@ -487,6 +519,13 @@ does not know is kept as read, under other. Building names are read with Tessera
 templates (`calibration/digits`, the timer letters in `calibration/units`, the badge's small digits in
 `calibration/badge`). The scan is refused while the bot is running, takes about a minute and works from the local and
 the online dashboard. Merges that are still locked (shown last with a padlock) are left out.
+After a scan, tick the rows the **upgrade buildings** task (`--buildings`) should upgrade: the first ticked goes first
+(its number shows beside the name), and each ticked row takes the level to stop at, or stays empty for Max. Running
+upgrades cannot be ticked. **Keep builders free** leaves that many builders for something else, walls for example.
+**Save selection** sends the pick to the device, which checks it (known building ids, walls excluded; levels 1–200;
+0–10 builders) and saves it to `config.local.json` as `buildings`; the saved pick comes back with the settings when
+the dashboard connects, and is listed in order above the scan. It applies at the next Start. The run setup's
+**upgrade buildings** task takes only the time limit and recoveries.
 
 **LDPlayer screen:** shows the instance's resolution and DPI next to the calibration (1280×720, DPI 240). "Fit
 screen" stops the bot, closes LDPlayer, waits for its virtual machine to stop, writes only the resolution, the DPI,
@@ -637,6 +676,7 @@ use a saved screenshot). "Taps" are the points the tool asks for.
 | `python calibrate.py --screen wall_confirm` | Home Village wall upgrade dialog | confirm, close |
 | `python calibrate.py --screen builder_wall_confirm` | Builder Base wall upgrade dialog | confirm, close |
 | `python calibrate.py --screen wall_bulk_confirm` | Bulk upgrade dialog ("Yakin ingin meningkatkan tembok yang dipilih …"), needed by `--bulk-walls` | confirm (Oke), close (Batal) |
+| `python calibrate.py --screen building_confirm` | A building's upgrade dialog, needed by `--buildings` (anchors: its X and the "Upgrade time" label; the wall dialog overrides it) | confirm, close |
 
 The `--counts` values are the units on each troop card, left to right (for example `--counts 11 4` for 11
 dragons and 4 rage spells); with an `auto` card-bar plan they are only used for the first calibration. The wall
@@ -766,7 +806,8 @@ How to change it:
 | A Builder Base stage 1 is won while the surrender dialog is up | The game moves on to stage 2, which can only be given up once it has loaded: Menyerah and Oke are tapped again until the battle has ended (its timer ends it at the latest). |
 | The server connection drops ("Sambungan terputus", or "Kesalahan sambungan" while loading) | Taps "Coba lagi", waiting 10 seconds between tries while the network is still down, and carries on. |
 | A game update is offered ("Pembaruan Tersedia!") | Updates the game: taps the game's update button, then the Play Store's own Update button, in the update dialog or on the game's store page (found by its text, only for Clash of Clans; install buttons and anything else in the store are never tapped), waits up to 30 minutes for the new version to install, opens CoC again and carries on. If the store shows no Update button (not signed in, no space) or the install does not finish, stops with exit code 5 and asks you to update CoC from the Play Store. A dry-run never updates. |
-| All builders are busy when a Builder Base wall is picked ("Semua tukang sibuk!") | Closes the gem offer with X and skips that village's walls; run again once a builder is free. |
+| All builders are busy when a Builder Base wall is picked ("Semua tukang sibuk!") | Closes the gem offer with X and skips that village's walls; run again once a builder is free. With `--buildings` the building is skipped until the next wait. |
+| `--buildings`: a building's upgrade dialog does not show the row's price and resource, or the list moved under the bot | Closes the dialog with X (never confirms), lets the next target go first and tries again after the next wait. A row whose name reads differently when it is about to be tapped is not tapped; the screen is tidied and the list read again. |
 | Searching runs out of gold 3 attacks in a row (no opponent meets the loot `minimum`) | Stops in the village with exit code 6 and asks to lower the minimum, instead of burning the gold it should fill. |
 | A setup the bot cannot work with: LDPlayer's ADB debugging off, a `serial` that is not the `ld_index` instance, a touch node that does not exist or whose range is not the screen size, a 32-bit LDPlayer | Stops at once with exit code 6 and says what to change; restarting would only repeat it. The touch node is checked once per live run, before the first tap. |
 | Any other error | Stops without sending input, so nothing is tapped blindly. |
@@ -795,7 +836,9 @@ dialog, bulk upgrades and their bar layouts, wall rings, `--wall-every`, `--wall
 dashboard link (signed commands, settings, the bot as a child process, the local server, the relay client against a
 fake relay server and against the real `relay_server.py`), Stats and Discord notifications, opponent readiness after
 Next (with real loot-display crops in `fixtures/opponent-readiness/`), the building scan (rows, badges, timers, prices
-and frames lined up, on real list crops in `fixtures/building-list-*.png`), the English terminal messages, the LDPlayer
+and frames lined up, on real list crops in `fixtures/building-list-*.png`), building upgrades (target order, levels,
+Max, affordability, spare builders, timers in both languages, and the upgrade dialog's price and resource guard on real
+dialogs in `fixtures/building-confirm-*.png`), the English terminal messages, the LDPlayer
 screen switch, and LDPlayer detection against fake tool output. They do not replace a live run on a real account.
 
 After editing `messages_en.json`, run `python messages.py` to synchronize the dashboard's catalog. The Python
@@ -815,7 +858,7 @@ relay_server.py        the online relay server the page and the PC meet on
 ldplayer.py            LDPlayer detection and its instance file (screen, ADB debugging, ASTC)
 game_update.py         Play Store Update button and installed game version, for the automatic game update
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
-buildings.py           building scan: reads the builder list (names, counts, level badges, times, costs, sections)
+buildings.py           building scan (names, counts, level badges, times, costs, sections) and --buildings upgrades
 buildings.json         building names in English and Indonesian, with their id and category
 web/                   dashboard page: app.js, deploy pin editor with sample maps (maps/), settings panel, building scan, Stats and Discord panels, own relay client, ID/EN text, app manifest, service worker, icons and its font (fonts/)
 deploy/                service files for hosting the page and the relay on a server (see deploy/README.md)
@@ -830,7 +873,7 @@ test_relay_server.py   relay server protocol tests, with the real relay client
 test_opponent_readiness.py opponent readiness after Next, on real loot-display crops
 test_ldplayer.py       LDPlayer detection tests against fake tool output
 test_device_control.py screen switch tests
-test_buildings.py      building scan tests on real builder-list crops
+test_buildings.py      building scan and upgrade tests on real builder-list and upgrade-dialog crops
 test_messages.py       every terminal message has its English text; translation of the log
 test_dashboard_features.py stats from the log, Discord settings and sender, stats commands
 test_web.mjs           dashboard text in both languages (node --test)
