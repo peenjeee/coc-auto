@@ -51,6 +51,7 @@ ACTIONS = {
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
     'wall_bulk_confirm': ('confirm', 'close'), 'building_confirm': ('confirm', 'close'), 'gear_confirm': ('confirm', 'close'),
     'locked_info': ('go', 'close'), 'upgrade_locked': ('close',), 'goblin_offer': ('close',),
+    'builder_upgrade_confirm': ('close',),
     'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
     'idle': ('reload',), 'out_of_sync': ('reload',), 'builders_busy': ('close',), 'update_offer': ('update',), 'disconnected': ('retry',),
     'other_device': ('reload',), 'home_battle': ('surrender',), 'builder_battle': ('surrender',),
@@ -149,7 +150,7 @@ GAME_CHECK_SECONDS = 10
 # an event); the X is looked for twice, this far apart, and must not have moved.
 UNKNOWN_CLOSE_SECONDS, UNKNOWN_CLOSE_RECHECK, UNKNOWN_CLOSE_DRIFT = 3, 0.5, 6
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm', 'wall_bulk_confirm',
-                'building_confirm', 'gear_confirm', 'locked_info', 'upgrade_locked')
+                'building_confirm', 'gear_confirm', 'locked_info', 'upgrade_locked', 'builder_upgrade_confirm')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', 'update_offer',
                     'surrender_confirm', 'maintenance', 'goblin_offer', *MENU_SCREENS)
 # The battle clock runs at 1x until its last minute, when the 4x button appears; past two minutes little is saved.
@@ -2843,7 +2844,7 @@ class Bot:
                 village = pending[0]
                 continue
             if attack_limit and attacks >= attack_limit:
-                LOG.info('%s serangan selesai; cek tembok lagi', attacks)
+                LOG.info('%s serangan selesai; cek upgrade lagi', attacks)
                 return attacks
             if village == 'home':
                 self.home_attack(searches)
@@ -3897,9 +3898,10 @@ def main() -> int:
                         help=messages.translate('Habiskan gold+elixir yang ada untuk upgrade tembok, farming sampai penuh, ulangi '
                              'sampai semua tembok maksimal; tidak pernah memakai gem'))
     parser.add_argument('--buildings', action='store_true',
-                        help=messages.translate('Upgrade bangunan, riset Lab, hewan dan peralatan Desa Utama yang '
-                                                'dipilih di dashboard sampai level targetnya, menjaga tukang dan lab '
-                                                'tetap sibuk; tidak pernah memakai gem'))
+                        help=messages.translate('Upgrade pilihan dashboard (bangunan, Lab, hewan, peralatan, Desa '
+                                                'Malam dan Lab Bintang) sampai level targetnya; kurang resource: '
+                                                'menyerang di desa itu dulu; tukang sibuk lama: CoC ditutup sampai '
+                                                'ada yang bebas; gem hanya untuk Goblin yang diizinkan'))
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
                         help=messages.translate('Dengan --live: batas pemulihan (crash, DC, layar macet) tanpa kemajuan; dihitung ulang '
                              'setelah serangan selesai atau tembok di-upgrade'))
@@ -4005,7 +4007,15 @@ def main() -> int:
             raise BotError('--buildings tidak bisa digabung dengan --walls/--until-full/--builder/--home')
         walls = wall_order(args.walls, args.first) if args.walls else ()
         goals = parse_goals(config, args.builder, args.home, args.first, args.dark) if until_full else None
-        villages = walls or tuple(goals or ()) or (('home',) if args.buildings else ())
+        if args.buildings:
+            if not args.live:
+                raise BotError('--buildings butuh --live')
+            import buildings
+            import upgrades
+            chosen = buildings.validate(config, args.config.parent)
+        # A --buildings run attacks in the villages of its picks when one is short of resources.
+        villages = walls or tuple(goals or ()) or (tuple(sorted({buildings.LISTS[name][0] for name in buildings.LISTS
+                                                                if chosen[name]['targets']})) if args.buildings else ())
         mode = (villages[0] if len(villages) == 1 else 'both') if villages else args.mode
         validate_config(config, args.config.parent, mode)
         validate_surrender(config, surrender)
@@ -4041,12 +4051,6 @@ def main() -> int:
             validate_walls(config, args.config.parent, walls)
             if args.bulk_walls and 'wall_bulk_confirm' not in config['screens']:
                 raise BotError('--bulk-walls butuh kalibrasi: wall_bulk_confirm')
-        if args.buildings:
-            if not args.live:
-                raise BotError('--buildings butuh --live')
-            import buildings
-            import upgrades
-            chosen = buildings.validate(config, args.config.parent)
         adb = executable(config.get('adb'), 'ADB')
         # Loot is read with Tesseract only when no digit templates are configured.
         if mode != 'builder' and any(config.get('minimum', {}).values()) and not config.get('digits'):
@@ -4069,7 +4073,7 @@ def main() -> int:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif args.buildings:
             runner.run_until_full_resilient(args.searches, args.max_recoveries,
-                                            job=lambda _: upgrades.run(runner, chosen))
+                                            job=lambda searches: upgrades.run(runner, chosen, searches))
         elif until_full and args.live:
             runner.run_until_full_resilient(args.searches, args.max_recoveries)
         elif args.live:

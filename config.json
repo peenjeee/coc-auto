@@ -2365,8 +2365,16 @@
         {"roi": [536, 576, 52, 92], "file": "calibration/upgrade_locked-okay-left.png", "margin": 8},
         {"roi": [692, 576, 52, 92], "file": "calibration/upgrade_locked-okay-right.png", "margin": 8}
       ],
-      "overrides": ["build_list", "wall_selected"],
+      "overrides": ["build_list", "wall_selected", "builder_upgrade_confirm"],
       "actions": {"close": [1053, 43]}
+    },
+    "builder_upgrade_confirm": {
+      "anchors": [
+        {"file": "calibration/builder_upgrade_confirm-close.png", "search": [1010, 8, 120, 85], "scales": [1.0, 1.1, 1.15], "max_score": 0.05},
+        {"file": "calibration/builder_upgrade_confirm-button.png", "search": [480, 540, 660, 170], "scales": [1.0, 1.1, 1.2], "max_score": 0.05}
+      ],
+      "overrides": ["builder", "build_list", "wall_selected"],
+      "actions": {"close": [1064, 47]}
     },
     "goblin_offer": {
       "anchors": [
@@ -2472,7 +2480,8 @@
       ],
       "overrides": [
         "build_list",
-        "wall_selected"
+        "wall_selected",
+        "builder_upgrade_confirm"
       ],
       "actions": {
         "confirm": [

@@ -97,7 +97,8 @@ TASK_OPTIONS = {
     'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', *ATTACK_OPTIONS},
     'attack': {'village', 'cycles', 'searches', *ATTACK_OPTIONS},
     'dry': {'village'},
-    'buildings': {'hours', 'minutes', 'max_recoveries'},
+    # It attacks when a pick is short of resources.
+    'buildings': {'searches', 'hours', 'minutes', 'max_recoveries', *ATTACK_OPTIONS},
 }
 # Deploy editor tab -> the deploy screen it is drawn on and the pins it moves: Home Village spells, its --ring
 # troop and spell pins and --quake pins, Builder Base troop points.

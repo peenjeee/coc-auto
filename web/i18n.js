@@ -614,7 +614,7 @@ Object.assign(TEXT.id, {
 
 Object.assign(TEXT.en, {
   task_buildings: 'upgrade buildings',
-  buildings_pick_hint: 'Tick the rows the "upgrade buildings" task should upgrade: the first ticked goes first. Set the level to stop at, or leave it empty for Max (as long as the building is listed). It pays only gold, elixir or dark elixir at the price the list shows, never gems (except for a Goblin you switch on below). A locked row is worked toward by upgrading the building it waits for.',
+  buildings_pick_hint: 'Tick the rows the "upgrade buildings" task should upgrade: the first ticked goes first. Set the level to stop at, or leave it empty for Max (as long as the building is listed). It pays only gold, elixir or dark elixir at the price the list shows, never gems (except for a Goblin you switch on below). A locked row is worked toward by upgrading the building it waits for. Short of the resource a pick costs, the bot attacks in that village first; with every builder busy for a long while it closes CoC until one is free.',
   buildings_pick: 'upgrade', buildings_target: 'up to level', buildings_max: 'Max',
   buildings_keep: 'keep builders free', buildings_save: 'save selection',
   buildings_picked: 'Picked, in order: {list}', buildings_picked_none: 'Nothing picked yet; scan, then tick rows.',
@@ -625,7 +625,7 @@ Object.assign(TEXT.en, {
 });
 Object.assign(TEXT.id, {
   task_buildings: 'upgrade bangunan',
-  buildings_pick_hint: 'Centang baris yang di-upgrade tugas "upgrade bangunan": yang dicentang pertama dikerjakan dulu. Isi level berhentinya, atau kosongkan untuk Maks (selama bangunan masih ada di daftar). Hanya dibayar gold, elixir atau dark elixir seharga di daftar, tidak pernah gem (kecuali Goblin yang dinyalakan di bawah). Baris terkunci dikerjakan dengan meng-upgrade bangunan yang ditunggunya.',
+  buildings_pick_hint: 'Centang baris yang di-upgrade tugas "upgrade bangunan": yang dicentang pertama dikerjakan dulu. Isi level berhentinya, atau kosongkan untuk Maks (selama bangunan masih ada di daftar). Hanya dibayar gold, elixir atau dark elixir seharga di daftar, tidak pernah gem (kecuali Goblin yang dinyalakan di bawah). Baris terkunci dikerjakan dengan meng-upgrade bangunan yang ditunggunya. Kalau resource pilihan kurang, bot menyerang di desa itu dulu; kalau semua tukang sibuk lama, CoC ditutup sampai ada yang bebas.',
   buildings_pick: 'upgrade', buildings_target: 'sampai level', buildings_max: 'Maks',
   buildings_keep: 'sisakan tukang bebas', buildings_save: 'simpan pilihan',
   buildings_picked: 'Dipilih, berurutan: {list}', buildings_picked_none: 'Belum ada yang dipilih; scan, lalu centang baris.',
@@ -655,8 +655,8 @@ Object.assign(TEXT.en, {
   buildings_scan_gear: 'scan hero equipment', buildings_scan_builder: 'scan Builder Base', buildings_scan_star: 'scan Star Laboratory',
   buildings_name_gear: 'equipment', buildings_name_builder: 'building', buildings_name_star: 'research',
   buildings_pick_hint_gear: 'Tick the equipment to upgrade, first ticked first, each up to a level or Max, then save. The "upgrade buildings" task upgrades it whenever the ore on hand covers the cost.',
-  buildings_pick_hint_builder: 'Tick the Builder Base buildings to upgrade, a running upgrade too to go on once it is done, first ticked first, each up to a level or Max, then save. The bot does not upgrade them by itself yet; the pick is kept on the device for when it does.',
-  buildings_pick_hint_star: 'Tick the Star Laboratory research to do, first ticked first, each up to a level or Max, then save. The bot does not research by itself yet; the pick is kept on the device for when it does.',
+  buildings_pick_hint_builder: 'Tick the Builder Base buildings to upgrade, a running upgrade too to go on once it is done, first ticked first, each up to a level or Max, then save. The "upgrade buildings" task upgrades them whenever a Builder Base builder is free.',
+  buildings_pick_hint_star: 'Tick the Star Laboratory research to do, a running one too to go on once it is done, first ticked first, each up to a level or Max, then save. The "upgrade buildings" task researches them whenever the Star Laboratory is free.',
   buildings_equipment: 'equipment', buildings_equipped: 'equipped', buildings_unequipped: 'not equipped',
   buildings_ore_shiny: 'shiny ore', buildings_ore_glowy: 'glowy ore', buildings_ore_starry: 'starry ore',
   buildings_instant: 'instant',
@@ -681,8 +681,8 @@ Object.assign(TEXT.id, {
   buildings_scan_gear: 'scan peralatan pahlawan', buildings_scan_builder: 'scan Desa Malam', buildings_scan_star: 'scan Lab Bintang',
   buildings_name_gear: 'peralatan', buildings_name_builder: 'bangunan', buildings_name_star: 'riset',
   buildings_pick_hint_gear: 'Centang peralatan yang ingin di-upgrade, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Tugas "upgrade bangunan" meng-upgrade-nya setiap kali bijih yang ada cukup.',
-  buildings_pick_hint_builder: 'Centang bangunan Desa Malam yang ingin di-upgrade, yang sedang di-upgrade juga bisa supaya dilanjutkan setelah selesai, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Bot belum meng-upgrade-nya sendiri; pilihannya disimpan di perangkat untuk nanti.',
-  buildings_pick_hint_star: 'Centang riset Lab Bintang yang ingin dikerjakan, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Bot belum meriset sendiri; pilihannya disimpan di perangkat untuk nanti.',
+  buildings_pick_hint_builder: 'Centang bangunan Desa Malam yang ingin di-upgrade, yang sedang di-upgrade juga bisa supaya dilanjutkan setelah selesai, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Tugas "upgrade bangunan" meng-upgrade-nya setiap kali ada tukang Desa Malam yang bebas.',
+  buildings_pick_hint_star: 'Centang riset Lab Bintang yang ingin dikerjakan, yang sedang diriset juga bisa supaya dilanjutkan setelah selesai, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Tugas "upgrade bangunan" merisetnya setiap kali Lab Bintang kosong.',
   buildings_equipment: 'peralatan', buildings_equipped: 'dipasang', buildings_unequipped: 'dilepas',
   buildings_ore_shiny: 'bijih kilau', buildings_ore_glowy: 'bijih cahaya', buildings_ore_starry: 'bijih bintang',
   buildings_instant: 'langsung',

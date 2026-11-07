@@ -74,6 +74,24 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(find.call_args.args[6:], (buildings.RESEARCH, buildings.NAME_BAND))
         self.assertTrue(any('Riset di-upgrade: Valkyrie ke level 2' in line for line in self.logs))
 
+    def test_a_builder_base_row_is_confirmed_on_its_button_where_the_dialog_shows_it_and_never_pays_gems(self):
+        rules = {'keep_builders': 0, 'goblin': {'builder': True, 'researcher': True, 'max_gems': 50}}
+        for refusal, confirmed in ((None, True), ('harga di dialog 5, di daftar 150', False)):
+            calls, runner = self.runner()
+            with self.subTest(refusal=refusal), patch.object(buildings, 'find_card', return_value=300), \
+                    patch.object(buildings, 'list_in_front', return_value=True), \
+                    patch.object(buildings, 'builder_refusal', return_value=refusal), \
+                    patch.object(buildings, 'builder_button', return_value=(150, 'gold', [958, 627])), \
+                    patch.object(upgrades, 'back_to_list',
+                                 lambda runner, dialog, gems, name: calls.append(('back', dialog, gems))), \
+                    self.assertLogs('upgrades', 'INFO'):
+                done = upgrades.upgrade(runner, 'star', CONFIG['walls']['builder'], ['frame'], 300,
+                                        row('Cannon Cart', 'cannon_cart'), 'tesseract', {}, rules)
+            self.assertEqual(done, confirmed)
+            self.assertEqual(('confirm', ('builder_upgrade_confirm',), [958, 627]) in calls, confirmed)
+            self.assertEqual(('builder_upgrade_confirm', 'close') in calls, not confirmed)
+            self.assertEqual(calls[-1], ('back', 'builder_upgrade_confirm', 0))
+
     def test_an_equipment_row_is_confirmed_on_the_blacksmith_dialog(self):
         done, calls, find = self.upgrade('gear', [None, None])
         self.assertTrue(done)
@@ -155,7 +173,7 @@ class VisitTests(unittest.TestCase):
     def visit(self, listing, chosen, builders=2, slots=(1, 1), placed=None, done=True, rules=upgrades.RULES_OFF):
         calls, refused = [], set()
         runner = SimpleNamespace(
-            config={'walls': {'home': SPEC}}, poll=0, progress=0, navigate=lambda village: calls.append(village),
+            config={'walls': CONFIG['walls']}, poll=0, progress=0, navigate=lambda village: calls.append(village),
             find_gem_row=lambda spec: None, start_gem_watch=lambda spec: calls.append('gems'),
             open_build_list=lambda village, spec: 'opened', list_indonesian=lambda image: False,
             close_menus=lambda: calls.append('close'), check_gems=lambda spec: calls.append('gems'),
@@ -183,7 +201,7 @@ class VisitTests(unittest.TestCase):
 
     def test_a_lab_target_is_upgraded_on_its_tab_and_counted(self):
         result, calls, _, runner, logs = self.visit('lab', picks(lab=['Valkyrie']))
-        self.assertEqual(result, (True, True, buildings.WAIT_MAX_SECONDS))
+        self.assertEqual(result, (True, True, buildings.WAIT_MAX_SECONDS, None))
         self.assertEqual(calls, ['home', 'gems', ('tab', 1062), ('upgrade', 'lab', 'Valkyrie', 40), ('tab', 978),
                                  'close', 'gems'])
         self.assertEqual(runner.progress, 1)
@@ -234,29 +252,55 @@ class VisitTests(unittest.TestCase):
         self.assertEqual(calls[-1], 'close')
         running = row('Valkyrie', None, None, None, None, 'in_progress')
         result, calls, _, _, _ = self.visit('lab', picks(lab=['Valkyrie']), placed=[(running, 0)])
-        self.assertEqual(result, (False, True, 8 + buildings.WAIT_MARGIN_SECONDS))
+        self.assertEqual(result, (False, True, 8 + buildings.WAIT_MARGIN_SECONDS, None))
         self.assertFalse([call for call in calls if call[0] == 'upgrade'])
+
+    def test_a_target_short_of_its_resource_asks_for_attacks_in_its_village_only_with_room_for_it(self):
+        dear = row('Valkyrie', None, cost=10 ** 9)
+        result, calls, _, _, _ = self.visit('lab', picks(lab=['Valkyrie']), placed=[(dear, 40)])
+        self.assertEqual(result[3], ('home', 'gold'))
+        self.assertFalse([call for call in calls if call[0] == 'upgrade'])
+        # The lab busy: the run waits for it instead.
+        result, _, _, _, _ = self.visit('lab', picks(lab=['Valkyrie']), slots=(0, 1), placed=[(dear, 40)])
+        self.assertIsNone(result[3])
+
+    def test_builder_base_lists_open_on_their_village_and_tab(self):
+        result, calls, _, _, _ = self.visit('star', picks(star=['Valkyrie']), slots=(1, 1))
+        self.assertEqual(calls, ['builder', 'gems', ('tab', 1193), ('upgrade', 'star', 'Valkyrie', 40),
+                                 ('tab', 1021), 'close', 'gems'])
+        # Its builders are counted on the list's tab: none free there, no tap.
+        _, calls, _, _, _ = self.visit('builder', picks(builder=['Valkyrie']), slots=(0, 2))
+        self.assertFalse([call for call in calls if call[0] == 'upgrade'])
+        # A locked Star Laboratory row needs a free Builder Base builder, counted on the same tab bar.
+        locked = {**row('Valkyrie', None, None, None, None, 'locked'), 'time': None}
+        for slots, unlocked in (((1, 3), True), ((0, 3), False)):
+            with self.subTest(slots=slots):
+                _, calls, _, _, _ = self.visit('star', picks(star=['Valkyrie']), slots=slots, placed=[(locked, 590)])
+                self.assertEqual(('unlock', 'star', 'Valkyrie', 590) in calls, unlocked)
 
 
 class RunTests(unittest.TestCase):
     """The --buildings loop over the lists with the visits faked: when it waits, and when it stops."""
 
-    def run_loop(self, chosen, rounds):
+    def run_loop(self, chosen, rounds, farmed=()):
         calls = []
         answers = iter(rounds)
-        runner = SimpleNamespace(config={'tesseract': 'tesseract'}, root=ROOT, poll=1, stop_at=None,
-                                 check_limits=lambda: None, refresh_if_low_memory=lambda: None)
+        runner = SimpleNamespace(config={'tesseract': 'tesseract'}, root=ROOT, poll=1, stop_at=None, live=False,
+                                 check_limits=lambda: None, refresh_if_low_memory=lambda: None,
+                                 run_until_full=lambda searches, limit: calls.append(
+                                     ('farm', searches, limit, runner.goals)) or attacks.pop(0))
+        attacks = list(farmed)
 
         def visit(runner, listing, chosen_list, refused, program, templates, rules):
             calls.append(listing)
-            done, pending, seconds, refuse = next(answers)
+            done, pending, seconds, refuse, *short = next(answers)
             refused.update(refuse)
-            return done, pending, seconds
+            return done, pending, seconds, (short or [None])[0]
         with patch.object(bot, 'executable', return_value='tesseract'), \
                 patch.object(buildings, 'load_templates', return_value={}), patch.object(upgrades, 'visit', visit), \
                 patch.object(upgrades.time, 'sleep', lambda seconds: calls.append(('sleep', seconds))), \
                 self.assertLogs('upgrades', 'INFO') as logs:
-            done = upgrades.run(runner, chosen)
+            done = upgrades.run(runner, chosen, 5)
         return done, calls, logs.output
 
     def test_home_lists_go_in_turn_and_the_run_ends_once_nothing_is_pending(self):
@@ -278,19 +322,42 @@ class RunTests(unittest.TestCase):
                                                 (False, False, 600, ())])
         self.assertEqual((done, calls), (1, ['pets', 'pets', 'pets']))
 
-    def test_builder_base_picks_are_never_opened(self):
-        done, calls, logs = self.run_loop(picks(builder=['Battle Copter'], star=['Cannon Cart']), [])
-        self.assertEqual((done, calls), (0, []))
-        self.assertTrue(any('Desa Malam' in line for line in logs))
-        # With Home Village picks too, only those lists are visited.
-        done, calls, _ = self.run_loop(picks(builder=['Battle Copter'], lab=['Valkyrie']), [(False, False, 600, ())])
-        self.assertEqual(calls, ['lab'])
+    def test_builder_base_lists_are_visited_after_the_home_ones(self):
+        done, calls, _ = self.run_loop(picks(star=['Cannon Cart'], lab=['Valkyrie']),
+                                       [(False, False, 600, ()), (True, False, 600, ())])
+        self.assertEqual((done, calls), (1, ['lab', 'star']))
+
+    def test_a_target_short_of_resources_has_its_village_farmed_before_any_wait(self):
+        chosen = picks(lab=['Valkyrie'], star=['Cannon Cart'])
+        rounds = [(False, True, 3000, (), None), (False, True, 3000, (), ('builder', 'elixir')),
+                  (True, False, 600, ()), (True, False, 600, ())]
+        done, calls, logs = self.run_loop(chosen, rounds, farmed=[3])
+        self.assertEqual(calls, ['lab', 'star', ('farm', 5, upgrades.FARM_ATTACKS, {'builder': {'elixir'}}), 'lab',
+                                 'star'])
+        self.assertEqual(done, 2)
+        # Already full, so nothing was played: the run waits instead of attacking on and on.
+        rounds = [(False, True, 300, (), ('home', 'dark')), (False, False, 600, ())]
+        _, calls, _ = self.run_loop(picks(lab=['Valkyrie']), rounds, farmed=[0])
+        self.assertEqual(calls, ['lab', ('farm', 5, upgrades.FARM_ATTACKS, {'home': {'dark'}}), ('sleep', 300), 'lab'])
 
     def test_the_time_limit_stops_a_wait_short(self):
-        runner = SimpleNamespace(stop_at=upgrades.time.monotonic() + 30, poll=1)
+        runner = SimpleNamespace(stop_at=upgrades.time.monotonic() + 30, poll=1, live=True)
         with patch.object(upgrades.time, 'sleep') as sleep:
             upgrades.pause(runner, 600, 'x')
         self.assertLessEqual(sleep.call_args.args[0], 30)
+
+    def test_a_long_wait_is_spent_with_the_game_closed_and_opens_it_again(self):
+        events = []
+        device = SimpleNamespace(stop_game=lambda: events.append('stop'))
+        runner = SimpleNamespace(stop_at=None, poll=1, live=True, device=device, recover=lambda: events.append('open'))
+        with patch.object(upgrades.time, 'sleep', lambda seconds: events.append(seconds)):
+            upgrades.pause(runner, 2 * 3600, 'x')
+            # Days away: looked at again after the longest closed wait.
+            upgrades.pause(runner, 5 * 86400, 'x')
+            # Short waits keep the game open, at most ten minutes.
+            upgrades.pause(runner, upgrades.CLOSED_WAIT_MIN_SECONDS - 1, 'x')
+        self.assertEqual(events, ['stop', 7200, 'open', 'stop', upgrades.CLOSED_WAIT_MAX_SECONDS, 'open',
+                                  buildings.WAIT_MAX_SECONDS])
 
 
 def frame(name):
@@ -423,6 +490,28 @@ class LockedTests(unittest.TestCase):
                 done, calls = self.unlock(button=button, amounts=AMOUNTS)
                 self.assertFalse(done)
                 self.assertEqual(calls[-1], ('wait', ('home',)))
+
+    def test_a_builder_base_locked_row_has_its_building_upgraded_on_the_builder_base_dialog(self):
+        calls, runner = self.runner()
+        runner.templates = lambda: {}
+        locked = {**row('Power P.E.K.K.A', 'power_pekka', None, None, None, 'locked'), 'time': None}
+        spec = CONFIG['walls']['builder']
+        with patch.object(buildings, 'find_card', return_value=587), \
+                patch.object(buildings, 'list_in_front', return_value=True), \
+                patch.object(upgrades, 'hammer', lambda *args: ('elixir', 1_000_000, [640, 560])), \
+                patch.object(buildings, 'builder_refusal', return_value=None), \
+                patch.object(buildings, 'builder_button', return_value=(1_000_000, 'elixir', [644, 632])), \
+                patch.object(upgrades, 'back_to_list', lambda runner, dialog, gems, name: calls.append(('back', gems))), \
+                patch.object(upgrades, 'reopen', lambda runner, village, spec: calls.append(('reopen', village))), \
+                self.assertLogs('upgrades', 'INFO'):
+            done = upgrades.unlock(runner, 'star', spec, ['frame'], 590, locked, 'tesseract',
+                                   {'keep_builders': 0, 'goblin': {'builder': True, 'researcher': True, 'max_gems': 50}},
+                                   {'gold': 0, 'elixir': 1_000_000})
+        self.assertTrue(done)
+        self.assertEqual(calls[1:], [('wait', ('locked_info',)), ('locked_info', 'go'), ('wait', ('builder',)),
+                                     ('guarded', ('builder',), [640, 560]), ('wait', ('builder_upgrade_confirm',)),
+                                     ('guarded', ('builder_upgrade_confirm',), [644, 632]), ('back', 0),
+                                     ('reopen', 'builder')])
 
     def test_the_hammer_button_is_found_and_its_price_read_on_a_real_frame(self):
         real = bot.Bot(CONFIG, ROOT, None)

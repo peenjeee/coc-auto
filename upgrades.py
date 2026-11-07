@@ -1,11 +1,13 @@
 """--buildings: the rows picked in the dashboard from the builder list's tabs upgraded, each list's first target first,
 up to its level or for as long as the game lists it (Max): Home Village buildings with the builders beyond
-keep_builders, Laboratory research and pets with a free slot, hero equipment with its ore. A price is paid only in
-gold, elixir, dark elixir or ore, as the list showed it; a running upgrade is waited for and then upgraded on. A
-picked locked row, and a building whose dialog points at another one first, is worked toward the way a player does:
-the game's own green button selects the building it waits for, which is upgraded at the price its button shows. The
-only gems ever paid hire the Goblin Builder or Goblin Researcher, each only with its switch on and up to max_gems.
-Builder Base picks are kept but not upgraded (buildings.DIALOGS)."""
+keep_builders, Laboratory research and pets with a free slot, hero equipment with its ore, Builder Base buildings and
+Star Laboratory research with a free builder or slot. A price is paid only in gold, elixir, dark elixir or ore, as the
+list showed it; a running upgrade is waited for and then upgraded on. A picked locked row, and a Home Village building
+whose dialog points at another one first, is worked toward the way a player does: the game's own green button selects
+the building it waits for, which is upgraded at the price its button shows. The only gems ever paid hire the Goblin
+Builder or Goblin Researcher, each only with its switch on and up to max_gems. A target short of the resource it
+costs, with a builder or slot free for it, is farmed for in its own village first; a wait for busy builders that
+runs long is spent with CoC closed."""
 from __future__ import annotations
 
 import logging
@@ -20,11 +22,22 @@ import gear
 import messages
 
 LOG = logging.getLogger(__name__)
-# Free slots on the open list's tab bar ([x, y, w, h] at 1280x720). The builders' counter there does not read, so the
-# Home builders are counted on the village (building_upgrade.free_builders); equipment has no slots, only ore.
-SLOTS = {'lab': [1034, 678, 56, 24], 'pets': [1212, 678, 56, 24]}
+# Free slots on the open list's tab bar ([x, y, w, h] at 1280x720), free/total. The Home builders' counter there does
+# not read, so they are counted on the village (building_upgrade.free_builders); equipment has no slots, only ore.
+# Only the Laboratory and the pet house can show a Goblin Researcher as one more slot.
+SLOTS = {'lab': [1034, 678, 56, 24], 'pets': [1212, 678, 56, 24], 'builder': [993, 678, 56, 24],
+         'star': [1165, 678, 56, 24]}
+RESEARCHER_SLOTS = ('lab', 'pets')
+# Short of the resource a target costs, the run attacks in that target's village this many times, or until it is
+# full, before it looks again; equipment, Builder Base and the Goblins pay nothing in gems either way.
+FARM_ATTACKS = 3
+UNPAID_GEMS = ('gear', 'builder', 'star')
+# A wait at least this long for a builder or slot is spent with CoC closed, at most the longest; a shorter one keeps
+# the game open, at most buildings.WAIT_MAX_SECONDS.
+CLOSED_WAIT_MIN_SECONDS, CLOSED_WAIT_MAX_SECONDS = 15 * 60, 6 * 3600
 DONE = {'buildings': 'Bangunan di-upgrade: %s ke level %s', 'lab': 'Riset di-upgrade: %s ke level %s',
-        'pets': 'Hewan di-upgrade: %s ke level %s', 'gear': 'Peralatan di-upgrade: %s ke level %s'}
+        'pets': 'Hewan di-upgrade: %s ke level %s', 'gear': 'Peralatan di-upgrade: %s ke level %s',
+        'builder': 'Bangunan di-upgrade: %s ke level %s', 'star': 'Riset di-upgrade: %s ke level %s'}
 RULES_OFF = {'keep_builders': 0, 'goblin': buildings.GOBLIN_OFF}
 # The Goblin offers' gem icons, searched in the band of their green buttons ([x, y, w, h]): a large one on the Goblin
 # Researcher's single button, a smaller one on each of the builders' offer's two ("Goblin Builder", "Free a Builder").
@@ -54,8 +67,11 @@ def room(runner: bot.Bot, listing: str, rules: dict, builders: int, builds: bool
     """Whether the open list can start an upgrade: for buildings, or for the building a locked row waits for (builds),
     more builders free than kept, or none free at all with the Goblin Builder allowed; a free Laboratory or pet house
     slot of the house itself (the Goblin Researcher shows as one more slot, "1/2", used only with its switch on);
-    equipment always, its ore being checked on the dialog."""
-    if listing == 'buildings' or builds:
+    equipment always, its ore being checked on the dialog. The Builder Base's builders and Star Laboratory are counted
+    on the tab bar, which shows both whatever the tab."""
+    if builds and buildings.LISTS[listing][0] == 'builder':
+        listing = 'builder'
+    elif listing == 'buildings' or builds:
         return builders > rules['keep_builders'] or (rules['goblin']['builder'] and builders == 0)
     if listing not in SLOTS:
         return True
@@ -65,7 +81,7 @@ def room(runner: bot.Bot, listing: str, rules: dict, builders: int, builds: bool
         free, total = bot.read_fraction(bot.crop(image, SLOTS[listing]), templates)
         if free > total:
             raise bot.BotError('Jumlah slot bebas meragukan')
-        return free if rules['goblin']['researcher'] else free - (total - 1)
+        return free if listing not in RESEARCHER_SLOTS or rules['goblin']['researcher'] else free - (total - 1)
     try:
         return runner.read_stable(read, bot.GEM_READ_SECONDS if runner.poll else 0) > 0
     except bot.BotError as exc:
@@ -166,15 +182,15 @@ def tap_row(runner: bot.Bot, spec: dict, y: int) -> None:
         runner.device.tap_many([[spec['row']['tap_x'], y + buildings.NAME_CENTRE]])
 
 
-def settle(runner: bot.Bot, dialog: str, problem, gems: int, name: str) -> bool:
+def settle(runner: bot.Bot, dialog: str, problem, gems: int, name: str, button=None) -> bool:
     """Confirm the open upgrade dialog only while problem finds nothing wrong, in a still frame and again in the very
-    frame the tap follows; otherwise close it with X. Then wait for the list or the village again (back_to_list).
-    False when it was closed unconfirmed."""
+    frame the tap follows, on its calibrated confirm or where button finds it in that frame; otherwise close it with
+    X. Then wait for the list or the village again (back_to_list). False when it was closed unconfirmed."""
     def confirm(frame: np.ndarray) -> list:
         again = problem(frame)
         if again:
             raise bot.TargetMissing(again)
-        return runner.config['screens'][dialog]['actions']['confirm']
+        return button(frame) if button else runner.config['screens'][dialog]['actions']['confirm']
     reason = problem(runner.wait_still(bot.WALL_LIST_SETTLE_SECONDS if runner.poll else 0))
     if reason is None:
         try:
@@ -186,8 +202,15 @@ def settle(runner: bot.Bot, dialog: str, problem, gems: int, name: str) -> bool:
         runner.action(dialog, 'close')
     if back_to_list(runner, dialog, gems if reason is None else 0, name) == dialog:
         # Freed for gems, the builder still has to be given the upgrade: checked and confirmed as before, unpaid.
-        return settle(runner, dialog, problem, 0, name)
+        return settle(runner, dialog, problem, 0, name, button)
     return reason is None
+
+
+def builder_checks(templates: dict, expected: dict) -> tuple:
+    """(problem, button) for settle on a Builder Base upgrade dialog asking expected's cost and currency: its price
+    button sits where the dialog's layout puts it, found again in the frame the tap follows."""
+    return (lambda frame: buildings.builder_refusal(frame, templates, expected),
+            lambda frame: buildings.builder_button(frame, templates)[2])
 
 
 def note_go(image: np.ndarray) -> list | None:
@@ -227,9 +250,10 @@ def hammer(runner: bot.Bot, image: np.ndarray, spec: dict) -> tuple:
 
 def prerequisite(runner: bot.Bot, village: str, spec: dict, amounts: dict, gems: int, name: str) -> bool:
     """After the game's green button: the building it selected on the village upgraded through its hammer button at
-    the price that button shows, covered by the resource on hand, on its own upgrade dialog confirmed like a row's.
-    False, with nothing paid, when any of it is not so."""
-    runner.wait({village}, {'locked_info', 'building_confirm', 'build_list'}, bot.WALL_TAP_SECONDS)
+    the price that button shows, covered by the resource on hand, on its own upgrade dialog confirmed like a row's
+    (the Builder Base's own dialog there, no Goblin). False, with nothing paid, when any of it is not so."""
+    dialog = 'building_confirm' if village == 'home' else buildings.DIALOGS['builder']
+    runner.wait({village}, {'locked_info', dialog, 'build_list'}, bot.WALL_TAP_SECONDS)
     try:
         resource, price, _ = runner.read_until(lambda image: hammer(runner, image, spec),
                                                bot.WALL_PRICE_SECONDS if runner.poll else 0)
@@ -245,10 +269,14 @@ def prerequisite(runner: bot.Bot, village: str, spec: dict, amounts: dict, gems:
     except bot.TargetMissing as exc:
         LOG.warning('Bangunan syarat %s tidak di-upgrade (%s)', name, exc)
         return False
-    runner.wait({'building_confirm'}, {village}, bot.WALL_TAP_SECONDS)
+    runner.wait({dialog}, {village}, bot.WALL_TAP_SECONDS)
     expected = {'cost': price, 'currency': resource}
-    done = settle(runner, 'building_confirm',
-                  lambda frame: blocked(frame) or buildings.refusal(runner, frame, expected), gems, name)
+    if village == 'home':
+        done = settle(runner, dialog, lambda frame: blocked(frame) or buildings.refusal(runner, frame, expected), gems,
+                      name)
+    else:
+        check, button = builder_checks(runner.templates(), expected)
+        done = settle(runner, dialog, check, 0, name, button)
     if done:
         LOG.info('Bangunan di-upgrade untuk membuka %s', name)
     return done
@@ -364,7 +392,9 @@ def upgrade(runner: bot.Bot, listing: str, spec: dict, frames: list, place: int,
         if dialog == 'gear_confirm':
             return gear.refusal(frame, row, digits)
         return blocked(frame) or buildings.refusal(runner, frame, row)
-    done = settle(runner, dialog, problem, 0 if listing == 'gear' else goblin_gems(rules, builds), row['name'])
+    check, button = builder_checks(digits, row) if dialog == buildings.DIALOGS['builder'] else (problem, None)
+    done = settle(runner, dialog, check, 0 if listing in UNPAID_GEMS else goblin_gems(rules, builds), row['name'],
+                  button)
     if done:
         LOG.info(DONE[listing], row['name'], row['next_level'])
     return done
@@ -383,17 +413,18 @@ def unlock(runner: bot.Bot, listing: str, spec: dict, frames: list, place: int, 
 def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: str, templates: dict,
           rules: dict = RULES_OFF) -> tuple:
     """One look at a list: (whether a row was upgraded, whether a target still has something left, seconds until the
-    list's soonest running upgrade is done). The list is opened on its tab, read whole, at most one row tapped, and
+    list's soonest running upgrade is done, (village, resource) when its first target is short of that resource with
+    a builder or slot free for it, else None). The list is opened on its tab, read whole, at most one row tapped, and
     closed from the builders tab again."""
     village, tab, path = buildings.LISTS[listing]
     spec = runner.config['walls'][village]
     runner.navigate(village)
     runner.find_gem_row(spec)
     runner.start_gem_watch(spec)
-    builders, amounts = buildings.village(runner)
+    builders, amounts = buildings.village(runner, village)
     image = runner.open_build_list(village, spec)
     indonesian = runner.list_indonesian(image)
-    first, done, builds = buildings.BUILDERS_TAB[village], False, listing == 'buildings'
+    first, done, builds, short = buildings.BUILDERS_TAB[village], False, listing == 'buildings', None
     try:
         if tab != first:
             image = buildings.show_tab(runner, tab)
@@ -403,6 +434,10 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
         choice, pending = buildings.pick(placed, chosen['targets'], amounts, refused)
         locked = choice is not None and choice[0]['section'] == 'locked'
         builds = builds or locked
+        if choice is None and pending:
+            resource = buildings.shortfall(placed, chosen['targets'], amounts, refused)
+            if resource in amounts and room(runner, listing, rules, builders):
+                short = (village, resource)
         if choice is not None and room(runner, listing, rules, builders, locked):
             row, place = choice
             try:
@@ -427,44 +462,65 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
             if after >= builders:
                 LOG.warning('Tukang bebas tidak berkurang setelah upgrade %s (%s -> %s); cek game', row['name'],
                             builders, after)
-    return done, pending, buildings.pause_seconds([item for item, _ in placed], indonesian)
+    return done, pending, buildings.pause_seconds([item for item, _ in placed], indonesian), short
 
 
 def pause(runner: bot.Bot, seconds_left: int, reason: str) -> None:
+    """Wait for the soonest running upgrade: with CoC closed when that is at least CLOSED_WAIT_MIN_SECONDS away (at
+    most CLOSED_WAIT_MAX_SECONDS, then the lists are read again), opened again afterwards on the village; otherwise
+    with the game open, at most buildings.WAIT_MAX_SECONDS. The time limit cuts either short."""
+    seconds_left = min(seconds_left, CLOSED_WAIT_MAX_SECONDS)
     if runner.stop_at is not None:
         seconds_left = max(0, min(seconds_left, round(runner.stop_at - time.monotonic())))
+    closed = runner.live and seconds_left >= CLOSED_WAIT_MIN_SECONDS
+    if not closed:
+        seconds_left = min(seconds_left, buildings.WAIT_MAX_SECONDS)
     LOG.info('Menunggu %s detik: %s', seconds_left, reason)
+    if closed:
+        LOG.info('CoC ditutup selama menunggu; dibuka lagi setelah %s detik', seconds_left)
+        runner.device.stop_game()
     time.sleep(seconds_left if runner.poll else 0)
+    if closed:
+        runner.recover()
 
 
-def run(runner: bot.Bot, chosen: dict) -> int:
+def farm(runner: bot.Bot, village: str, resource: str, searches: int) -> bool:
+    """Attack in the village a target is short of resource in, FARM_ATTACKS times or until that resource is full;
+    whether any attack was played (none: already full, so the target costs more than it can hold for now)."""
+    LOG.info('%s di %s kurang untuk upgrade; menyerang dulu', resource, village)
+    runner.goals = {village: {resource}}
+    return runner.run_until_full(searches, FARM_ATTACKS) > 0
+
+
+def run(runner: bot.Bot, chosen: dict, searches: int = 0) -> int:
     """--buildings: look at every list with targets in turn (buildings.validate's pick, a LISTS key each) until each
     target reaches its level or leaves its list; the number upgraded. A round that upgraded or refused something is
-    followed by the next at once, so the next target goes first; otherwise the run waits for the soonest running
-    upgrade, at most buildings.WAIT_MAX_SECONDS."""
-    kept = [listing for listing in buildings.LISTS if listing not in buildings.DIALOGS and chosen[listing]['targets']]
-    if kept:
-        LOG.warning('Pilihan %s tidak di-upgrade: dialog upgrade Desa Malam belum dikenali', ', '.join(kept))
-    lists = [listing for listing in buildings.LISTS if listing in buildings.DIALOGS and chosen[listing]['targets']]
+    followed by the next at once, so the next target goes first. Otherwise a target short of resources has its village
+    farmed (searches as --searches), or the run waits for the soonest running upgrade (pause)."""
+    lists = [listing for listing in buildings.LISTS if chosen[listing]['targets']]
     program = bot.executable(runner.config.get('tesseract'), 'Tesseract')
     templates = buildings.load_templates(runner.root, runner.config)
     rules = {'keep_builders': chosen['buildings']['keep_builders'],
              'goblin': buildings.goblin(runner.config.get('goblin', buildings.GOBLIN_OFF))}
     refused, upgraded = set(), 0
     while lists:
-        tried, before, waits, left = len(refused), upgraded, [], []
+        tried, before, waits, left, shorts = len(refused), upgraded, [], [], []
         for listing in lists:
             runner.check_limits()
             runner.refresh_if_low_memory()
-            done, pending, seconds = visit(runner, listing, chosen[listing], refused, program, templates, rules)
+            done, pending, seconds, short = visit(runner, listing, chosen[listing], refused, program, templates,
+                                                  rules)
             upgraded += done
             if pending:
                 left.append(listing)
                 waits.append(seconds)
+            if short:
+                shorts.append(short)
         # A list whose targets are all reached stays so: levels only go up.
         lists = left
         if lists and upgraded == before and len(refused) == tried:
-            pause(runner, min(waits), messages.translate('belum ada pilihan yang bisa di-upgrade sekarang'))
+            if not (shorts and farm(runner, *shorts[0], searches)):
+                pause(runner, min(waits), messages.translate('belum ada pilihan yang bisa di-upgrade sekarang'))
             # A dialog that did not match is tried again after the wait; meanwhile the next target went first.
             refused.clear()
     LOG.info('Semua pilihan sudah mencapai target (%s upgrade); selesai', upgraded)

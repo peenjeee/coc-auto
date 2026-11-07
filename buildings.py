@@ -33,12 +33,17 @@ LISTS = {'buildings': ('home', 978, CATALOG), 'lab': ('home', 1062, RESEARCH), '
 BUILDERS_TAB = {'home': 978, 'builder': 1021}
 TAB_Y = 690
 # Upgrade dialogs a row opens over the list.
-ROW_DIALOGS = ('building_confirm', 'gear_confirm')
-# The dialog a row of each list opens, for the lists --buildings upgrades. A Builder Base row opens a dialog of
-# another layout that no calibration knows (a Star Laboratory row can open the laboratory itself), so those picks are
-# kept but never tapped.
+ROW_DIALOGS = ('building_confirm', 'gear_confirm', 'builder_upgrade_confirm')
+# The dialog a row of each list opens, for --buildings.
 DIALOGS = {'buildings': 'building_confirm', 'lab': 'building_confirm', 'gear': 'gear_confirm',
-           'pets': 'building_confirm'}
+           'pets': 'building_confirm', 'builder': 'builder_upgrade_confirm', 'star': 'builder_upgrade_confirm'}
+# A Builder Base upgrade dialog has its one green price button where its layout puts it: centred and larger for a
+# building, at the bottom right for a hero or a Star Laboratory upgrade. It is found in this band ([x, y, w, h]) as
+# the largest green patch; the price is white beside the resource's icon, told by colour: Builder Gold yellow,
+# Builder Elixir purple (seen: 1900 and 1000 pixels of its own colour, none of the other). A button smaller than
+# BUTTON_MIN_PIXELS green is no price button.
+BUILDER_BUTTONS, BUTTON_MIN_PIXELS, ICON_MIN_SHARE, ICON_OTHER_SHARE = [480, 540, 660, 170], 6000, 0.03, 0.005
+BUILDER_ICONS = {'gold': ((12, 28), 120, 120), 'elixir': ((125, 160), 80, 80)}
 # Tesseract reads the small capitals' S and I as digits ("L.A.S.5.1").
 OCR_DIGITS = str.maketrans('51', 'si')
 UNITS, BADGE_DIGITS = 'calibration/units', 'calibration/badge'
@@ -90,8 +95,8 @@ COUNT = re.compile(r'^(.*?)\s*[xX×]\s*(\d{1,3})$')
 CURRENCIES = ('gold', 'elixir', 'dark')
 # Timer letters: in Indonesian 'j' (jam) is hours, 'h' (hari) days and 'd' (detik) seconds.
 TIME_UNITS = {False: {'d': 86_400, 'h': 3600, 'm': 60, 's': 1}, True: {'h': 86_400, 'j': 3600, 'm': 60, 'd': 1}}
-# With nothing to upgrade the run looks again when the soonest running upgrade is done, a little after, at the latest
-# after the maximum.
+# With nothing to upgrade the run looks again when the soonest running upgrade is done, a little after; with the game
+# open at the latest after the maximum (upgrades.pause).
 WAIT_MAX_SECONDS, WAIT_MARGIN_SECONDS = 600, 5
 MAX_TARGETS, MAX_LEVEL, MAX_KEEP_BUILDERS, NAME_MAX = 100, 200, 10, 40
 GOBLIN_OFF, MAX_GOBLIN_GEMS = {'builder': False, 'researcher': False, 'max_gems': 0}, 1000
@@ -567,8 +572,8 @@ def goblin(value: object) -> dict:
 
 def validate(config: dict, root: Path) -> dict:
     """--buildings: the wall calibration it shares (builder list, price and icon on the upgrade dialog's button, gem
-    bars), its own (free builder counter, dark elixir icon, upgrade dialog) and every list's pick (a LISTS key each),
-    with at least one target in a list it upgrades (DIALOGS)."""
+    bars), its own (free builder counter, dark elixir icon, upgrade dialog), the Builder Base's when it has picks
+    there, and every list's pick (a LISTS key each), with at least one target."""
     bot.validate_walls(config, root, ('home',))
     upgrade = config.get('building_upgrade')
     if not isinstance(upgrade, dict) or 'building_confirm' not in config['screens']:
@@ -584,9 +589,14 @@ def validate(config: dict, root: Path) -> dict:
     empty = {listing: {'targets': []} for listing in LISTS}
     empty['buildings']['keep_builders'] = 0
     chosen = {listing: selection(config.get(listing, empty[listing]), listing) for listing in LISTS}
-    if not any(chosen[listing]['targets'] for listing in DIALOGS):
-        raise bot.BotError('Belum ada bangunan, riset, hewan atau peralatan Desa Utama dipilih; pilih di dashboard '
-                           '(Upgrade) lalu Simpan')
+    if not any(chosen[listing]['targets'] for listing in LISTS):
+        raise bot.BotError('Belum ada pilihan upgrade; pilih di dashboard (Upgrade) lalu Simpan')
+    if any(chosen[listing]['targets'] for listing in LISTS if LISTS[listing][0] == 'builder'):
+        bot.validate_walls(config, root, ('builder',))
+        if 'builder_upgrade_confirm' not in config['screens'] or \
+                not {'gold', 'elixir'} <= set(config.get('capacity', {}).get('builder', {})):
+            raise bot.BotError('Upgrade Desa Malam butuh kalibrasi: builder_upgrade_confirm dan capacity builder '
+                               'gold dan elixir')
     return chosen
 
 
@@ -605,7 +615,8 @@ def payable(row: dict, amounts: dict) -> bool:
     there every ore cost need only be read: the dialog shows an amount the ore on hand does not cover in red."""
     if 'costs' in row:
         return bool(row['costs']) and None not in row['costs'].values()
-    return row['cost'] is not None and row['currency'] in CURRENCIES and row['cost'] <= amounts[row['currency']]
+    # The Builder Base has no dark elixir: a row read as dark there is never payable.
+    return row['cost'] is not None and row['currency'] in CURRENCIES and row['cost'] <= amounts.get(row['currency'], 0)
 
 
 def pick(placed: list, targets: list, amounts: dict, refused: set = frozenset()) -> tuple:
@@ -638,10 +649,19 @@ def pick(placed: list, targets: list, amounts: dict, refused: set = frozenset())
 
 
 def pause_seconds(rows: list, indonesian: bool) -> int:
-    """Until the soonest running upgrade is done, at most WAIT_MAX_SECONDS."""
+    """Until the soonest running upgrade is done, a little after; WAIT_MAX_SECONDS when none is running."""
     timers = [seconds(row['time'], indonesian) for row in rows if row['section'] == 'in_progress']
     timers = [timer for timer in timers if timer is not None]
-    return min(WAIT_MAX_SECONDS, min(timers) + WAIT_MARGIN_SECONDS) if timers else WAIT_MAX_SECONDS
+    return min(timers) + WAIT_MARGIN_SECONDS if timers else WAIT_MAX_SECONDS
+
+
+def shortfall(placed: list, targets: list, amounts: dict, refused: set = frozenset()) -> str | None:
+    """The resource pick would pay its row with now if the village had enough of it: the reason nothing is picked
+    when that row's price is read but not covered. None for a locked row or equipment, whose price is not on hand."""
+    rich, _ = pick(placed, targets, dict.fromkeys(CURRENCIES, float('inf')), refused)
+    if rich is None or rich[0]['section'] == 'locked' or 'costs' in rich[0]:
+        return None
+    return rich[0]['currency']
 
 
 def dialog_spec(config: dict) -> dict:
@@ -666,24 +686,76 @@ def refusal(runner: bot.Bot, image: np.ndarray, row: dict) -> str | None:
     return None
 
 
-def village(runner: bot.Bot) -> tuple[int, dict]:
-    """Free builders and the gold, elixir and dark elixir on hand, from the Home Village once two frames agree; an
-    open builder list would push the resource bars aside."""
-    templates, bars = runner.templates(), runner.config['capacity']['home']
+def builder_button(image: np.ndarray, templates: dict) -> tuple:
+    """(price, resource, tap) of a Builder Base upgrade dialog's green button: the price None when it does not read
+    white and whole, the resource None unless the icon is all Builder Gold or all Builder Elixir colour; None when
+    there is no such button."""
+    left, top, _, _ = BUILDER_BUTTONS
+    hsv = cv2.cvtColor(bot.crop(image, BUILDER_BUTTONS), cv2.COLOR_BGR2HSV)
+    green = ((hsv[..., 0] >= 30) & (hsv[..., 0] <= 50) & (hsv[..., 1] > 120) & (hsv[..., 2] > 150)).astype(np.uint8)
+    count, _, stats, _ = cv2.connectedComponentsWithStats(green)
+    if count < 2:
+        return None
+    best = max(range(1, count), key=lambda index: stats[index, cv2.CC_STAT_AREA])
+    x, y, w, h, area = (int(value) for value in stats[best])
+    if area < BUTTON_MIN_PIXELS:
+        return None
+    x, y = left + x, top + y
+    button = cv2.cvtColor(image[y:y + h, x:x + w], cv2.COLOR_BGR2HSV)
+    shares, columns = {}, {}
+    for resource, ((low, high), saturation, value) in BUILDER_ICONS.items():
+        mask = ((button[..., 0] >= low) & (button[..., 0] <= high) & (button[..., 1] > saturation)
+                & (button[..., 2] > value))
+        shares[resource] = mask.sum() / mask.size
+        columns[resource] = np.nonzero(mask.any(axis=0))[0]
+    found = [resource for resource, share in shares.items() if share >= ICON_MIN_SHARE]
+    resource = found[0] if len(found) == 1 and all(
+        share <= ICON_OTHER_SHARE for other, share in shares.items() if other != found[0]) else None
+    price = None
+    if resource is not None:
+        # The digits end just left of the icon; the button's rim and shine above and below are left out.
+        digits = image[y + h // 5:y + h * 4 // 5, x + 6:x + int(columns[resource][0]) - 2]
+        try:
+            price = bot.read_trailing_number(digits, templates, bot.FRACTION_MIN_SCORE)
+        except bot.BotError:
+            price = None
+    return price, resource, [x + w // 2, y + h // 2]
+
+
+def builder_refusal(image: np.ndarray, templates: dict, row: dict) -> str | None:
+    """Why a Builder Base upgrade dialog must not be confirmed; None only when its green button shows the row's cost,
+    white, beside the row's resource icon. A gem price never has a Builder Gold or Builder Elixir icon."""
+    found = builder_button(image, templates)
+    if found is None:
+        return messages.translate('tombol harga tidak terlihat')
+    price, resource, _ = found
+    if resource != row['currency']:
+        return messages.translate(f'ikon harga {resource}, di daftar {row["currency"]}')
+    if price != row['cost']:
+        return messages.translate(f'harga di dialog {price}, di daftar {row["cost"]}')
+    return None
+
+
+def village(runner: bot.Bot, name: str = 'home') -> tuple[int, dict]:
+    """Free builders and the resources on hand once two frames agree, read on the village itself (an open builder
+    list would push the resource bars aside): the Home Village's builders, gold, elixir and dark elixir; the Builder
+    Base's gold and elixir, its builders being counted on the list's tab instead (0 here)."""
+    templates, bars = runner.templates(), runner.config['capacity'][name]
+    keys = CURRENCIES if name == 'home' else ('gold', 'elixir')
     region = runner.config['building_upgrade']['free_builders']
 
     def read(image: np.ndarray) -> tuple:
-        free, total = bot.read_fraction(bot.crop(image, region), templates)
+        free, total = bot.read_fraction(bot.crop(image, region), templates) if name == 'home' else (0, 0)
         if free > total:
             raise bot.BotError('Jumlah tukang bebas meragukan')
         return free, tuple(bot.read_number(bot.crop(image, bars[key]['bar']), templates, bot.FRACTION_MIN_SCORE)
-                           for key in CURRENCIES)
-    runner.wait({'home'}, set(), OPEN_SECONDS)
+                           for key in keys)
+    runner.wait({name}, set(), OPEN_SECONDS)
     try:
         free, amounts = runner.read_stable(read, bot.GEM_READ_SECONDS if runner.poll else 0)
     except bot.BotError as exc:
         raise bot.WaitTimeout(f'Tukang bebas/resource desa tidak terbaca ({exc}); tidak ada upgrade') from exc
-    return free, dict(zip(CURRENCIES, amounts))
+    return free, dict(zip(keys, amounts))
 
 
 def find_card(runner: bot.Bot, spec: dict, frames: list, place: int, row: dict, program: str, path: Path = CATALOG,

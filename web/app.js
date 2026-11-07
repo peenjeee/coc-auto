@@ -341,10 +341,11 @@ function readOptions() {
     options.max_recoveries = number('max_recoveries', 20);
   }
   if (task === 'walls' && number('max_upgrades')) options.max_upgrades = number('max_upgrades');
-  if (['walls', 'farm', 'attack'].includes(task) && number('searches')) options.searches = number('searches');
+  if (['walls', 'farm', 'attack', 'buildings'].includes(task) && number('searches')) options.searches = number('searches');
   if (task === 'attack' || task === 'dry') options.village = data.get('village');
   if (task === 'attack') options.cycles = Math.max(1, number('cycles', 1));
-  if (['walls', 'farm', 'attack'].includes(task)) {
+  // The buildings task attacks too, when a pick is short of resources.
+  if (['walls', 'farm', 'attack', 'buildings'].includes(task)) {
     if (data.get('surrender')) {
       options.surrender = data.get('surrender');
       options.surrender_after = number('surrender_after', 60);
@@ -766,7 +767,7 @@ function syncVillageControls() {
     if (enabled && !inputs.some(input => input.checked)) inputs[0].setCustomValidity(t('choose_resource'));
   }
   for (const label of form.querySelectorAll('.resource-village-label')) label.hidden = target !== 'both';
-  // Buildings are upgraded in the Home Village only and never attack, so village and loot choices do not apply.
+  // The buildings task attacks in the villages of its picks, so no village or resource is chosen for it.
   form.querySelector('.target-section').hidden = task === 'buildings';
   form.querySelector('.first-village').hidden = target !== 'both' || !['farm','walls'].includes(task);
   const minimum = $('minimum-fields');

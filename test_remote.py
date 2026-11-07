@@ -833,12 +833,17 @@ class BuildArgsTests(unittest.TestCase):
                          ['--mode', 'home', '--cycles', '3', '--live'])
         self.assertEqual(remote.build_args({'task': 'dry', 'village': 'both'}), ['--mode', 'both'])
 
-    def test_building_upgrades_take_only_their_limits(self):
+    def test_building_upgrades_take_their_limits_and_how_they_attack(self):
         self.assertEqual(remote.build_args({'task': 'buildings'}), ['--buildings', '--live'])
         self.assertEqual(remote.build_args({'task': 'buildings', 'hours': 2, 'minutes': 30, 'max_recoveries': 5}),
                          ['--buildings', '--hours', '2', '--minutes', '30', '--max-recoveries', '5', '--live'])
-        # It never attacks, picks a village or touches walls.
-        for bad in ({'first': 'home'}, {'searches': 10}, {'surrender': 'home'}, {'walls': 'home'}, {'quake': True}):
+        # A pick short of resources has its village attacked, fought like any attack.
+        self.assertEqual(remote.build_args({'task': 'buildings', 'searches': 10, 'surrender': 'builder',
+                                            'surrender_after': 40, 'quake': True, 'surrender_stars': 1}),
+                         ['--buildings', '--searches', '10', '--surrender', 'builder', '--surrender-after', '40',
+                          '--quake', '--surrender-stars', '1', '--live'])
+        # It never picks a village or touches walls.
+        for bad in ({'first': 'home'}, {'walls': 'home'}, {'home': ['gold']}, {'cycles': 2}):
             with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
                 remote.build_args({'task': 'buildings', **bad})
 
