@@ -46,6 +46,20 @@ class GearListTests(unittest.TestCase):
         self.assertEqual([gear.title(text) for text in ('Dilepas', 'Unequipped', 'Dipasang', 'Botol Gesit')],
                          ['unequipped', 'unequipped', 'equipped', None])
 
+    def test_the_dialog_is_told_apart_and_confirmed_only_at_the_listed_ores(self):
+        detector = bot.Detector(self.config, ROOT)
+        one, three, research = (cv2.imread(str(ROOT / 'fixtures' / f'{name}.png'))
+                                for name in ('gear-confirm-one-ore', 'gear-confirm-three-ores', 'research-confirm'))
+        self.assertEqual([detector.detect(image) for image in (one, three, research)],
+                         ['gear_confirm', 'gear_confirm', 'building_confirm'])
+        digits = self.templates['digits']
+        self.assertEqual(gear.dialog_costs(three, digits), {'shiny': 3000, 'glowy': 600, 'starry': 100})
+        self.assertIsNone(gear.refusal(one, {'costs': {'shiny': 2500}}, digits))
+        self.assertIsNone(gear.refusal(three, {'costs': {'shiny': 3000, 'glowy': 600, 'starry': 100}}, digits))
+        for costs in ({'shiny': 2400}, {'shiny': 3000, 'glowy': 600}, {'shiny': 840, 'glowy': None}, {}):
+            with self.subTest(costs=costs):
+                self.assertIsNotNone(gear.refusal(three if len(costs) > 1 else one, {'costs': costs}, digits))
+
     @unittest.skipUnless(shutil.which(bot.load_config(ROOT / 'config.json').get('tesseract') or ''), 'needs Tesseract')
     def test_the_list_reads_whole_with_tesseract(self):
         rows = gear.read_rows([panel('gear-list-next'), panel('gear-list-unequipped')], self.spec, self.templates,

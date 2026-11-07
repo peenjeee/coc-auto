@@ -468,5 +468,7 @@
  "Bangunan di-upgrade: %s ke level %s": "Building upgraded: %s to level %s",
  "Pilihan bangunan ditolak: {}": "Building selection rejected: {}",
  "Pilihan bangunan": "Building selection",
- "Pilihan bangunan disimpan; berlaku saat Start berikutnya": "Building selection saved; it applies at the next Start"
+ "Pilihan bangunan disimpan; berlaku saat Start berikutnya": "Building selection saved; it applies at the next Start",
+ "biaya di dialog {}, di daftar {}": "cost {} in the dialog, {} in the list",
+ "Daftar Bangun tertutup layar lain; tab tidak disentuh": "The builder list is covered by another screen; no tab touched"
 }

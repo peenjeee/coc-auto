@@ -2274,6 +2274,44 @@
         ]
       }
     },
+    "gear_confirm": {
+      "anchors": [
+        {
+          "roi": [
+            1104,
+            30,
+            56,
+            54
+          ],
+          "file": "calibration/building_confirm-close-6fc60c22b47f410db7fcd11cf9fdca7c.png",
+          "margin": 8
+        },
+        {
+          "roi": [
+            658,
+            509,
+            49,
+            46
+          ],
+          "file": "calibration/gear_confirm-ore-2f159b53a1164bd4b6b0b08f3105b669.png",
+          "margin": 8
+        }
+      ],
+      "overrides": [
+        "build_list",
+        "wall_selected"
+      ],
+      "actions": {
+        "confirm": [
+          1001,
+          628
+        ],
+        "close": [
+          1131,
+          56
+        ]
+      }
+    },
     "wall_bulk_confirm": {
       "anchors": [
         {

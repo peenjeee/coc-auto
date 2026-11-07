@@ -166,8 +166,8 @@ class ScanTests(unittest.TestCase):
             close_menus=lambda: calls.append('close'),
             open_build_list=lambda village, spec: calls.append(('open', village)) or 'opened',
             scroll_list=scroll_list, list_indonesian=lambda image: image == 'opened', live=True, poll=0,
-            device=SimpleNamespace(tap_many=lambda taps: calls.append(('tap', taps))),
-            wait_still=lambda seconds: 'tab')
+            device=SimpleNamespace(tap_many=lambda taps: calls.append(('tap', taps)), capture=lambda: 'tab'),
+            detector=SimpleNamespace(shows=lambda image, name: False), wait_still=lambda seconds: 'tab')
 
     def test_the_list_is_read_from_its_top_to_its_end_then_closed(self):
         calls, runner = self.runner(['home'], ['second', 'third'])
@@ -184,9 +184,31 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(calls, ['check_touch', ('open', 'home'), ('swipe', ((1110, 300), (1110, 560)), False),
                                  down, down, down, 'close'])
 
+    def test_a_tab_is_touched_only_with_the_list_in_front(self):
+        # A tab sits where a row's upgrade dialog has its confirm button: the dialog is closed with its X first.
+        calls, shown = [], {'building_confirm'}
+        runner = SimpleNamespace(
+            live=True, poll=0, wait_still=lambda seconds: 'frame',
+            device=SimpleNamespace(capture=lambda: 'frame', tap_many=lambda taps: calls.append(('tap', taps))),
+            detector=SimpleNamespace(shows=lambda image, name: name in shown),
+            action=lambda state, name: calls.append((state, name)) or shown.clear())
+        with patch.object(buildings, 'list_in_front', return_value=True):
+            buildings.show_tab(runner, 1062)
+        self.assertEqual(calls, [('building_confirm', 'close'), ('tap', [[1062, 690]])])
+        calls.clear()
+        with patch.object(buildings, 'list_in_front', return_value=False), self.assertRaises(bot.UnexpectedScreen):
+            buildings.show_tab(runner, 978)
+        self.assertEqual(calls, [])
+        # The list's own close button tells it is in front on any tab; a dialog over it dims that button.
+        config = bot.load_config(ROOT / 'config.json')
+        real = SimpleNamespace(config=config, detector=bot.Detector(config, ROOT))
+        self.assertTrue(buildings.list_in_front(real, panel('lab-list-giant-barbarian')))
+        self.assertFalse(buildings.list_in_front(real, cv2.imread(str(ROOT / 'fixtures' / 'research-confirm.png'))))
+
     def test_the_lab_tab_is_read_and_the_builders_tab_shown_again_before_closing(self):
         calls, runner = self.runner(['home'], ['second'])
-        with patch.object(bot, 'executable', return_value='tesseract'), \
+        with patch.object(buildings, 'list_in_front', return_value=True), \
+                patch.object(bot, 'executable', return_value='tesseract'), \
                 patch.object(buildings, 'load_templates', return_value={}), \
                 patch.object(buildings, 'list_frames', wraps=buildings.list_frames) as frames, \
                 patch.object(buildings, 'read_rows', return_value=[{'section': 'in_progress', 'time': '2j'}]) as read:
@@ -200,7 +222,8 @@ class ScanTests(unittest.TestCase):
                                  'close'])
         # A swipe that fails on the pets tab still shows the builders tab before closing.
         calls, runner = self.runner(['home'], [])
-        with patch.object(bot, 'executable', return_value='tesseract'), \
+        with patch.object(buildings, 'list_in_front', return_value=True), \
+                patch.object(bot, 'executable', return_value='tesseract'), \
                 patch.object(buildings, 'load_templates', return_value={}), \
                 patch.object(runner, 'scroll_list', side_effect=bot.BotError('x')), self.assertRaises(bot.BotError):
             buildings.scan(runner, 'pets')

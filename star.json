@@ -1,0 +1,16 @@
+{
+  "troop": {
+    "raging_barbarian": ["Raging Barbarian", "Orang Barbar Murka"],
+    "sneaky_archer": ["Sneaky Archer", "Pemanah Licik"],
+    "boxer_giant": ["Boxer Giant", "Raksasa Petinju"],
+    "beta_minion": ["Beta Minion", "Minion Beta"],
+    "bomber": ["Bomber", "Pengebom"],
+    "baby_dragon": ["Baby Dragon", "Bayi Naga"],
+    "cannon_cart": ["Cannon Cart", "Gerobak Meriam"],
+    "night_witch": ["Night Witch", "Nenek Sihir Malam"],
+    "drop_ship": ["Drop Ship", "Kapal Drop"],
+    "power_pekka": ["Power P.E.K.K.A", "P.E.K.K.A Perkasa"],
+    "hog_glider": ["Hog Glider", "Babi Layang"],
+    "electrofire_wizard": ["Electrofire Wizard", "Penyihir Elektro-Api"]
+  }
+}

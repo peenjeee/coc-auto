@@ -1,0 +1,47 @@
+{
+  "defense": {
+    "cannon": ["Cannon", "Meriam"],
+    "double_cannon": ["Double Cannon", "Meriam Ganda"],
+    "archer_tower": ["Archer Tower", "Menara Pemanah"],
+    "hidden_tesla": ["Hidden Tesla", "Tesla Tersembunyi"],
+    "firecrackers": ["Firecrackers", "Mercon"],
+    "crusher": ["Crusher", "Peremuk"],
+    "multi_mortar": ["Multi Mortar", "Multi Mortir"],
+    "roaster": ["Roaster", "Pemanggang"],
+    "giant_cannon": ["Giant Cannon", "Meriam Raksasa"],
+    "mega_tesla": ["Mega Tesla", "Tesla Mega"],
+    "lava_launcher": ["Lava Launcher", "Peluncur Lava"],
+    "otto_outpost": ["O.T.T.O's Outpost", "Pos Jaga O.T.T.O"],
+    "guard_post": ["Guard Post"],
+    "air_bombs": ["Air Bombs"],
+    "wall": ["Wall", "Tembok"]
+  },
+  "trap": {
+    "push_trap": ["Push Trap", "Jebakan Dorong"],
+    "spring_trap": ["Spring Trap", "Jebakan Pegas"],
+    "mine": ["Mine", "Ranjau"],
+    "mega_mine": ["Mega Mine", "Ranjau Mega"]
+  },
+  "army": {
+    "builder_barracks": ["Builder Barracks", "Barak Tukang"],
+    "healing_hut": ["Healing Hut", "Pondok Penyembuhan"],
+    "army_camp": ["Army Camp"],
+    "star_laboratory": ["Star Laboratory"],
+    "reinforcement_camp": ["Reinforcement Camp"]
+  },
+  "resource": {
+    "gold_mine": ["Gold Mine", "Tambang Emas"],
+    "elixir_collector": ["Elixir Collector", "Pengumpul Eliksir"],
+    "gold_storage": ["Gold Storage", "Penyimpanan Emas"],
+    "elixir_storage": ["Elixir Storage", "Penyimpanan Eliksir"],
+    "gem_mine": ["Gem Mine", "Tambang Permata"]
+  },
+  "hero": {
+    "battle_machine": ["Battle Machine", "Mesin Pertempuran"],
+    "battle_copter": ["Battle Copter", "Helikopter Tempur"]
+  },
+  "other": {
+    "builder_hall": ["Builder Hall"],
+    "clock_tower": ["Clock Tower"]
+  }
+}

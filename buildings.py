@@ -29,6 +29,8 @@ RESEARCH = Path(__file__).with_name('research.json')
 # too, not read here.
 LISTS = {'buildings': (978, CATALOG), 'lab': (1062, RESEARCH), 'pets': (1240, RESEARCH)}
 TAB_Y = 690
+# Upgrade dialogs a row opens over the list.
+ROW_DIALOGS = ('building_confirm', 'gear_confirm')
 # Tesseract reads the small capitals' S and I as digits ("L.A.S.5.1").
 OCR_DIGITS = str.maketrans('51', 'si')
 UNITS, BADGE_DIGITS = 'calibration/units', 'calibration/badge'
@@ -362,9 +364,27 @@ def list_frames(runner: bot.Bot, spec: dict, image: np.ndarray) -> list:
     return frames
 
 
+def list_in_front(runner: bot.Bot, image: np.ndarray) -> bool:
+    """The list's own close button shows undimmed, on any of its tabs: nothing lies over the list."""
+    screen = runner.config['screens']['build_list']
+    cx, cy = screen['actions']['close']
+    anchors = [template for template, anchor in zip(runner.detector.templates['build_list'], screen['anchors'])
+               if anchor['roi'][0] <= cx < anchor['roi'][0] + anchor['roi'][2]
+               and anchor['roi'][1] <= cy < anchor['roi'][1] + anchor['roi'][3]]
+    return bool(anchors) and runner.detector.matches(image, anchors)
+
+
 def show_tab(runner: bot.Bot, x: int) -> np.ndarray:
-    """Tap one of the open list's tabs; the frame once the list holds still."""
+    """Tap one of the open list's tabs; the frame once the list holds still. A tab sits where a row's upgrade dialog has
+    its confirm button, so such a dialog is closed with its X first and nothing is tapped unless the list is in front."""
     if runner.live:
+        frame = runner.device.capture()
+        for dialog in ROW_DIALOGS:
+            if runner.detector.shows(frame, dialog):
+                runner.action(dialog, 'close')
+                frame = runner.wait_still(bot.WALL_LIST_SETTLE_SECONDS if runner.poll else 0)
+        if not list_in_front(runner, frame):
+            raise bot.UnexpectedScreen('Daftar Bangun tertutup layar lain; tab tidak disentuh')
         runner.device.tap_many([[x, TAB_Y]])
     return runner.wait_still(bot.WALL_LIST_SETTLE_SECONDS if runner.poll else 0)
 
