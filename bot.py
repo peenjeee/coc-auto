@@ -1488,9 +1488,10 @@ def event_bytes(events: list) -> bytes:
     return b''.join(struct.pack('<qqHHi', 0, 0, kind, code, value) for kind, code, value in events)
 
 
-def bar_cards(image: np.ndarray, region: list) -> list:
+def bar_cards(image: np.ndarray, region: list, colour: float = BAR_CARD_COLOUR) -> list:
     """(left, right) of every card in the bar. The bar behind the cards is a flat dark strip, so a card is a run of
-    columns with contrast; this follows whatever army is trained instead of fixed slots."""
+    columns with contrast; this follows whatever army is trained instead of fixed slots. colour is the least share
+    of saturated pixels a card needs (a dark hero card on the home bar sits lower than a Builder Base dead machine)."""
     x, y, w, h = region
     gray = cv2.cvtColor(image[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY).astype(np.float32)
     busy = gray.std(axis=0) > BAR_CARD_STD
@@ -1500,17 +1501,17 @@ def bar_cards(image: np.ndarray, region: list) -> list:
             start = column
         elif not on and start is not None:
             card = (x + start, x + column)
-            if BAR_CARD_WIDTH[0] <= column - start <= BAR_CARD_WIDTH[1] and card_coloured(image, region, card):
+            if BAR_CARD_WIDTH[0] <= column - start <= BAR_CARD_WIDTH[1] and card_coloured(image, region, card, colour):
                 cards.append(card)
             start = None
     return cards
 
 
-def card_coloured(image: np.ndarray, region: list, card: tuple) -> bool:
+def card_coloured(image: np.ndarray, region: list, card: tuple, colour: float = BAR_CARD_COLOUR) -> bool:
     """Empty slots are grey dashed outlines; a real card is mostly saturated colour."""
     _, y, _, h = region
     hsv = cv2.cvtColor(image[y:y + h, card[0]:card[1]], cv2.COLOR_BGR2HSV)
-    return float(((hsv[..., 1] > 100) & (hsv[..., 2] > 80)).mean()) >= BAR_CARD_COLOUR
+    return float(((hsv[..., 1] > 100) & (hsv[..., 2] > 80)).mean()) >= colour
 
 
 def card_kind(image: np.ndarray, region: list, card: tuple, camps: bool = False) -> str:
@@ -1633,7 +1634,7 @@ def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = F
         return camp_plan(image, auto, stack, templates)
     region = auto['bar']
     middle = region[1] + region[3] // 2
-    found = bar_cards(image, region)
+    found = bar_cards(image, region, auto.get('colour', BAR_CARD_COLOUR))
     cards = [(card, card_kind(image, region, card), group) for card, group in zip(found, card_groups(found))]
     # Counted cards are troops in the first group and spells in the last counted group after it, with or without
     # heroes and siege machines between them; a counted card in a group between those is a siege machine.
