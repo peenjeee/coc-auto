@@ -470,5 +470,10 @@
  "Pilihan bangunan": "Building selection",
  "Pilihan bangunan disimpan; berlaku saat Start berikutnya": "Building selection saved; it applies at the next Start",
  "biaya di dialog {}, di daftar {}": "cost {} in the dialog, {} in the list",
- "Daftar Bangun tertutup layar lain; tab tidak disentuh": "The builder list is covered by another screen; no tab touched"
+ "Daftar Bangun tertutup layar lain; tab tidak disentuh": "The builder list is covered by another screen; no tab touched",
+ "Scan laboratorium selesai: {} baris": "Laboratory scan done: {} rows",
+ "Scan hewan selesai: {} baris": "Pet scan done: {} rows",
+ "Scan peralatan pahlawan selesai: {} baris": "Hero equipment scan done: {} rows",
+ "Scan bangunan Desa Malam selesai: {} baris": "Builder Base building scan done: {} rows",
+ "Scan Lab Bintang selesai: {} baris": "Star Laboratory scan done: {} rows"
 }

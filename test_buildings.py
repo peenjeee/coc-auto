@@ -229,13 +229,21 @@ class ScanTests(unittest.TestCase):
             buildings.scan(runner, 'pets')
         self.assertEqual(calls[-3:], [('tap', [[1240, 690]]), ('tap', [[978, 690]]), 'close'])
 
-    def test_a_list_left_open_is_closed_first_and_only_the_home_village_is_scanned(self):
+    def test_a_list_left_open_is_closed_first_and_the_lists_village_is_travelled_to(self):
         with patch.object(bot, 'executable', return_value='tesseract'), \
-                patch.object(buildings, 'load_templates', return_value={}):
+                patch.object(buildings, 'load_templates', return_value={}), \
+                patch.object(buildings, 'read_rows', return_value=[]) as read:
             calls, runner = self.runner(['build_list', 'builder'], [])
-            with self.assertRaises(bot.BotError):
-                buildings.scan(runner)
-            self.assertEqual(calls, ['check_touch', 'close'])
+            runner.navigate = lambda village: calls.append(('navigate', village))
+            buildings.scan(runner)
+            self.assertEqual(calls[:4], ['check_touch', 'close', ('navigate', 'home'), ('open', 'home')])
+            # The Builder Base list is read in the Builder Base, named from its own catalog.
+            calls, runner = self.runner(['home'], [])
+            runner.config['walls']['builder'] = runner.config['walls']['home']
+            runner.navigate = lambda village: calls.append(('navigate', village))
+            buildings.scan(runner, 'builder')
+            self.assertEqual(calls[1:3], [('navigate', 'builder'), ('open', 'builder')])
+            self.assertEqual(read.call_args.args[4], buildings.BUILDER)
             # A swipe that fails still leaves the list closed.
             calls, runner = self.runner(['home'], [])
             with patch.object(runner, 'scroll_list', side_effect=bot.BotError('x')), self.assertRaises(bot.BotError):

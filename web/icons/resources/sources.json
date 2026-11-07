@@ -8,5 +8,6 @@
     "builder_gold": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/main/assets/resources/builder_gold.webp",
     "builder_elixir": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/main/assets/resources/builder_elixir.webp"
   },
-  "elixir_cart.png": "https://clashofclans.wiki.gg/es/images/Elixir_Cart_info.png?ae7e2e"
+  "elixir_cart.png": "https://clashofclans.wiki.gg/es/images/Elixir_Cart_info.png?ae7e2e",
+  "ore_shiny.png, ore_glowy.png, ore_starry.png": "cut from the ore count row of the game's Blacksmith upgrade dialog"
 }

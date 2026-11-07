@@ -1,6 +1,7 @@
-// Building scan: every row of one of the game's builder list tabs ("Buildings & Heroes", Laboratory, pets) read on
-// the device, grouped by category. Rows are ticked here, first ticked first, each up to a level or Max: buildings for
-// the "Upgrade buildings" task, research and pets only kept for now. The scan itself upgrades nothing.
+// Building scan: every row of one of the game's builder list tabs (in the Home Village buildings, Laboratory, pets
+// and hero equipment; in the Builder Base buildings and Star Laboratory) read on the device, grouped by category.
+// Rows are ticked here, first ticked first, each up to a level or Max, a running upgrade too: buildings for the
+// "Upgrade buildings" task, the other lists only kept for now. The scan itself upgrades nothing.
 import { t } from './i18n.js';
 
 // Each list's categories, in the order shown; a row the device could not name comes under other.
@@ -8,9 +9,18 @@ const CATEGORIES = {
   buildings: ['defense', 'army', 'resource', 'trap', 'hero', 'other'],
   lab: ['troop', 'dark_troop', 'spell', 'dark_spell', 'siege', 'other'],
   pets: ['pet', 'other'],
+  gear: ['equipment', 'other'],
+  builder: ['defense', 'army', 'resource', 'trap', 'hero', 'other'],
+  star: ['troop', 'other'],
 };
 export const LISTS = Object.keys(CATEGORIES);
-const COINS = { gold: 'icons/resources/gold.png', elixir: 'icons/resources/elixir.png', dark: 'icons/resources/dark_elixir.png' };
+// The village whose builder list has each list; the first list of a village opens when it is chosen.
+const VILLAGE = { buildings: 'home', lab: 'home', pets: 'home', gear: 'home', builder: 'builder', star: 'builder' };
+const COINS = {
+  home: { gold: 'icons/resources/gold.png', elixir: 'icons/resources/elixir.png', dark: 'icons/resources/dark_elixir.png' },
+  builder: { gold: 'icons/resources/builder_gold.webp', elixir: 'icons/resources/builder_elixir.webp' },
+};
+const ORES = ['shiny', 'glowy', 'starry'];
 // The device opens, swipes and reads the whole list before it answers, which takes about a minute.
 export const SCAN_WAIT_MS = 180000;
 const MAX_LEVEL = 200;
@@ -49,7 +59,11 @@ export class BuildingsPanel {
     for (const tab of document.querySelectorAll('[data-list]')) {
       tab.addEventListener('click', () => { this.list = tab.dataset.list; this.render(); });
     }
-    $('buildings-scan').addEventListener('click', () => send('scan_buildings', { list: this.list }, { wait: SCAN_WAIT_MS }));
+    for (const tab of document.querySelectorAll('[data-village]')) {
+      tab.addEventListener('click', () => { this.list = LISTS.find((list) => VILLAGE[list] === tab.dataset.village); this.render(); });
+    }
+    $('buildings-scan').addEventListener('click', () => send('scan_buildings', { list: this.list },
+      { wait: SCAN_WAIT_MS, label: this.text('buildings_scan') }));
     $('buildings-save').addEventListener('click', () => {
       const keep = Number.parseInt($('buildings-keep').value, 10);
       // Only buildings leave builders free; research and pets have their own queues.
@@ -104,10 +118,12 @@ export class BuildingsPanel {
   }
 
   render() {
-    for (const tab of document.querySelectorAll('[data-list]')) {
-      const selected = tab.dataset.list === this.list;
+    const village = VILLAGE[this.list];
+    for (const tab of document.querySelectorAll('[data-list], [data-village]')) {
+      const selected = tab.dataset.list ? tab.dataset.list === this.list : tab.dataset.village === village;
       tab.classList.toggle('active', selected);
       tab.setAttribute('aria-selected', String(selected));
+      if (tab.dataset.list) tab.hidden = VILLAGE[tab.dataset.list] !== village;
     }
     $('buildings-title').textContent = this.text('buildings_title');
     $('buildings-hint').textContent = this.text('buildings_hint');
@@ -154,11 +170,10 @@ export class BuildingsPanel {
     this.renderPicked();
   }
 
-  /** The tick and target level of a row that can be upgraded; a running upgrade gets neither. */
+  /** The tick and target level of a row; a running upgrade can be ticked too, to go on once it is done. */
   pickCells(row, line, name) {
-    const target = row.section === 'in_progress' ? null : this.targets.find((candidate) => sameBuilding(candidate, row));
+    const target = this.targets.find((candidate) => sameBuilding(candidate, row));
     const goal = line.insertCell();
-    if (row.section === 'in_progress') return;
     const box = element('input', undefined, 'building-pick');
     Object.assign(box, { type: 'checkbox', checked: Boolean(target), title: t('buildings_pick') });
     box.setAttribute('aria-label', `${t('buildings_pick')}: ${row.name ?? '?'}`);
@@ -186,20 +201,27 @@ export class BuildingsPanel {
       const name = line.insertCell();
       name.append(element('span', String(row.name ?? '?')));
       if (Number(row.count) > 1) name.append(element('small', ` ×${row.count}`));
-      if (['in_progress', 'suggested'].includes(row.section)) name.append(element('em', t(`buildings_${row.section}`), `building-tag ${row.section}`));
+      if (['in_progress', 'suggested', 'equipped'].includes(row.section)) name.append(element('em', t(`buildings_${row.section}`), `building-tag ${row.section}`));
       line.insertCell().textContent = Number.isInteger(row.next_level) ? `→ ${row.next_level}` : '–';
       const time = line.insertCell();
       time.textContent = typeof row.time === 'string' ? row.time : '–';
       if (Number.isInteger(row.seconds)) this.clocks.push([time, row.seconds]);
       const cost = line.insertCell();
-      if (Number.isInteger(row.cost)) {
-        cost.append(element('span', row.cost.toLocaleString('en-US')));
-        if (COINS[row.currency]) {
+      const coins = COINS[VILLAGE[this.list]];
+      // Hero equipment costs up to three ores, each on its own line; an amount not read shows as '?'.
+      const prices = row.costs && typeof row.costs === 'object'
+        ? ORES.filter((ore) => ore in row.costs).map((ore) => [row.costs[ore], `icons/resources/ore_${ore}.png`, t(`buildings_ore_${ore}`)])
+        : Number.isInteger(row.cost) ? [[row.cost, coins[row.currency], coins[row.currency] && t(`resource_${row.currency}`)]] : [];
+      for (const [amount, icon, label] of prices) {
+        const price = element('span', Number.isInteger(amount) ? amount.toLocaleString('en-US') : '?', 'building-price');
+        if (icon) {
           const coin = element('img');
-          Object.assign(coin, { src: COINS[row.currency], alt: t(`resource_${row.currency}`), width: 16, height: 16 });
-          cost.append(coin);
+          Object.assign(coin, { src: icon, alt: label, width: 16, height: 16 });
+          price.append(coin);
         }
-      } else cost.textContent = '–';
+        cost.append(price);
+      }
+      if (!prices.length) cost.textContent = '–';
       this.pickCells(row, line, name);
     }
     section.append(table);

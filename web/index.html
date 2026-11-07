@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#45a8ee">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=buildings-5"><script type="module" src="app.js?v=buildings-5"></script>
+<link rel="stylesheet" href="style.css?v=buildings-6"><script type="module" src="app.js?v=buildings-6"></script>
 </head><body>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <header class="site-header"><div class="header-inner">
@@ -133,10 +133,17 @@
           <h2 id="buildings-title" class="card-title"></h2>
           <button id="buildings-scan" type="button" class="primary"></button>
         </div>
+        <div class="tabs segmented" role="tablist" aria-label="Village">
+          <button type="button" role="tab" data-village="home" data-i18n="home_village"></button>
+          <button type="button" role="tab" data-village="builder" data-i18n="builder_village"></button>
+        </div>
         <div class="tabs segmented" role="tablist">
           <button type="button" role="tab" data-list="buildings" data-i18n="buildings_tab_buildings"></button>
           <button type="button" role="tab" data-list="lab" data-i18n="buildings_tab_lab"></button>
           <button type="button" role="tab" data-list="pets" data-i18n="buildings_tab_pets"></button>
+          <button type="button" role="tab" data-list="gear" data-i18n="buildings_tab_gear"></button>
+          <button type="button" role="tab" data-list="builder" data-i18n="buildings_tab_buildings"></button>
+          <button type="button" role="tab" data-list="star" data-i18n="buildings_tab_star"></button>
         </div>
         <p id="buildings-hint" class="hint"></p>
         <p id="buildings-scanned" class="hint" hidden></p>

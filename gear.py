@@ -4,11 +4,7 @@ timer; a row's hero portrait and icon push its name further right than a buildin
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-import difflib
-from functools import lru_cache
-import json
 from pathlib import Path
-import re
 
 import cv2
 import numpy as np
@@ -32,24 +28,6 @@ TITLE_WORDS = (('unequipped', ('unequip', 'dilepas')), ('equipped', ('equip', 'd
 # The upgrade dialog's green Confirm button ([x, y, w, h]) lists each ore's amount before its icon on one line; an
 # amount the ore on hand does not cover is red, which never reads as a price. The grey button beside it uses an item.
 DIALOG_PRICES, DIALOG_TEXT_PAD = (850, 615, 307, 50), 2
-
-
-@lru_cache(maxsize=1)
-def catalog() -> dict:
-    """Name as the cleaned OCR text would read -> (id, name as written)."""
-    return {clean(spelling): (key, spelling)
-            for key, spellings in json.loads(CATALOG.read_text(encoding='utf-8')).items() for spelling in spellings}
-
-
-def clean(text: str) -> str:
-    return re.sub(r"[^a-z' -]", '', text.lower()).strip()
-
-
-def named(text: str) -> dict:
-    """The closest catalog name; an unknown one stays as read, with no id."""
-    found = difflib.get_close_matches(clean(text), list(catalog()), n=1, cutoff=buildings.NAME_MIN_RATIO)
-    key, name = catalog()[found[0]] if found else (None, text)
-    return {'id': key, 'name': name}
 
 
 def costs(image: np.ndarray, y: int, digits: dict) -> dict:
@@ -130,7 +108,7 @@ def read_rows(frames: list, spec: dict, templates: dict, program: str) -> list[d
         if kind == 'title':
             section = title(text) or section
             continue
-        rows.append({**named(text), 'category': 'equipment',
-                     'next_level': buildings.read_badge(buildings.band(image, BADGE_BAND, y), templates['badge']),
+        rows.append({**buildings.named(text, CATALOG),
+                     'next_level':buildings.read_badge(buildings.band(image, BADGE_BAND, y), templates['badge']),
                      'costs': costs(image, y, templates['digits']), 'section': section})
     return rows

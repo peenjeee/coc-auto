@@ -25,9 +25,14 @@ LOG = logging.getLogger(__name__)
 CATALOG = Path(__file__).with_name('buildings.json')
 # Lab and pet names stay out of the buildings catalog: "Raksasa" (Giant) would match "Bom Raksasa" (Giant Bomb).
 RESEARCH = Path(__file__).with_name('research.json')
-# The list's tabs along its bottom (y TAB_Y): its x and the catalog its rows are named from. Hero equipment has a tab
-# too, not read here.
-LISTS = {'buildings': (978, CATALOG), 'lab': (1062, RESEARCH), 'pets': (1240, RESEARCH)}
+GEAR = Path(__file__).with_name('gear.json')
+BUILDER = Path(__file__).with_name('builder.json')
+STAR = Path(__file__).with_name('star.json')
+# Each list: the village whose builder list has it, its tab's x along the list's bottom (y TAB_Y) and the catalog its
+# rows are named from. The first tab of each village is its builders'.
+LISTS = {'buildings': ('home', 978, CATALOG), 'lab': ('home', 1062, RESEARCH), 'gear': ('home', 1150, GEAR),
+         'pets': ('home', 1240, RESEARCH), 'builder': ('builder', 1021, BUILDER), 'star': ('builder', 1193, STAR)}
+BUILDERS_TAB = {'home': 978, 'builder': 1021}
 TAB_Y = 690
 # Upgrade dialogs a row opens over the list.
 ROW_DIALOGS = ('building_confirm', 'gear_confirm')
@@ -390,10 +395,11 @@ def show_tab(runner: bot.Bot, x: int) -> np.ndarray:
 
 
 def scan(runner: bot.Bot, listing: str = 'buildings') -> list[dict]:
-    """Open the Home Village builder list on the tab of listing (a LISTS key), read it from its top to its end, and
-    close it again."""
-    tab, path = LISTS[listing]
-    spec = runner.config['walls']['home']
+    """Open the builder list of listing's village (a LISTS key; the boat is taken when the other village shows) on
+    listing's tab, read it from its top to its end, and close it again."""
+    import gear  # gear reads its rows with this module's helpers
+    village, tab, path = LISTS[listing]
+    spec = runner.config['walls'][village]
     program = bot.executable(runner.config.get('tesseract'), 'Tesseract')
     templates = load_templates(runner.root, runner.config)
     runner.check_touch()
@@ -402,12 +408,12 @@ def scan(runner: bot.Bot, listing: str = 'buildings') -> list[dict]:
         # Whichever village is behind a list left open is out of sight; closing it shows which.
         runner.close_menus()
         state = runner.wait({'home', 'builder'}, set(), OPEN_SECONDS)
-    if state != 'home':
-        raise bot.BotError('Scan bangunan hanya di Desa Utama; pindah ke Desa Utama dulu')
-    image = runner.open_build_list('home', spec)
+    if state != village:
+        runner.navigate(village)
+    image = runner.open_build_list(village, spec)
     # The list opens on the builders tab, whose header tells the language.
     indonesian = runner.list_indonesian(image)
-    builders = LISTS['buildings'][0]
+    builders = BUILDERS_TAB[village]
     try:
         frames = list_frames(runner, spec, image if tab == builders else show_tab(runner, tab))
     finally:
@@ -415,9 +421,11 @@ def scan(runner: bot.Bot, listing: str = 'buildings') -> list[dict]:
             # close_menus knows the list by the builders tab only, and the game may reopen the tab it was left on.
             show_tab(runner, builders)
         runner.close_menus()
+    rows = (gear.read_rows(frames, spec, templates, program) if listing == 'gear'
+            else read_rows(frames, spec, templates, program, path))
     # A running upgrade's time left in seconds, so the dashboard can count it down until the next scan.
     return [{**row, 'seconds': seconds(row['time'], indonesian)} if row['section'] == 'in_progress' else row
-            for row in read_rows(frames, spec, templates, program, path)]
+            for row in rows]
 
 
 def seconds(text: object, indonesian: bool) -> int | None:
@@ -444,7 +452,7 @@ def selection(value: object, listing: str = 'buildings') -> dict:
         bot.integer(value['keep_builders'], 0, MAX_KEEP_BUILDERS, 'keep_builders')
     if not isinstance(targets, list) or len(targets) > MAX_TARGETS:
         raise bot.BotError(f'Target bangunan harus daftar berisi 0..{MAX_TARGETS}')
-    known = {key for key, _, _ in catalog(LISTS[listing][1]).values()} - {'wall'}
+    known = {key for key, _, _ in catalog(LISTS[listing][2]).values()} - {'wall'}
     checked, seen = [], set()
     for target in targets:
         if not isinstance(target, dict) or set(target) != {'id', 'name', 'level'}:

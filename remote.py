@@ -44,6 +44,7 @@ STATIC_FILES = {'/icons/stats/attacks.png': 'icons/stats/attacks.png',
                 '/icons/resources/gold.png': 'icons/resources/gold.png',
                 '/icons/resources/elixir.png': 'icons/resources/elixir.png',
                 '/icons/resources/dark_elixir.png': 'icons/resources/dark_elixir.png',
+                **{f'/icons/resources/ore_{ore}.png': f'icons/resources/ore_{ore}.png' for ore in ('shiny', 'glowy', 'starry')},
                 '/fonts/lilita-one-latin.woff2': 'fonts/lilita-one-latin.woff2',
                 '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js',
                 '/messages.js': 'messages.js', '/messages_en.json': 'messages_en.json',
@@ -73,8 +74,13 @@ ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_scree
 # Reads that run outside the control lock (a slow one must not hold up Stop) and stay out of the log.
 READ_ONLY = ('get_screen', 'get_stats', 'get_discord', 'get_buildings')
 VILLAGE_CHOICES = ('home', 'builder', 'both')
-# The builder list's tabs a scan reads (buildings.LISTS); each keeps its own last scan and its own pick.
-SCAN_LISTS = ('buildings', 'lab', 'pets')
+# The builder list's tabs a scan reads (buildings.LISTS) and their village; each keeps its own last scan and its own
+# pick.
+SCAN_LISTS = {'buildings': 'home', 'lab': 'home', 'pets': 'home', 'gear': 'home', 'builder': 'builder',
+              'star': 'builder'}
+SCAN_DONE = {'buildings': 'Scan bangunan selesai: {} baris', 'lab': 'Scan laboratorium selesai: {} baris',
+             'pets': 'Scan hewan selesai: {} baris', 'gear': 'Scan peralatan pahlawan selesai: {} baris',
+             'builder': 'Scan bangunan Desa Malam selesai: {} baris', 'star': 'Scan Lab Bintang selesai: {} baris'}
 RESOURCES = {'home': ('gold', 'elixir', 'dark'), 'builder': ('gold', 'elixir', 'cart')}
 # Option name, CLI flag, range; zero means "no limit" and is left out, except for recoveries.
 LIMITS = (('searches', '--searches', 0, 1_000_000), ('hours', '--hours', 0, 1000),
@@ -658,10 +664,10 @@ class Supervisor:
                 raise CommandRefused('hentikan bot dulu; scan bangunan mengetuk layar game')
             scan = {'list': listing, 'scanned_at': time.time(), 'rows': self.device.scan_buildings(listing)}
             self.keep_scan(scan)
-            return 'buildings_scanned', f'Scan bangunan selesai: {len(scan["rows"])} baris', scan
+            return 'buildings_scanned', SCAN_DONE[listing].format(len(scan['rows'])), scan
         if action == 'get_buildings':
             listing = choice(options, 'list', SCAN_LISTS, 'buildings')
-            return 'buildings_loaded', '', {'list': listing, **self.statistics.last_scan('home', listing)}
+            return 'buildings_loaded', '', {'list': listing, **self.statistics.last_scan(SCAN_LISTS[listing], listing)}
         # Closing the game or the emulator under a running bot would only start its recovery.
         self.stop()
         if action == 'close_coc':
@@ -718,7 +724,7 @@ class Supervisor:
     def keep_scan(self, scan: dict) -> None:
         """Keep the last scan of each list, so a dashboard opened later shows it without scanning again."""
         try:
-            self.statistics.keep_scan('home', scan['list'], scan['rows'], scan['scanned_at'])
+            self.statistics.keep_scan(SCAN_LISTS[scan['list']], scan['list'], scan['rows'], scan['scanned_at'])
         except sqlite3.Error as exc:  # The rows still reach the dashboard; only a later reopen would miss them.
             self.log(f'REMOTE: hasil scan bangunan tidak tersimpan ({exc})')
 

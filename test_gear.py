@@ -41,8 +41,9 @@ class GearListTests(unittest.TestCase):
                           for y in self.cards(image)], [21, 16, 9, 2, 15, 16, 15, 9, 2, 2])
 
     def test_names_match_the_catalog_and_titles_open_their_sections(self):
-        self.assertEqual(gear.named('Kitab ManHasakti'), {'id': 'eternal_tome', 'name': 'Kitab Mahasakti'})
-        self.assertEqual(gear.named('Mystery Thing'), {'id': None, 'name': 'Mystery Thing'})
+        self.assertEqual(buildings.named('Kitab ManHasakti', gear.CATALOG),
+                         {'id': 'eternal_tome', 'name': 'Kitab Mahasakti', 'category': 'equipment', 'count': 1})
+        self.assertEqual(buildings.named('Mystery Thing', gear.CATALOG)['id'], None)
         self.assertEqual([gear.title(text) for text in ('Dilepas', 'Unequipped', 'Dipasang', 'Botol Gesit')],
                          ['unequipped', 'unequipped', 'equipped', None])
 
@@ -70,7 +71,8 @@ class GearListTests(unittest.TestCase):
                           'healer_puppet', 'henchmen_puppet'])
         self.assertEqual([row['section'] for row in rows], ['equipped'] * 6 + ['unequipped'] * 7)
         self.assertEqual(rows[-1], {'id': 'henchmen_puppet', 'name': 'Boneka Pengawal', 'category': 'equipment',
-                                    'next_level': 3, 'costs': {'shiny': 240, 'glowy': 20}, 'section': 'unequipped'})
+                                    'count': 1, 'next_level': 3, 'costs': {'shiny': 240, 'glowy': 20},
+                                    'section': 'unequipped'})
 
 
 if __name__ == '__main__':

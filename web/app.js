@@ -11,7 +11,7 @@ import { setupSelects, refreshSelects } from './select.js';
 import { StatsPanel, previewStatistics } from './stats.js?v=9';
 import { DiscordPanel } from './discord.js?v=5';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=4';
+import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=5';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -468,16 +468,16 @@ function setBusy(busy) {
 
 /** Send a signed command; quiet ones (loading on connect) only speak up when they fail. A command that works on the
  * device for a while (the building scan) waits longer for its answer. */
-async function send(action, args = {}, { quiet = false, wait = ACK_MS } = {}) {
+async function send(action, args = {}, { quiet = false, wait = ACK_MS, label = action } = {}) {
   if (!link) return;
   if (!online) {
-    notify(() => t('cannot_run', { action, reason: t('offline_text') }), 'error');
+    notify(() => t('cannot_run', { action: label, reason: t('offline_text') }), 'error');
     return;
   }
   const nonce = crypto.randomUUID();
   const body = JSON.stringify({ action, args, ts: Date.now() / 1000, nonce });
   setBusy(true);
-  if (!quiet) notify(() => t('sending', { action }));
+  if (!quiet) notify(() => t('sending', { action: label }));
   try {
     handleResult(await link.send(body, await sign(body), nonce, wait), quiet);
   } catch (error) {
@@ -643,7 +643,21 @@ const DEMO_LAB = [
 const DEMO_PETS = [
   {id:'lassi',name:'L.A.S.S.I',category:'pet',count:1,next_level:null,time:'13h 57m',seconds:50220,cost:null,currency:null,section:'in_progress'},
 ];
-const DEMO_SCANS = {buildings:DEMO_BUILDINGS, lab:DEMO_LAB, pets:DEMO_PETS};
+const DEMO_GEAR = [
+  {id:'giant_gauntlet',name:'Giant Gauntlet',category:'equipment',count:1,next_level:21,costs:{shiny:3000,glowy:600,starry:100},section:'equipped'},
+  {id:'giant_arrow',name:'Giant Arrow',category:'equipment',count:1,next_level:16,costs:{shiny:2500},section:'equipped'},
+  {id:'barbarian_puppet',name:'Barbarian Puppet',category:'equipment',count:1,next_level:6,costs:{shiny:840,glowy:null},section:'unequipped'},
+];
+const DEMO_BUILDER = [
+  {id:'battle_machine',name:'Battle Machine',category:'hero',count:1,next_level:null,time:'6d 27m',seconds:519000,cost:null,currency:null,section:'in_progress'},
+  {id:'battle_copter',name:'Battle Copter',category:'hero',count:1,next_level:19,time:'5d',cost:2900000,currency:'elixir',section:'suggested'},
+  {id:'mega_tesla',name:'Mega Tesla',category:'defense',count:1,next_level:2,time:'3d',cost:3100000,currency:'gold',section:'other'},
+];
+const DEMO_STAR = [
+  {id:'night_witch',name:'Night Witch',category:'troop',count:1,next_level:null,time:'1d 23h',seconds:169000,cost:null,currency:null,section:'in_progress'},
+  {id:'cannon_cart',name:'Cannon Cart',category:'troop',count:1,next_level:11,time:'2d',cost:1400000,currency:'elixir',section:'suggested'},
+];
+const DEMO_SCANS = {buildings:DEMO_BUILDINGS, lab:DEMO_LAB, pets:DEMO_PETS, gear:DEMO_GEAR, builder:DEMO_BUILDER, star:DEMO_STAR};
 
 let activeView = 'overview';
 

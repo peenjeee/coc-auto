@@ -279,11 +279,15 @@ class BuildingScanTests(unittest.TestCase):
         self.assertEqual(supervisor.command(*signed('get_buildings', {'list': 'pets'}))['data'],
                          {'list': 'pets', 'rows': None})
         for action in ('scan_buildings', 'get_buildings'):
-            for bad in ('gear', 'BUILDINGS', '', None, 1, ['lab']):
+            for bad in ('shop', 'BUILDINGS', '', None, 1, ['lab']):
                 result = supervisor.command(*signed(action, {'list': bad}))
                 with self.subTest(action=action, bad=bad):
                     self.assertEqual((result['ok'], result['code']), (False, 'refused'))
         self.assertEqual(self.device.scan_buildings.call_count, 2)
+        # A Builder Base list is kept under its own village.
+        self.device.scan_buildings = Mock(return_value=lab)
+        supervisor.command(*signed('scan_buildings', {'list': 'star'}))
+        self.assertEqual(supervisor.statistics.last_scan('builder', 'star')['rows'], lab)
 
     def test_a_missing_or_malformed_saved_scan_gives_no_rows(self):
         supervisor = self.supervisor()
