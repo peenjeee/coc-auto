@@ -43,6 +43,6 @@
   },
   "other": {
     "builder_hall": ["Builder Hall"],
-    "clock_tower": ["Clock Tower"]
+    "clock_tower": ["Clock Tower", "Menara Jam"]
   }
 }

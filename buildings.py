@@ -60,6 +60,8 @@ TITLE_WORDS = {'other': ('other', 'lain'), 'suggested': ('sugg', 'saran')}
 COIN_MIN_PIXELS, DARK_MIN_PIXELS = 40, 90
 # Rows seen in two frames land within a few pixels of each other once the frames are lined up.
 SAME_ROW_PX = 12
+# From a card's top to below its level badge and price.
+CARD_DEPTH = 45
 # A strip near the bottom of the previous frame is looked up in the next one to tell how far the list moved; the
 # list's last pixels fade into the tabs and are left out. The list stops between whole pixels, so each frame draws
 # its rows a little differently: a light blur evens that out, and a strip about two rows tall tells rows that look
@@ -331,8 +333,11 @@ def placed_rows(frames: list, spec: dict, templates: dict, program: str,
     """read_rows with each row's place down the list: its card's top as the first frame would show it."""
     region, digits, units = spec['row']['region'], templates['digits'], templates['units']
     kept = []
-    for offset, image in zip(offsets(frames, region), frames):
+    for index, (offset, image) in enumerate(zip(offsets(frames, region), frames)):
         for kind, y in items(image, region):
+            # A card cut off by the list's bottom edge loses its badge and price; the next frame shows it whole.
+            if kind == 'card' and index + 1 < len(frames) and y + CARD_DEPTH > region[1] + region[3]:
+                continue
             if not any(kind == other and abs(offset + y - place) <= SAME_ROW_PX for other, place, _, _ in kept):
                 kept.append((kind, offset + y, y, image))
     ordered = sorted(kept, key=lambda item: item[1])
