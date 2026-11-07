@@ -9,6 +9,7 @@ import numpy as np
 
 import bot
 import buildings
+import upgrades
 
 ROOT = Path(__file__).resolve().parent
 
@@ -351,97 +352,6 @@ class UpgradeDialogTests(unittest.TestCase):
         self.assertIsNotNone(buildings.refusal(self.runner, self.dark, {**king, 'currency': 'gold'}))
         self.assertIsNotNone(buildings.refusal(self.runner, np.zeros_like(self.gold), collector))
 
-    def runner_for(self, refusals):
-        calls = []
-        answers = iter(refusals)
-
-        def guarded_tap(states, location):
-            calls.append(('tap', tuple(sorted(states)), location(None) if callable(location) else location))
-        runner = SimpleNamespace(
-            config=self.config, poll=0, guarded_tap=guarded_tap,
-            wait=lambda targets, allowed, seconds: calls.append(('wait', tuple(sorted(targets)))),
-            wait_still=lambda seconds: 'dialog', action=lambda state, name: calls.append(('action', state, name)),
-            check_gems=lambda spec: calls.append('gems'))
-        return calls, runner, patch.object(buildings, 'refusal', lambda runner, image, row: next(answers))
-
-    def test_a_dialog_that_does_not_match_is_closed_and_never_confirmed(self):
-        spec = self.config['walls']['home']
-        confirm = self.config['screens']['building_confirm']['actions']['confirm']
-        mine = row('Gold Mine', 'gold_mine')
-        # Wrong at once, or wrong in the frame the confirm tap would follow.
-        for refusals in (['harga beda'], [None, 'harga beda']):
-            calls, runner, refusal = self.runner_for(refusals)
-            with self.subTest(refusals=refusals), refusal, patch.object(buildings, 'find_card', return_value=300):
-                self.assertFalse(buildings.upgrade(runner, spec, ['frame'], 300, mine, 'tesseract'))
-                self.assertIn(('action', 'building_confirm', 'close'), calls)
-                self.assertNotIn(('tap', ('building_confirm',), confirm), calls)
-                self.assertNotIn('gems', calls)
-        calls, runner, refusal = self.runner_for([None, None])
-        with refusal, patch.object(buildings, 'find_card', return_value=300):
-            self.assertTrue(buildings.upgrade(runner, spec, ['frame'], 300, mine, 'tesseract'))
-        self.assertEqual(calls[0], ('tap', ('build_list',), [spec['row']['tap_x'], 300 + buildings.NAME_CENTRE]))
-        self.assertIn(('tap', ('building_confirm',), confirm), calls)
-        self.assertEqual(calls[-1], 'gems')
-
-
-class RunTests(unittest.TestCase):
-    """The --buildings loop with the screens faked: when it waits, what it upgrades and when it stops."""
-
-    def run_loop(self, chosen, homes, lists, upgrades):
-        calls = []
-        runner = SimpleNamespace(
-            config={'walls': {'home': {}}, 'tesseract': 'tesseract'}, root=ROOT, poll=1, stop_at=None, progress=0,
-            check_limits=lambda: None, refresh_if_low_memory=lambda: None, open_build_list=lambda village, spec: None,
-            list_indonesian=lambda image: False, close_menus=lambda: calls.append('close'))
-        tried = []
-
-        def upgrade(runner, spec, frames, place, chosen_row, program):
-            tried.append(chosen_row['name'])
-            result = next(upgrades)
-            if isinstance(result, Exception):
-                raise result
-            return result
-        with patch.object(bot, 'executable', return_value='tesseract'), \
-                patch.object(buildings, 'load_templates', return_value={}), \
-                patch.object(buildings, 'home', side_effect=homes), \
-                patch.object(buildings, 'list_frames', return_value=['frame']), \
-                patch.object(buildings, 'placed_rows', side_effect=lists), \
-                patch.object(buildings, 'upgrade', upgrade), \
-                patch.object(buildings.time, 'sleep', lambda seconds: calls.append(('sleep', seconds))):
-            done = buildings.run(runner, chosen)
-        return done, tried, calls, runner
-
-    def test_spare_builders_are_kept_then_the_target_is_upgraded_until_reached(self):
-        chosen = {'targets': [{'id': 'gold_mine', 'name': 'Gold Mine', 'level': 2}], 'keep_builders': 1}
-        mine, running = row('Gold Mine', 'gold_mine', 2), row('Cannon', 'cannon', None, None, None, 'in_progress', '8s')
-        lists = [[(mine, 10), (running, 0)], [(mine, 10)], [(row('Gold Mine', 'gold_mine', 3), 10)]]
-        homes = [(1, AMOUNTS), (2, AMOUNTS), (1, AMOUNTS), (1, AMOUNTS)]
-        with self.assertLogs('buildings', 'INFO') as logs:
-            done, tried, calls, runner = self.run_loop(chosen, homes, lists, iter([True]))
-        self.assertEqual((done, tried, runner.progress), (1, ['Gold Mine'], 1))
-        # One builder free and one kept: wait until the cannon is done.
-        self.assertEqual([call for call in calls if call != 'close'], [('sleep', 8 + buildings.WAIT_MARGIN_SECONDS)])
-        self.assertTrue(any('Bangunan di-upgrade: Gold Mine ke level 2' in line for line in logs.output))
-        self.assertTrue(any('selesai' in line for line in logs.output))
-
-    def test_a_refused_dialog_lets_the_next_target_go_first(self):
-        chosen = {'targets': [{'id': 'bomb', 'name': 'Bomb', 'level': None},
-                              {'id': 'gold_mine', 'name': 'Gold Mine', 'level': None}], 'keep_builders': 0}
-        both = [(row('Bomb', 'bomb'), 0), (row('Gold Mine', 'gold_mine'), 50)]
-        homes = [(2, AMOUNTS), (2, AMOUNTS), (1, AMOUNTS), (1, AMOUNTS)]
-        done, tried, _, _ = self.run_loop(chosen, homes, [both, both, []], iter([False, True]))
-        self.assertEqual((done, tried), (1, ['Bomb', 'Gold Mine']))
-        # Builders all busy after all (the gem offer was closed with X): skipped like a refusal.
-        done, tried, _, _ = self.run_loop(chosen, homes, [both, both, []],
-                                          iter([bot.NoFreeBuilder('Semua tukang sibuk'), True]))
-        self.assertEqual((done, tried), (1, ['Bomb', 'Gold Mine']))
-
-    def test_the_time_limit_stops_a_wait_short(self):
-        runner = SimpleNamespace(stop_at=buildings.time.monotonic() + 30, poll=1)
-        with patch.object(buildings.time, 'sleep') as sleep:
-            buildings.pause(runner, 600, 'x')
-        self.assertLessEqual(sleep.call_args.args[0], 30)
-
 
 class CommandLineTests(unittest.TestCase):
     def test_buildings_needs_live_and_runs_on_its_own(self):
@@ -452,7 +362,7 @@ class CommandLineTests(unittest.TestCase):
                 self.assertEqual(bot.main(), 1)
 
     def test_buildings_runs_its_pick_under_the_recovery(self):
-        chosen = {'targets': [{'id': 'bomb', 'name': 'Bomb', 'level': None}], 'keep_builders': 0}
+        chosen = {'buildings': {'targets': [{'id': 'bomb', 'name': 'Bomb', 'level': None}], 'keep_builders': 0}}
         with patch('sys.argv', ['bot.py', '--buildings', '--live', '--hours', '2', '--no-remote']), \
                 patch('bot.load_config'), patch('bot.validate_config'), patch('bot.executable'), patch('bot.ADB'), \
                 patch('bot.Bot') as runner, patch('bot.fit_screen', return_value=False), \
@@ -460,20 +370,30 @@ class CommandLineTests(unittest.TestCase):
             self.assertEqual(bot.main(), 0)
         self.assertEqual(runner.call_args.kwargs['minutes'], 120)
         job = runner.return_value.run_until_full_resilient.call_args.kwargs['job']
-        with patch.object(buildings, 'run', return_value=2) as run:
+        with patch.object(upgrades, 'run', return_value=2) as run:
             self.assertEqual(job(0), 2)
         run.assert_called_once_with(runner.return_value, chosen)
 
     def test_the_pick_is_checked_before_a_run(self):
         config = bot.load_config(ROOT / 'config.json')
+        config = {key: value for key, value in config.items() if key not in buildings.LISTS}
         target = {'id': 'gold_mine', 'name': 'Gold Mine', 'level': 2}
         chosen = {'targets': [target], 'keep_builders': 1}
-        self.assertEqual(buildings.validate({**config, 'buildings': chosen}, ROOT), chosen)
-        for bad in ({'targets': [], 'keep_builders': 0}, {'targets': [{**target, 'id': 'nope'}], 'keep_builders': 0}):
+        picked = buildings.validate({**config, 'buildings': chosen}, ROOT)
+        self.assertEqual(picked, {'buildings': chosen, 'lab': {'targets': []}, 'gear': {'targets': []},
+                                  'pets': {'targets': []}, 'builder': {'targets': []}, 'star': {'targets': []}})
+        # Any list it upgrades may carry the pick on its own.
+        research = {'targets': [{'id': 'valkyrie', 'name': 'Valkyrie', 'level': None}]}
+        self.assertEqual(buildings.validate({**config, 'lab': research}, ROOT)['lab'], research)
+        for bad in ({'buildings': {'targets': [], 'keep_builders': 0}},
+                    {'buildings': {'targets': [{**target, 'id': 'nope'}], 'keep_builders': 0}},
+                    {'lab': {'targets': [], 'keep_builders': 0}},
+                    # Builder Base picks alone: their upgrade dialogs are not recognised, so nothing would be done.
+                    {'builder': {'targets': [{'id': None, 'name': 'Battle Copter', 'level': None}]}}):
             with self.subTest(bad=bad), self.assertRaises(bot.BotError):
-                buildings.validate({**config, 'buildings': bad}, ROOT)
+                buildings.validate({**config, **bad}, ROOT)
         with self.assertRaises(bot.BotError):
-            buildings.validate({key: value for key, value in config.items() if key != 'buildings'}, ROOT)
+            buildings.validate(config, ROOT)
         with self.assertRaises(bot.BotError):
             buildings.validate({**config, 'buildings': chosen, 'building_upgrade': {'free_builders': [0, 0, 1, 1]}},
                                ROOT)

@@ -3850,8 +3850,9 @@ def main() -> int:
                         help=messages.translate('Habiskan gold+elixir yang ada untuk upgrade tembok, farming sampai penuh, ulangi '
                              'sampai semua tembok maksimal; tidak pernah memakai gem'))
     parser.add_argument('--buildings', action='store_true',
-                        help=messages.translate('Upgrade bangunan Desa Utama yang dipilih di dashboard sampai level '
-                                                'targetnya, menjaga tukang tetap sibuk; tidak pernah memakai gem'))
+                        help=messages.translate('Upgrade bangunan, riset Lab, hewan dan peralatan Desa Utama yang '
+                                                'dipilih di dashboard sampai level targetnya, menjaga tukang dan lab '
+                                                'tetap sibuk; tidak pernah memakai gem'))
     parser.add_argument('--max-recoveries', type=int, default=MAX_RECOVERIES,
                         help=messages.translate('Dengan --live: batas pemulihan (crash, DC, layar macet) tanpa kemajuan; dihitung ulang '
                              'setelah serangan selesai atau tembok di-upgrade'))
@@ -3997,6 +3998,7 @@ def main() -> int:
             if not args.live:
                 raise BotError('--buildings butuh --live')
             import buildings
+            import upgrades
             chosen = buildings.validate(config, args.config.parent)
         adb = executable(config.get('adb'), 'ADB')
         # Loot is read with Tesseract only when no digit templates are configured.
@@ -4020,7 +4022,7 @@ def main() -> int:
             runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
         elif args.buildings:
             runner.run_until_full_resilient(args.searches, args.max_recoveries,
-                                            job=lambda _: buildings.run(runner, chosen))
+                                            job=lambda _: upgrades.run(runner, chosen))
         elif until_full and args.live:
             runner.run_until_full_resilient(args.searches, args.max_recoveries)
         elif args.live:

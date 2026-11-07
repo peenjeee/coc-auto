@@ -91,7 +91,8 @@ class Statistics:
         bulk = re.fullmatch(r'(\d+) (?:tembok di-upgrade sekaligus dengan|walls upgraded at once with) (gold|elixir)', text)
         wall = re.fullmatch(r'(?:Tembok di-upgrade dengan|Wall upgraded with) (gold|elixir)', text)
         storage = re.fullmatch(r'(?:Gudang|Storage) (home|builder): (\{.{1,600}\})', text)
-        upgrade = re.fullmatch(r'(?:Bangunan di-upgrade|Building upgraded): (.{1,60}) (?:ke|to) level (\d{1,3})', text)
+        upgrade = re.fullmatch(r'(?:(?:Bangunan|Riset|Hewan|Peralatan) di-upgrade|(?:Building|Research|Pet|Equipment) '
+                               r'upgraded): (.{1,60}) (?:ke|to) level (\d{1,3})', text)
         if attack:
             self.record(run, 'attack', 'Home Village attack' if attack[1] == 'home' else 'Builder Base attack', attacks=1)
             return 'attack'

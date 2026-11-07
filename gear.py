@@ -91,6 +91,11 @@ def title(text: str) -> str | None:
 
 def read_rows(frames: list, spec: dict, templates: dict, program: str) -> list[dict]:
     """Every equipment row from frames taken top to bottom, each once: id, name, next_level, costs and section."""
+    return [row for row, _ in placed_rows(frames, spec, templates, program)]
+
+
+def placed_rows(frames: list, spec: dict, templates: dict, program: str) -> list[tuple[dict, int]]:
+    """read_rows with each row's place down the list: its card's top as the first frame would show it."""
     region = spec['row']['region']
     kept = []
     for offset, image in zip(buildings.offsets(frames, region), frames):
@@ -104,11 +109,11 @@ def read_rows(frames: list, spec: dict, templates: dict, program: str) -> list[d
     with ThreadPoolExecutor(buildings.OCR_WORKERS) as pool:
         texts = list(pool.map(lambda job: buildings.ocr_line(*job), jobs))
     rows, section = [], 'equipped'
-    for (kind, _, y, image), text in zip(ordered, texts):
+    for (kind, place, y, image), text in zip(ordered, texts):
         if kind == 'title':
             section = title(text) or section
             continue
-        rows.append({**buildings.named(text, CATALOG),
-                     'next_level':buildings.read_badge(buildings.band(image, BADGE_BAND, y), templates['badge']),
-                     'costs': costs(image, y, templates['digits']), 'section': section})
+        rows.append(({**buildings.named(text, CATALOG),
+                      'next_level':buildings.read_badge(buildings.band(image, BADGE_BAND, y), templates['badge']),
+                      'costs': costs(image, y, templates['digits']), 'section': section}, place))
     return rows

@@ -1,8 +1,7 @@
 """The game's builder list ("Buildings & Heroes", "Bangunan dan Pahlawan") read top to bottom: the name, count, level
 badge, time and cost of every row, named from buildings.json; its Laboratory and pet tabs, named from research.json,
 read the same way. A scan only opens, swipes and closes the list.
---buildings (run) upgrades the buildings picked in the dashboard from it, paying only gold, elixir or dark elixir at
-the price the list showed."""
+The helpers here also serve --buildings (upgrades.run), which upgrades the rows picked in the dashboard."""
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -13,7 +12,6 @@ import logging
 from pathlib import Path
 import re
 import subprocess
-import time
 
 import cv2
 import numpy as np
@@ -36,6 +34,11 @@ BUILDERS_TAB = {'home': 978, 'builder': 1021}
 TAB_Y = 690
 # Upgrade dialogs a row opens over the list.
 ROW_DIALOGS = ('building_confirm', 'gear_confirm')
+# The dialog a row of each list opens, for the lists --buildings upgrades. A Builder Base row opens a dialog of
+# another layout that no calibration knows (a Star Laboratory row can open the laboratory itself), so those picks are
+# kept but never tapped.
+DIALOGS = {'buildings': 'building_confirm', 'lab': 'building_confirm', 'gear': 'gear_confirm',
+           'pets': 'building_confirm'}
 # Tesseract reads the small capitals' S and I as digits ("L.A.S.5.1").
 OCR_DIGITS = str.maketrans('51', 'si')
 UNITS, BADGE_DIGITS = 'calibration/units', 'calibration/badge'
@@ -65,8 +68,9 @@ SHIFT_STRIP, SHIFT_MARGIN, SHIFT_MAX_SCORE, SHIFT_UNIQUE, SHIFT_BLUR = 120, 20, 
 NAME_MIN_RATIO, OCR_WORKERS = 0.75, 8
 # Timer glyphs: digits are full height, unit letters ('h', 'm', 's') shorter; 'd' and 'j' reach full height too.
 TIME_SCALE, TIME_MIN_HEIGHT, TIME_LETTER_HEIGHT, TIME_GAP = 2, 0.45, 0.85, 1.0
-# Glyph height range at 1280x720, and the widest a glyph gets (two touching digits) for its height.
-TIME_GLYPH_HEIGHT, TIME_GLYPH_ASPECT = (3, 11), 2.2
+# Glyph height range at 1280x720, and the widest a glyph gets (two touching digits) for its height; a running bar's
+# helper face beside its timer reaches taller than any glyph.
+TIME_GLYPH_HEIGHT, TIME_GLYPH_ASPECT = (3, 10), 2.2
 # The level badge: a black square with a light rim; its digits have their own small font (calibration/badge).
 BADGE_SCALE, BADGE_DARK, BADGE_BRIGHT, BADGE_INK, BADGE_MIN_HEIGHT = 4, 70, 170, 120, 4
 BADGE_WIDE, BADGE_CUT = 6, (0.2, 0.55)
@@ -179,16 +183,14 @@ def read_time(image: np.ndarray, digits: dict, units: dict) -> str | None:
     text = ''
     for glyph, tall in time_glyphs(image):
         letter = bot.classify(bot.mask_canvas(glyph), units, bot.FRACTION_MIN_SCORE)
-        if not tall:
-            found = letter
-        else:
-            h, w = glyph.shape
-            # Neighbouring digits can touch ("30").
-            pieces = bot.split_glyphs(glyph, max(2, round(w / (h * bot.DIGIT_ASPECT)))) if w > bot.WIDE_RATIO * h \
-                else [glyph]
-            found = ''.join(bot.classify(bot.mask_canvas(piece), digits) or '?' for piece in pieces)
-            if '?' in found:
-                found = letter
+        h, w = glyph.shape
+        # Neighbouring digits can touch ("30").
+        pieces = bot.split_glyphs(glyph, max(2, round(w / (h * bot.DIGIT_ASPECT)))) if w > bot.WIDE_RATIO * h \
+            else [glyph]
+        number = ''.join(bot.classify(bot.mask_canvas(piece), digits) or '?' for piece in pieces)
+        number = None if '?' in number else number
+        # A '1' is drawn a little shorter than the other digits, as short as a unit letter ("18j").
+        found = (number or letter) if tall else (letter or number)
         if found is None:
             return None
         text += found
@@ -474,7 +476,8 @@ def selection(value: object, listing: str = 'buildings') -> dict:
 
 def validate(config: dict, root: Path) -> dict:
     """--buildings: the wall calibration it shares (builder list, price and icon on the upgrade dialog's button, gem
-    bars), its own (free builder counter, dark elixir icon, upgrade dialog) and a pick with at least one target."""
+    bars), its own (free builder counter, dark elixir icon, upgrade dialog) and every list's pick (a LISTS key each),
+    with at least one target in a list it upgrades (DIALOGS)."""
     bot.validate_walls(config, root, ('home',))
     upgrade = config.get('building_upgrade')
     if not isinstance(upgrade, dict) or 'building_confirm' not in config['screens']:
@@ -486,9 +489,12 @@ def validate(config: dict, root: Path) -> dict:
         raise bot.BotError('building_upgrade icons perlu ikon dark')
     if not set(CURRENCIES) <= set(config.get('capacity', {}).get('home', {})):
         raise bot.BotError('--buildings butuh kalibrasi: capacity home gold, elixir dan dark')
-    chosen = selection(config.get('buildings', {'targets': [], 'keep_builders': 0}))
-    if not chosen['targets']:
-        raise bot.BotError('Belum ada bangunan dipilih; pilih di dashboard (Pengaturan perangkat) lalu Simpan')
+    empty = {listing: {'targets': []} for listing in LISTS}
+    empty['buildings']['keep_builders'] = 0
+    chosen = {listing: selection(config.get(listing, empty[listing]), listing) for listing in LISTS}
+    if not any(chosen[listing]['targets'] for listing in DIALOGS):
+        raise bot.BotError('Belum ada bangunan, riset, hewan atau peralatan Desa Utama dipilih; pilih di dashboard '
+                           '(Upgrade) lalu Simpan')
     return chosen
 
 
@@ -499,14 +505,22 @@ def matches(row: dict, target: dict) -> bool:
 
 
 def row_key(row: dict) -> tuple:
-    return row['id'] or row['name'], row['next_level'], row['cost']
+    return row['id'] or row['name'], row['next_level'], row.get('cost')
+
+
+def payable(row: dict, amounts: dict) -> bool:
+    """A row's price is read and covered by the resource on hand. Equipment's ore is not shown on the village, so
+    there every ore cost need only be read: the dialog shows an amount the ore on hand does not cover in red."""
+    if 'costs' in row:
+        return bool(row['costs']) and None not in row['costs'].values()
+    return row['cost'] is not None and row['currency'] in CURRENCIES and row['cost'] <= amounts[row['currency']]
 
 
 def pick(placed: list, targets: list, amounts: dict, refused: set = frozenset()) -> tuple:
     """((row, place) to upgrade now or None, whether any target still has something left). The first target in
-    priority order wins with a listed row that is not running, does not go past its level and costs no more than
-    the resource on hand. A row going past the level means that target is reached; a running one, or one short of
-    resources or not read, is left for later."""
+    priority order wins with a listed row that is not running, does not go past its level and is payable. A row
+    going past the level means that target is reached; a running one, or one short of resources or not read, is left
+    for later."""
     pending = False
     for target in targets:
         for row, place in placed:
@@ -517,10 +531,10 @@ def pick(placed: list, targets: list, amounts: dict, refused: set = frozenset())
                     and row['next_level'] > level:
                 continue
             pending = True
-            if (row['section'] == 'in_progress' or row_key(row) in refused or row['cost'] is None
-                    or row['currency'] not in CURRENCIES or (level is not None and row['next_level'] is None)):
+            if (row['section'] == 'in_progress' or row_key(row) in refused
+                    or (level is not None and row['next_level'] is None)):
                 continue
-            if row['cost'] <= amounts[row['currency']]:
+            if payable(row, amounts):
                 return (row, place), True
     return None, pending
 
@@ -574,23 +588,16 @@ def village(runner: bot.Bot) -> tuple[int, dict]:
     return free, dict(zip(CURRENCIES, amounts))
 
 
-def home(runner: bot.Bot, spec: dict) -> tuple[int, dict]:
-    """On the Home Village with the gem count on record: free builders and resources."""
-    runner.navigate('home')
-    runner.find_gem_row(spec)
-    runner.start_gem_watch(spec)
-    return village(runner)
-
-
-def find_card(runner: bot.Bot, spec: dict, frames: list, place: int, row: dict, program: str) -> int:
-    """y of the row's card, swiping the list back up from its end until it shows. Its name is read again first, so
-    a list that moved under the bot never gets another row tapped."""
+def find_card(runner: bot.Bot, spec: dict, frames: list, place: int, row: dict, program: str, path: Path = CATALOG,
+              name_band: tuple = NAME_BAND) -> int:
+    """y of the row's card, swiping the list back up from its end until it shows. Its name (at name_band, named from
+    the catalog at path) is read again first, so a list that moved under the bot never gets another row tapped."""
     region = spec['row']['region']
     image, offset = frames[-1], offsets(frames, region)[-1]
     for _ in range(bot.WALL_SCROLL_LIMIT):
         for kind, y in items(image, region):
             if kind == 'card' and abs(offset + y - place) <= SAME_ROW_PX:
-                seen = named(ocr_line(band(image, NAME_BAND, y), program))
+                seen = named(ocr_line(band(image, name_band, y), program), path)
                 if (seen['id'], seen['name'], seen['count']) != (row['id'], row['name'], row['count']):
                     raise bot.WaitTimeout(f'Baris {row["name"]} berubah jadi {seen["name"]}; tidak ada input')
                 return y
@@ -600,90 +607,3 @@ def find_card(runner: bot.Bot, spec: dict, frames: list, place: int, row: dict, 
         offset -= list_shift(moved, image, region)
         image = moved
     raise bot.WaitTimeout(f'Baris {row["name"]} tidak ketemu lagi di daftar; tidak ada input')
-
-
-def upgrade(runner: bot.Bot, spec: dict, frames: list, place: int, row: dict, program: str) -> bool:
-    """Tap the row (the game opens its upgrade dialog) and confirm it only when refusal finds nothing; False when
-    the dialog was closed unconfirmed."""
-    y = find_card(runner, spec, frames, place, row, program)
-    runner.guarded_tap({'build_list'}, [spec['row']['tap_x'], y + NAME_CENTRE])
-    runner.wait({'building_confirm'}, {'build_list', 'wall_selected'}, bot.WALL_TAP_SECONDS)
-    image = runner.wait_still(bot.WALL_LIST_SETTLE_SECONDS if runner.poll else 0)
-    after = {'build_list', 'wall_selected', 'home'}
-    problem = refusal(runner, image, row)
-
-    def confirm(frame: np.ndarray) -> list:
-        # Looked at again in the very frame the tap follows.
-        again = refusal(runner, frame, row)
-        if again:
-            raise bot.TargetMissing(again)
-        return runner.config['screens']['building_confirm']['actions']['confirm']
-    if problem is None:
-        try:
-            runner.guarded_tap({'building_confirm'}, confirm)
-        except bot.TargetMissing as exc:
-            problem = str(exc)
-    if problem:
-        LOG.warning('Dialog upgrade %s tidak sesuai (%s); ditutup tanpa konfirmasi', row['name'], problem)
-        runner.action('building_confirm', 'close')
-        runner.wait(after, {'building_confirm'}, bot.WALL_TAP_SECONDS)
-        return False
-    # All builders busy or resources short bring up a gem offer; wait() closes it with X and stops this try.
-    runner.wait(after, {'building_confirm'}, bot.WALL_TAP_SECONDS)
-    runner.check_gems(spec)
-    return True
-
-
-def pause(runner: bot.Bot, seconds_left: int, reason: str) -> None:
-    if runner.stop_at is not None:
-        seconds_left = max(0, min(seconds_left, round(runner.stop_at - time.monotonic())))
-    LOG.info('Menunggu %s detik: %s', seconds_left, reason)
-    time.sleep(seconds_left if runner.poll else 0)
-
-
-def run(runner: bot.Bot, chosen: dict) -> int:
-    """--buildings: keep the builders busy on the picked Home Village buildings, the first target first, until each
-    reaches its level (or, without one, leaves the list); the number upgraded. Builders beyond keep_builders are
-    used only, and a cost only when the resource on hand covers it."""
-    spec = runner.config['walls']['home']
-    program = bot.executable(runner.config.get('tesseract'), 'Tesseract')
-    templates = load_templates(runner.root, runner.config)
-    targets, keep = chosen['targets'], chosen['keep_builders']
-    refused, upgraded = set(), 0
-    while True:
-        runner.check_limits()
-        runner.refresh_if_low_memory()
-        free, amounts = home(runner, spec)
-        frames = list_frames(runner, spec, runner.open_build_list('home', spec))
-        indonesian = runner.list_indonesian(frames[0])
-        placed = placed_rows(frames, spec, templates, program)
-        choice, pending = pick(placed, targets, amounts, refused)
-        if choice is None and not pending:
-            runner.close_menus()
-            LOG.info('Semua bangunan pilihan sudah mencapai target (%s upgrade); selesai', upgraded)
-            return upgraded
-        if choice is None or free <= keep:
-            runner.close_menus()
-            reason = (messages.translate(f'tukang bebas {free}, disisakan {keep}') if free <= keep
-                      else messages.translate('belum ada bangunan pilihan yang terjangkau'))
-            pause(runner, pause_seconds([row for row, _ in placed], indonesian), reason)
-            # A dialog that did not match is tried again after the wait; meanwhile the next target went first.
-            refused.clear()
-            continue
-        row, place = choice
-        try:
-            done = upgrade(runner, spec, frames, place, row, program)
-        except bot.NoFreeBuilder as exc:
-            LOG.warning('Upgrade %s dilewati: %s', row['name'], exc)
-            done = False
-        runner.close_menus()
-        if not done:
-            refused.add(row_key(row))
-            continue
-        upgraded += 1
-        runner.progress += 1
-        after, _ = home(runner, spec)
-        if after >= free:
-            LOG.warning('Tukang bebas tidak berkurang setelah upgrade %s (%s -> %s); cek game', row['name'], free,
-                        after)
-        LOG.info('Bangunan di-upgrade: %s ke level %s', row['name'], row['next_level'])

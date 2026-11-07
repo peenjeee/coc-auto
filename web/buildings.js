@@ -1,7 +1,7 @@
 // Building scan: every row of one of the game's builder list tabs (in the Home Village buildings, Laboratory, pets
 // and hero equipment; in the Builder Base buildings and Star Laboratory) read on the device, grouped by category.
-// Rows are ticked here, first ticked first, each up to a level or Max, a running upgrade too: buildings for the
-// "Upgrade buildings" task, the other lists only kept for now. The scan itself upgrades nothing.
+// Rows are ticked here, first ticked first, each up to a level or Max, a running upgrade too: the Home Village lists
+// for the "Upgrade buildings" task, the Builder Base lists only kept for now. The scan itself upgrades nothing.
 import { t } from './i18n.js';
 
 // Each list's categories, in the order shown; a row the device could not name comes under other.

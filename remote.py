@@ -434,9 +434,8 @@ class Settings:
         return language
 
     def write_buildings(self, chosen: object, listing: str = 'buildings') -> None:
-        """One list's pick (a SCAN_LISTS name, saved under that key), first one first, each up to its level: the
-        buildings --buildings upgrades and the builders it leaves, or the lab's or the pets' (no run upgrades those
-        yet)."""
+        """One list's pick (a SCAN_LISTS name, saved under that key), first one first, each up to its level, that
+        --buildings works through: the buildings with the builders it leaves, or another list's rows."""
         import bot
         import buildings
         try:

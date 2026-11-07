@@ -49,6 +49,21 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(snapshot['recent'][0]['detail'],'Archer Tower upgraded to level 8')
         fields=DiscordHooks.embed('summary',snapshot)['embeds'][0]['fields']
         self.assertIn(('🏗️ Upgrades','**2**'),[(f['name'],f['value']) for f in fields])
+    def test_research_pet_and_equipment_upgrades_count_like_buildings(self):
+        run=self.stats.start(['--buildings','--live'])
+        for line,detail in [('INFO: Riset di-upgrade: Valkyrie ke level 6','Valkyrie upgraded to level 6'),
+                            ('INFO: Research upgraded: Valkyrie to level 7','Valkyrie upgraded to level 7'),
+                            ('INFO: Hewan di-upgrade: L.A.S.S.I ke level 3','L.A.S.S.I upgraded to level 3'),
+                            ('INFO: Pet upgraded: Mighty Yak to level 2','Mighty Yak upgraded to level 2'),
+                            ('INFO: Peralatan di-upgrade: Kitab Mahasakti ke level 9','Kitab Mahasakti upgraded to level 9'),
+                            ('INFO: Equipment upgraded: Giant Gauntlet to level 4','Giant Gauntlet upgraded to level 4')]:
+            self.assertEqual(self.stats.consume(line,run),'upgrade')
+            self.assertEqual(self.stats.snapshot()['recent'][0]['detail'],detail)
+        snapshot=self.stats.snapshot()
+        self.assertEqual((snapshot['totals']['upgrades'],snapshot['totals']['walls']),(6,0))
+        fields=DiscordHooks.embed('summary',snapshot)['embeds'][0]['fields']
+        self.assertIn(('🏗️ Upgrades','**6**'),[(f['name'],f['value']) for f in fields])
+        self.assertIsNone(self.stats.consume('INFO: Riset dilewati: Valkyrie ke level 6',run))
     def test_history_and_session_isolation(self):
         self.consume('INFO: Serangan selesai: home (1)')
         self.now+=120
