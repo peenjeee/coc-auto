@@ -91,16 +91,10 @@ class BuildingListTests(unittest.TestCase):
         with self.assertRaises(bot.BotError):
             buildings.list_shift(top, panel('building-list-archer-towers'), self.spec['row']['region'])
 
-    def test_rows_that_look_alike_are_lined_up_by_the_previous_swipe(self):
+    def test_rows_that_look_alike_are_lined_up(self):
         # Real frames on which a second spot scored 0.039 against the right one's 0.034: the scan used to give up.
-        region = self.spec['row']['region']
         first, second, third = (panel(f'building-list-alike-{name}') for name in 'abc')
-        with self.assertRaises(bot.WaitTimeout):
-            buildings.list_shift(second, third, region)
-        self.assertEqual(buildings.list_shift(second, third, region, expected=313), 314)
-        self.assertEqual(buildings.offsets([first, second, third], region), [0, 313, 627])
-        with self.assertRaises(bot.WaitTimeout):
-            buildings.list_shift(second, third, region, expected=200)  # a move the swipe never made settles nothing
+        self.assertEqual(buildings.offsets([first, second, third], self.spec['row']['region']), [0, 313, 627])
 
     def test_a_title_names_its_section_in_either_language(self):
         self.assertEqual(buildings.title_section('Other upgrades', 0), 'other')
