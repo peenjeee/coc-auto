@@ -2498,6 +2498,14 @@ class BotTests(unittest.TestCase):
         image[240:480, 240:1040] = cv2.imread(str(root / 'fixtures' / 'idle-en.png'))
         self.assertEqual(bot.Detector(config, root).detect(image), 'idle')
 
+    def test_an_out_of_sync_error_is_a_popup_that_reloads_the_game(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[240:480, 240:1040] = cv2.imread(str(root / 'fixtures' / 'out-of-sync-en.png'))
+        self.assertEqual(bot.Detector(config, root).detect(image), 'out_of_sync')
+        self.assertEqual(bot.POPUP_ACTIONS['out_of_sync'], 'reload')
+
     def test_the_english_builder_result_is_known_while_its_battle_plays_on_behind_it(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent

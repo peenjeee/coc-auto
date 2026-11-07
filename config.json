@@ -2572,6 +2572,40 @@
         ]
       }
     },
+    "out_of_sync": {
+      "anchors": [
+        {
+          "roi": [
+            284,
+            276,
+            76,
+            30
+          ],
+          "file": "calibration/out_of_sync-title-2fa5d3cc59cb4257996edf06dd1af810.png"
+        },
+        {
+          "roi": [
+            284,
+            326,
+            450,
+            28
+          ],
+          "file": "calibration/out_of_sync-text-37526d435e7546fb840c446121a141f5.png"
+        }
+      ],
+      "overrides": [
+        "home",
+        "builder",
+        "build_list",
+        "wall_selected"
+      ],
+      "actions": {
+        "reload": [
+          354,
+          436
+        ]
+      }
+    },
     "builders_busy": {
       "anchors": [
         {
