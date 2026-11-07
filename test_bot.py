@@ -2289,6 +2289,37 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.GemSpent):
             runner.start_gem_watch(spec)
 
+    def test_only_the_goblins_pay_passes_the_gem_watch_and_only_once(self):
+        spec, _, _ = self.wall_spec()
+        runner = self.make_bot(Device(self.frames), True)
+        reads = iter([1020, 980, 980, 970, 1020, 1009])
+        runner.read_gems = lambda image, spec: next(reads)
+        runner.start_gem_watch(spec)
+        # 40 paid to a Goblin: exactly that drop, even one that loses a digit, becomes the record.
+        runner.gems_paid = 40
+        runner.check_gems(spec)
+        self.assertEqual((runner.gems_known, runner.gems_paid), (980, 0))
+        runner.check_gems(spec)
+        # Allowed once: any later drop stops the run.
+        with self.assertRaises(bot.GemSpent):
+            runner.check_gems(spec)
+        # Any other drop than the pay stops it too, at the next session's start as well.
+        runner.gems_known, runner.gems_paid = 1020, 0
+        runner.start_gem_watch(spec)
+        runner.gems_paid = 10
+        with self.assertRaises(bot.GemSpent):
+            runner.start_gem_watch(spec)
+
+    def test_a_goblin_offer_is_closed_unpaid_by_any_wait(self):
+        root = Path(__file__).parent
+        config = bot.load_config(root / 'config.json')
+        offer = cv2.imread(str(root / 'fixtures' / 'goblin-builder-offer.png'))
+        device = Device({'goblin_offer': offer}, 'goblin_offer')
+        runner = bot.Bot(config, root, device, live=True, timeout=1, poll=0)
+        with self.assertRaises(bot.NoFreeBuilder):
+            runner.wait({'home'}, {'build_list'}, 1)
+        self.assertEqual(device.inputs, [tuple(config['screens']['goblin_offer']['actions']['close'])])
+
     def test_the_bundled_wall_list_prices_read_white_and_red(self):
         config, _, _ = self.bundled()
         root = Path(bot.__file__).parent
@@ -2524,6 +2555,16 @@ class BotTests(unittest.TestCase):
         self.assertEqual(bot.Detector(config, root).detect(image), 'gold_pass')
         self.assertEqual(bot.POPUP_ACTIONS['gold_pass'], 'close')
         self.assertEqual(config['screens']['gold_pass']['actions']['close'], [1100, 80])
+
+    def test_a_new_seasons_gold_pass_offer_over_an_upgrade_dialog_is_closed_never_bought(self):
+        config, _, _ = self.bundled()
+        root = Path(bot.__file__).parent
+        image = cv2.imread(str(root / 'fixtures' / 'gold-pass-season.png'))
+        self.assertEqual(bot.Detector(config, root).detect(image), 'gold_pass_season')
+        self.assertEqual(bot.POPUP_ACTIONS['gold_pass_season'], 'close')
+        # Its only action is the X at the top right; the buy button below is never a known point.
+        self.assertEqual(config['screens']['gold_pass_season']['actions'], {'close': [1116, 83]})
+        self.assertEqual(bot.ACTIONS['gold_pass_season'], ('close',))
 
     def test_the_english_another_device_popup_is_the_other_device_screen(self):
         config, _, _ = self.bundled()

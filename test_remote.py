@@ -519,6 +519,22 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual((refused['ok'], refused['code']), (False, 'refused'))
         self.assertEqual(json.loads(self.config.with_name('config.local.json').read_text(encoding='utf-8')), local)
 
+    def test_the_goblin_switches_start_off_and_are_saved_only_when_valid(self):
+        self.assertEqual(self.settings.read()['goblin'], {'builder': False, 'researcher': False, 'max_gems': 0})
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), settings=self.settings)
+        self.addCleanup(supervisor.statistics.db.close)
+        goblin = {'builder': False, 'researcher': True, 'max_gems': 60}
+        result = supervisor.command(*signed('set_goblin', {'goblin': goblin}))
+        self.assertEqual((result['ok'], result['code'], result['data']['goblin']), (True, 'goblin_saved', goblin))
+        self.assertEqual(self.stored()['goblin'], goblin)
+        saved = self.config.with_name('config.local.json').read_text(encoding='utf-8')
+        for bad in (None, {}, {**goblin, 'max_gems': 1001}, {**goblin, 'researcher': 'yes'},
+                    {**goblin, 'max_gems': 5.0}, {**goblin, 'gems': 1}):
+            with self.subTest(bad=bad):
+                refused = supervisor.command(*signed('set_goblin', {'goblin': bad}))
+                self.assertEqual((refused['ok'], refused['code']), (False, 'refused'))
+        self.assertEqual(self.config.with_name('config.local.json').read_text(encoding='utf-8'), saved)
+
     def test_a_minimum_the_bot_cannot_read_is_refused(self):
         config = self.stored()
         del config['screens']['home_scout']['loot']['dark']

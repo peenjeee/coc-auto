@@ -68,7 +68,8 @@ KEY_FILE = Path('.coc-auto') / 'device.json'
 COMMAND_MAX_AGE_SECONDS = 120
 # Settings action -> its answer code; every one answers with the settings as they are now (or what was found).
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected',
-                    'set_setup': 'setup_saved', 'set_language': 'language_saved', 'set_buildings': 'buildings_saved'}
+                    'set_setup': 'setup_saved', 'set_language': 'language_saved', 'set_buildings': 'buildings_saved',
+                    'set_goblin': 'goblin_saved'}
 ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
            'fit_display', 'restore_display', 'scan_buildings', 'get_buildings', *SETTINGS_ACTIONS)
 # Reads that run outside the control lock (a slow one must not hold up Stop) and stay out of the log.
@@ -413,9 +414,14 @@ class Settings:
             except bot.BotError:
                 # Never saved, or edited by hand into something --buildings refuses: the panel starts empty.
                 picks[listing] = {'targets': [], 'keep_builders': 0} if listing == 'buildings' else {'targets': []}
+        try:
+            goblin = buildings.goblin(config.get('goblin', buildings.GOBLIN_OFF))
+        except bot.BotError:
+            # Edited by hand into something --buildings refuses: shown off, as a run would not start with it anyway.
+            goblin = buildings.GOBLIN_OFF
         return {'minimum': {key: minimum.get(key, 0) for key in MINIMUM_KEYS},
                 'setup': {name: config.get(name) for name in SETUP_FIELDS}, 'language': config.get('language', 'id'),
-                **picks}
+                'goblin': goblin, **picks}
 
     def detect(self) -> dict:
         return self.detector(self.config())
@@ -443,6 +449,17 @@ class Settings:
         except bot.BotError as exc:
             raise CommandRefused(f'Pilihan bangunan ditolak: {exc}') from exc
         save_local(self.config_path, changes, self.root, 'Pilihan bangunan')
+
+    def write_goblin(self, goblin: object) -> None:
+        """The Goblin Builder and Goblin Researcher switches and the most gems one hire may cost: the only gems
+        --buildings ever pays."""
+        import bot
+        import buildings
+        try:
+            changes = {'goblin': buildings.goblin(goblin)}
+        except bot.BotError as exc:
+            raise CommandRefused(f'Pengaturan Goblin ditolak: {exc}') from exc
+        save_local(self.config_path, changes, self.root, 'Pengaturan Goblin')
 
     def write_setup(self, setup: object) -> None:
         import bot
@@ -708,6 +725,9 @@ class Supervisor:
         elif action == 'set_buildings':
             self.settings.write_buildings(options.get('buildings'), choice(options, 'list', SCAN_LISTS, 'buildings'))
             message = 'Pilihan bangunan disimpan; berlaku saat Start berikutnya'
+        elif action == 'set_goblin':
+            self.settings.write_goblin(options.get('goblin'))
+            message = 'Pengaturan Goblin disimpan; berlaku saat Start berikutnya'
         else:
             message = 'Pengaturan dimuat'
         return code, message, {**self.settings.read(), 'display': self.display_data()}

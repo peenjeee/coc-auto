@@ -11,7 +11,7 @@ import { setupSelects, refreshSelects } from './select.js';
 import { StatsPanel, previewStatistics } from './stats.js?v=9';
 import { DiscordPanel } from './discord.js?v=5';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=6';
+import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=7';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -177,7 +177,7 @@ function resultText(result) {
   return text === key ? translate(String(result.source_message ?? result.message ?? '')) : text;
 }
 
-const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved', 'language_saved', 'buildings_saved'];
+const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved', 'language_saved', 'buildings_saved', 'goblin_saved'];
 const DISPLAY_ANSWERS = ['display_fitted', 'display_ok', 'display_restored', 'display_unchanged'];
 
 function handleResult(result, quiet = false) {
@@ -840,6 +840,7 @@ class DemoLink {
     else if (action === 'set_setup') code='setup_saved';
     else if (action === 'set_language') code='language_saved';
     else if (action === 'set_buildings') {this.picks[args.list]=args.buildings;code='buildings_saved';}
+    else if (action === 'set_goblin') {this.picks.goblin=args.goblin;code='goblin_saved';}
     else if (action === 'detect_setup') {code='setup_detected';data={folders:['Demo LDPlayer installation'],instances:[{index:0,name:'Demo device',running:true}],resolution:[1280,720],problems:[]};}
     else if (action === 'open_coc') code='coc_opened';
     else if (action === 'close_coc') {this.state.state='idle';code='coc_closed';}

@@ -2077,6 +2077,44 @@
         ]
       }
     },
+    "gold_pass_season": {
+      "anchors": [
+        {
+          "file": "calibration/gold_pass_season-close.png",
+          "search": [
+            1080,
+            50,
+            75,
+            70
+          ],
+          "max_score": 0.05
+        },
+        {
+          "file": "calibration/gold_pass_season-shield.png",
+          "search": [
+            140,
+            55,
+            130,
+            110
+          ],
+          "max_score": 0.05
+        }
+      ],
+      "overrides": [
+        "home",
+        "builder",
+        "build_list",
+        "wall_selected",
+        "building_confirm",
+        "gear_confirm"
+      ],
+      "actions": {
+        "close": [
+          1116,
+          83
+        ]
+      }
+    },
     "build_list": {
       "anchors": [
         {
@@ -2311,6 +2349,36 @@
           56
         ]
       }
+    },
+    "locked_info": {
+      "anchors": [
+        {"roi": [1104, 30, 56, 54], "file": "calibration/building_confirm-close-6fc60c22b47f410db7fcd11cf9fdca7c.png", "margin": 8},
+        {"roi": [1012, 598, 40, 62], "file": "calibration/locked_info-go-left.png", "margin": 8},
+        {"roi": [1106, 598, 40, 62], "file": "calibration/locked_info-go-right.png", "margin": 8}
+      ],
+      "overrides": ["build_list", "wall_selected"],
+      "actions": {"go": [1079, 628], "close": [1131, 56]}
+    },
+    "upgrade_locked": {
+      "anchors": [
+        {"roi": [1022, 16, 62, 56], "file": "calibration/upgrade_locked-close.png", "margin": 8},
+        {"roi": [536, 576, 52, 92], "file": "calibration/upgrade_locked-okay-left.png", "margin": 8},
+        {"roi": [692, 576, 52, 92], "file": "calibration/upgrade_locked-okay-right.png", "margin": 8}
+      ],
+      "overrides": ["build_list", "wall_selected"],
+      "actions": {"close": [1053, 43]}
+    },
+    "goblin_offer": {
+      "anchors": [
+        {"roi": [1116, 128, 58, 58], "file": "calibration/goblin_offer-close.png", "margin": 8},
+        {"roi": [896, 403, 50, 62], "file": "calibration/goblin_offer-gem.png", "margin": 30}
+      ],
+      "alt_anchors": [[
+        {"roi": [1116, 128, 58, 58], "file": "calibration/goblin_offer-close.png", "margin": 8},
+        {"roi": [1005, 424, 38, 46], "file": "calibration/goblin_offer-gem-small.png", "margin": 30}
+      ]],
+      "overrides": ["home", "builder", "build_list", "wall_selected", "building_confirm"],
+      "actions": {"close": [1145, 156]}
     },
     "wall_bulk_confirm": {
       "anchors": [

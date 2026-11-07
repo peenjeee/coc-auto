@@ -65,11 +65,14 @@ class GearListTests(unittest.TestCase):
     def test_the_list_reads_whole_with_tesseract(self):
         rows = gear.read_rows([panel('gear-list-next'), panel('gear-list-unequipped')], self.spec, self.templates,
                               bot.executable(self.config.get('tesseract'), 'Tesseract'))
+        # The two locked rows with green names (Stun Blaster, Haste Vial) come under their own section.
         self.assertEqual([row['id'] for row in rows],
                          ['fireball', 'seeking_shield', 'royal_gem', 'jantung_api', 'ransel_roket', 'rage_vial',
-                          'dumbel_sakti', 'barbarian_puppet', 'snake_bracelet', 'archer_puppet', 'invisibility_vial',
-                          'healer_puppet', 'henchmen_puppet'])
-        self.assertEqual([row['section'] for row in rows], ['equipped'] * 6 + ['unequipped'] * 7)
+                          'pemancar_kejut', 'haste_vial', 'dumbel_sakti', 'barbarian_puppet', 'snake_bracelet',
+                          'archer_puppet', 'invisibility_vial', 'healer_puppet', 'henchmen_puppet'])
+        self.assertEqual([row['section'] for row in rows], ['equipped'] * 6 + ['locked'] * 2 + ['unequipped'] * 7)
+        self.assertEqual(rows[6], {'id': 'pemancar_kejut', 'name': 'Pemancar Kejut', 'category': 'equipment',
+                                   'count': 1, 'next_level': None, 'costs': {}, 'section': 'locked'})
         self.assertEqual(rows[-1], {'id': 'henchmen_puppet', 'name': 'Boneka Pengawal', 'category': 'equipment',
                                     'count': 1, 'next_level': 3, 'costs': {'shiny': 240, 'glowy': 20},
                                     'section': 'unequipped'})

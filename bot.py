@@ -46,8 +46,10 @@ ACTIONS = {
     'builder_result': ('return',), 'star_bonus': ('ok',), 'builder_star_bonus': ('ok',),
     'builder_cart': ('claim', 'close'), 'reward_chest': ('open',), 'reward_card': ('continue',),
     'layout_blocked': ('ok',), 'league': ('close',), 'welcome': ('ok',), 'gold_pass': ('close',),
+    'gold_pass_season': ('close',),
     'build_list': ('close',), 'wall_selected': ('close', 'build'), 'wall_confirm': ('confirm', 'close'),
     'wall_bulk_confirm': ('confirm', 'close'), 'building_confirm': ('confirm', 'close'), 'gear_confirm': ('confirm', 'close'),
+    'locked_info': ('go', 'close'), 'upgrade_locked': ('close',), 'goblin_offer': ('close',),
     'builder_wall_confirm': ('confirm', 'close'), 'search_failed': ('close',), 'gem_offer': ('close',),
     'idle': ('reload',), 'out_of_sync': ('reload',), 'builders_busy': ('close',), 'update_offer': ('update',), 'disconnected': ('retry',),
     'other_device': ('reload',), 'home_battle': ('surrender',), 'builder_battle': ('surrender',),
@@ -95,7 +97,7 @@ FULL_RATIO, STORAGE_RUN_RATIO, STORAGE_MIN_VALUE = 0.95, 0.8, 150
 RGBA_8888, RAW_HEADERS, RAW_HEADER_MIN = 1, (12, 16), 16
 POPUP_ACTIONS = {'star_bonus': 'ok', 'builder_star_bonus': 'ok', 'reward_chest': 'open', 'reward_card': 'continue',
                  'layout_blocked': 'ok', 'league': 'close', 'welcome': 'ok', 'idle': 'reload', 'disconnected': 'retry',
-                 'other_device': 'reload', 'gold_pass': 'close', 'out_of_sync': 'reload'}
+                 'other_device': 'reload', 'gold_pass': 'close', 'gold_pass_season': 'close', 'out_of_sync': 'reload'}
 POPUPS = tuple(POPUP_ACTIONS)
 # A retry with the network still down brings the dialog straight back, so give it time between tries.
 POPUP_PAUSE_SECONDS = {'disconnected': 10}
@@ -143,9 +145,9 @@ LAUNCH_ATTEMPTS = 4
 # How long a wait sees only unknown frames before it asks whether the game is still in front.
 GAME_CHECK_SECONDS = 10
 MENU_SCREENS = ('build_list', 'wall_selected', 'wall_confirm', 'builder_wall_confirm', 'wall_bulk_confirm',
-                'building_confirm', 'gear_confirm')
+                'building_confirm', 'gear_confirm', 'locked_info', 'upgrade_locked')
 OPTIONAL_SCREENS = ('builder_cart', 'search_failed', 'gem_offer', 'other_device', 'builders_busy', 'update_offer',
-                    'surrender_confirm', 'maintenance', *MENU_SCREENS)
+                    'surrender_confirm', 'maintenance', 'goblin_offer', *MENU_SCREENS)
 # The battle clock runs at 1x until its last minute, when the 4x button appears; past two minutes little is saved.
 SURRENDER_MAX_SECONDS, SURRENDER_DEFAULT_SECONDS = 120, 60
 # Home Village battles are given up at this damage unless --surrender-at says otherwise (0 = never).
@@ -1793,6 +1795,8 @@ class Bot:
         self.upgrade_limit, self.upgrades_done = max_upgrades or None, 0
         self.bulk_walls, self.wall_every, self.wall_resources = bulk_walls, wall_every, wall_resources
         self.gems_known: int | None = None
+        # Gems just paid to a Goblin the user allowed (upgrades.hire): the next count may be exactly that much lower.
+        self.gems_paid = 0
         self.gem_shift = 0
         self.wall_excluded: set = set()
         self.gems_fresh = False
@@ -1875,6 +1879,10 @@ class Bot:
             if state == 'builders_busy' and state not in targets | allowed:
                 self.action(state, 'close')
                 raise NoFreeBuilder('Semua tukang sibuk; tawaran gem ditutup tanpa membeli')
+            if state == 'goblin_offer' and state not in targets | allowed:
+                # The Goblin Builder or Researcher for gems: hired only by --buildings with its switch on.
+                self.action(state, 'close')
+                raise NoFreeBuilder('Tukang atau Lab sibuk; tawaran Goblin ditutup tanpa membayar gem')
             if state == 'search_failed' and state not in targets | allowed:
                 # The server refused the search ("coba lagi nanti"): go home, give it a minute, let recovery retry.
                 self.action(state, 'close')
@@ -2864,7 +2872,10 @@ class Bot:
             raise GemUnreadable(f'Gem tidak terbaca ({exc}); tidak ada upgrade') from exc
 
     def compare_gems(self, now: int) -> None:
-        """A count with other digits than the one on record is a misread; the same digits but lower is a drop."""
+        """A count with other digits than the one on record is a misread; the same digits but lower is a drop. A count
+        exactly the Goblin's pay below the record is that payment, which then becomes the record."""
+        if self.gems_paid and now == self.gems_known - self.gems_paid:
+            self.gems_known = now
         known = self.gems_known
         if len(str(now)) != len(str(known)):
             raise GemUnreadable(f'Gem terbaca {now:,}, tercatat {known:,}; dibaca ulang tanpa upgrade')
@@ -2876,7 +2887,7 @@ class Bot:
         now = self.gem_count(spec)
         if self.gems_known is not None:
             self.compare_gems(now)
-        self.gems_known = now
+        self.gems_known, self.gems_paid = now, 0
         self.gems_fresh = True
 
     def check_gems(self, spec: dict) -> None:
@@ -2885,6 +2896,8 @@ class Bot:
         if now > self.gems_known:
             # Walls never add gems, so a higher count mid-session is a misread that could hide a drop.
             raise GemUnreadable(f'Gem terbaca naik {self.gems_known:,} -> {now:,}; dibaca ulang tanpa upgrade')
+        # The Goblin's pay is allowed once: a count read cleanly after it was either that drop or no drop at all.
+        self.gems_paid = 0
         self.gems_fresh = True
 
     def wall_rows(self, image: np.ndarray, spec: dict) -> list:
@@ -2972,8 +2985,8 @@ class Bot:
         return [hit[:3] for hit in self.button_hits(image, spec, spec['button'])]
 
     def button_hits(self, image: np.ndarray, spec: dict, button: dict) -> list:
-        """(resource, tap, affordable, scale) for every button matching button's hammer: the one-wall upgrade or,
-        with --bulk-walls, the double hammer of "Tingkatkan Lebih Banyak"."""
+        """(resource, tap, affordable, scale, price band) for every button matching button's hammer: the one-wall
+        upgrade (a selected building's too) or, with --bulk-walls, the double hammer of "Tingkatkan Lebih Banyak"."""
         template = cv2.imread(str(asset_path(self.root, button['file'])))
         x0, y0, w0, h0 = button['search']
         region = image[y0:y0 + h0, x0:x0 + w0]
@@ -2999,7 +3012,7 @@ class Bot:
                 continue
             affordable = white_pixels(image, band) >= spec['min_white'] * scale * scale
             tap = [x + round(button['tap'][0] * scale), y + round(button['tap'][1] * scale)]
-            result.append((resource, tap, affordable, scale))
+            result.append((resource, tap, affordable, scale, band))
         return result
 
     def affordable_button(self, image: np.ndarray, spec: dict) -> tuple | None:

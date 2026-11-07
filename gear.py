@@ -3,7 +3,6 @@ badge and ore costs, named from gear.json. An equipment upgrade is paid in ore a
 timer; a row's hero portrait and icon push its name further right than a building's."""
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import cv2
@@ -22,8 +21,7 @@ ORE_COLUMNS, ORE_MIN_SATURATION, ORE_MIN_VALUE, ORE_MIN_PIXELS, ORE_MIN_HEIGHT =
 # the midpoints to its neighbours, so the line above never reaches into it.
 CARD_HEIGHT, NAME_BAND, BADGE_BAND = 50, (1030, 2, 170, 20), (985, 26, 14, 15)
 COST_X, COST_HALF, COST_TOP_GAP = (1150, 1248), 8, 2
-# "Equipped" checked after "Unequipped", which contains it; a locked row's green name also passes as a title and
-# opens no section.
+# "Equipped" checked after "Unequipped", which contains it.
 TITLE_WORDS = (('unequipped', ('unequip', 'dilepas')), ('equipped', ('equip', 'dipasang')))
 # The upgrade dialog's green Confirm button ([x, y, w, h]) lists each ore's amount before its icon on one line; an
 # amount the ore on hand does not cover is red, which never reads as a price. The grey button beside it uses an item.
@@ -97,15 +95,15 @@ def read_rows(frames: list, spec: dict, templates: dict, program: str) -> list[d
 def placed_rows(frames: list, spec: dict, templates: dict, program: str) -> list[tuple[dict, int]]:
     """read_rows with each row's place down the list: its card's top as the first frame would show it."""
     ordered = buildings.listed(frames, spec['row']['region'])
-    jobs = [(buildings.band(image, buildings.TITLE_BAND, y), program, *buildings.TITLE_TEXT) if kind == 'title' else
-            (buildings.band(image, NAME_BAND, y), program) for kind, _, y, image in ordered]
-    # Tesseract takes about half a second to start, so the lines are read side by side.
-    with ThreadPoolExecutor(buildings.OCR_WORKERS) as pool:
-        texts = list(pool.map(lambda job: buildings.ocr_line(*job), jobs))
+    texts = buildings.read_lines(ordered, program, NAME_BAND)
     rows, section = [], 'equipped'
     for (kind, place, y, image), text in zip(ordered, texts):
         if kind == 'title':
             section = title(text) or section
+            continue
+        if kind == 'locked':
+            rows.append(({**buildings.named(text, CATALOG), 'next_level': None, 'costs': {}, 'section': 'locked'},
+                         place))
             continue
         rows.append(({**buildings.named(text, CATALOG),
                       'next_level':buildings.read_badge(buildings.band(image, BADGE_BAND, y), templates['badge']),

@@ -25,6 +25,7 @@ const ORES = ['shiny', 'glowy', 'starry'];
 export const SCAN_WAIT_MS = 180000;
 const MAX_LEVEL = 200;
 const MAX_KEEP = 10;
+const MAX_GOBLIN_GEMS = 1000;
 const $ = (id) => document.getElementById(id);
 
 /** @param {string} tag @param {string} [text] @param {string} [className] */
@@ -71,6 +72,12 @@ export class BuildingsPanel {
         ? { targets: this.targets, keep_builders: Number.isInteger(keep) ? Math.min(MAX_KEEP, Math.max(0, keep)) : 0 }
         : { targets: this.targets } });
     });
+    // The only gems the bot ever pays: a Goblin hired for an upgrade, each kind only when switched on.
+    $('goblin-save').addEventListener('click', () => {
+      const gems = Number.parseInt($('goblin-max').value, 10);
+      send('set_goblin', { goblin: { builder: $('goblin-builder').checked, researcher: $('goblin-researcher').checked,
+        max_gems: Number.isInteger(gems) ? Math.min(MAX_GOBLIN_GEMS, Math.max(0, gems)) : 0 } });
+    });
   }
 
   /** The list shown: its rows (null until a scan of it is known), when they were read and its pick. */
@@ -109,6 +116,10 @@ export class BuildingsPanel {
       }));
     }
     $('buildings-keep').value = String(Number.isInteger(saved?.buildings?.keep_builders) ? saved.buildings.keep_builders : 0);
+    // A device from before the Goblin switches has them off.
+    $('goblin-builder').checked = saved?.goblin?.builder === true;
+    $('goblin-researcher').checked = saved?.goblin?.researcher === true;
+    $('goblin-max').value = String(Number.isInteger(saved?.goblin?.max_gems) ? saved.goblin.max_gems : 0);
     this.render();
   }
 
@@ -129,6 +140,7 @@ export class BuildingsPanel {
     $('buildings-hint').textContent = this.text('buildings_hint');
     $('buildings-pick-hint').textContent = this.text('buildings_pick_hint');
     $('buildings-keep').closest('label').hidden = this.list !== 'buildings';
+    $('goblin').hidden = village !== 'home';
     this.renderPicked();
     this.clocks = [];
     $('buildings-scan').textContent = this.rows ? t('buildings_rescan') : this.text('buildings_scan');
@@ -143,10 +155,15 @@ export class BuildingsPanel {
       return;
     }
     const categories = CATEGORIES[this.list];
+    const open = this.rows.filter((row) => row.section !== 'locked');
     for (const category of categories) {
-      const rows = this.rows.filter((row) => (categories.includes(row.category) ? row.category : 'other') === category);
+      const rows = open.filter((row) => (categories.includes(row.category) ? row.category : 'other') === category);
       if (rows.length) list.append(this.group(category, rows));
     }
+    // Rows with the game's padlock come last, under their own group; a ticked one is worked toward by upgrading what
+    // it waits for.
+    const locked = this.rows.filter((row) => row.section === 'locked');
+    if (locked.length) list.append(this.group('locked', locked));
     this.tick();
   }
 
@@ -205,7 +222,8 @@ export class BuildingsPanel {
       line.insertCell().textContent = Number.isInteger(row.next_level) ? `→ ${row.next_level}` : '–';
       const time = line.insertCell();
       // Hero equipment is upgraded at once; it has no timer to read.
-      time.textContent = typeof row.time === 'string' ? row.time : this.list === 'gear' ? t('buildings_instant') : '–';
+      time.textContent = typeof row.time === 'string' ? row.time
+        : this.list === 'gear' && row.section !== 'locked' ? t('buildings_instant') : '–';
       if (Number.isInteger(row.seconds)) this.clocks.push([time, row.seconds]);
       const cost = line.insertCell();
       const coins = COINS[VILLAGE[this.list]];

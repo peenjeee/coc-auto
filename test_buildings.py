@@ -180,11 +180,85 @@ class BuildingListTests(unittest.TestCase):
                                                        'barbarian', 'pekka', 'wizard', 'archer'])
         self.assertEqual([(row['category'], row['cost'], row['currency']) for row in rows[4:6]],
                          [('troop', 400_000, 'elixir'), ('troop', 400_000, 'elixir')])
-        # The pets: L.A.S.S.I upgrading, every other pet still locked behind the Pet House and left out.
+        # The pets: L.A.S.S.I upgrading, every other pet still locked behind the Pet House.
         pets = buildings.read_rows([panel('pet-list-lassi')], self.spec, self.templates, self.config['tesseract'],
                                    buildings.RESEARCH)
-        self.assertEqual([(row['id'], row['category'], row['section'], row['time']) for row in pets],
-                         [('lassi', 'pet', 'in_progress', '13j 57m')])
+        self.assertEqual([(row['id'], row['category'], row['section'], row['time']) for row in pets[:2]],
+                         [('lassi', 'pet', 'in_progress', '13j 57m'), ('electro_owl', 'pet', 'locked', None)])
+        self.assertEqual({row['section'] for row in pets[1:]}, {'locked'})
+        self.assertEqual(len(pets), 10)
+
+    @unittest.skipUnless(shutil.which(bot.load_config(ROOT / 'config.json').get('tesseract') or ''), 'needs Tesseract')
+    def test_locked_rows_are_read_by_name_in_either_language(self):
+        # White names and green ones (what the next level brings) alike, each from its list's catalog.
+        for name, path, expected in (('building-list-locked', buildings.CATALOG, ['multi_archer_tower', 'ricochet_cannon']),
+                                     ('building-list-locked-en', buildings.CATALOG,
+                                      ['multi_archer_tower', 'ricochet_cannon']),
+                                     ('star-list-locked', buildings.STAR, None)):
+            with self.subTest(name=name):
+                rows = buildings.read_rows([panel(name)], self.spec, self.templates, self.config['tesseract'], path)
+                locked = [row for row in rows if row['section'] == 'locked']
+                if expected is not None:
+                    self.assertEqual([row['id'] for row in locked], expected)
+                self.assertTrue(locked)
+                self.assertEqual({(row['next_level'], row['time'], row['cost'], row['currency']) for row in locked},
+                                 {(None, None, None, None)})
+
+
+class LockedRowTests(unittest.TestCase):
+    """Locked rows on real list frames of every tab and both villages, told by the padlock in either language."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.config = bot.load_config(ROOT / 'config.json')
+
+    def test_a_locked_row_is_told_by_its_padlock_in_every_list(self):
+        for name, village, locked, cards in (('building-list-locked', 'home', [530, 587], 8),
+                                             ('building-list-locked-en', 'home', [530, 587], 8),
+                                             ('lab-list-locked', 'home', [74, 131, 188, 245, 302, 359, 416, 472, 529, 586],
+                                              0),
+                                             ('pet-list-lassi', 'home', 9, 0), ('gear-list-locked', 'home', [461, 518], 7),
+                                             ('star-list-locked', 'builder', [416, 473, 530, 586], 6)):
+            with self.subTest(name=name):
+                found = buildings.items(panel(name), self.config['walls'][village]['row']['region'])
+                ys = [y for kind, y in found if kind == 'locked']
+                self.assertEqual(len(ys) if isinstance(locked, int) else ys, locked)
+                if cards:
+                    self.assertEqual(sum(kind == 'card' for kind, _ in found), cards)
+                # A locked row's own text never passes as a section title.
+                self.assertFalse([y for kind, y in found if kind == 'title' and any(abs(y - top - 20) < 25 for top in ys)])
+
+    def test_locked_rows_come_under_their_own_section_with_nothing_to_pay(self):
+        spec = self.config['walls']['home']
+        with patch.object(buildings, 'ocr_line', lambda image, program, *colours:
+                          'Meriam Pantul' if colours == buildings.LOCKED_TEXT else 'Bom x 8'):
+            rows = buildings.read_rows([panel('building-list-locked')], spec, buildings.load_templates(ROOT, self.config),
+                                       'tesseract')
+        self.assertEqual(rows[-1], {'id': 'ricochet_cannon', 'name': 'Meriam Pantul', 'category': 'defense', 'count': 1,
+                                    'next_level': None, 'time': None, 'cost': None, 'currency': None,
+                                    'section': 'locked'})
+        self.assertEqual([row['section'] for row in rows].count('locked'), 2)
+
+    def test_the_locked_dialog_the_goblin_offers_and_upgrade_locked_are_known_in_either_language(self):
+        detector = bot.Detector(self.config, ROOT)
+        for name, screen in (('locked-info', 'locked_info'), ('locked-info-en', 'locked_info'),
+                             ('goblin-offer', 'goblin_offer'), ('goblin-offer-en', 'goblin_offer'),
+                             ('goblin-builder-offer', 'goblin_offer'), ('goblin-builder-offer-en', 'goblin_offer'),
+                             ('upgrade-locked', 'upgrade_locked'), ('upgrade-locked-en', 'upgrade_locked'),
+                             ('building-confirm-gold', 'building_confirm'), ('research-confirm', 'building_confirm'),
+                             ('gear-confirm-one-ore', 'gear_confirm')):
+            with self.subTest(name=name):
+                self.assertEqual(detector.detect(cv2.imread(str(ROOT / 'fixtures' / f'{name}.png'))), screen)
+
+    def test_the_goblin_switches_are_checked(self):
+        allowed = {'builder': True, 'researcher': False, 'max_gems': 1000}
+        self.assertEqual(buildings.goblin(allowed), allowed)
+        self.assertEqual(buildings.goblin(buildings.GOBLIN_OFF), buildings.GOBLIN_OFF)
+        for bad in (None, [], {}, {**allowed, 'max_gems': 1001}, {**allowed, 'max_gems': -1},
+                    {**allowed, 'max_gems': True}, {**allowed, 'builder': 'true'}, {**allowed, 'builder': 1},
+                    {**allowed, 'extra': 1}, {'builder': True, 'researcher': True}):
+            with self.subTest(bad=bad), self.assertRaises(bot.BotError):
+                buildings.goblin(bad)
 
 
 class ScanTests(unittest.TestCase):
@@ -332,6 +406,17 @@ class PickTests(unittest.TestCase):
             self.assertEqual(buildings.pick([(unread, 0)], target, AMOUNTS), (None, True))
         mine = row('Gold Mine', 'gold_mine')
         self.assertEqual(buildings.pick([(mine, 0)], target, AMOUNTS, {buildings.row_key(mine)}), (None, True))
+
+    def test_a_locked_target_is_worked_toward_until_the_game_lists_it_unlocked(self):
+        locked = row('Ricochet Cannon', 'ricochet_cannon', None, None, None, 'locked', None)
+        target = [{'id': 'ricochet_cannon', 'name': 'Ricochet Cannon', 'level': 3}]
+        # No price or level of its own: the building it waits for is paid for, from whatever is on hand.
+        self.assertEqual(buildings.pick([(locked, 590)], target, {'gold': 0, 'elixir': 0, 'dark': 0}),
+                         ((locked, 590), True))
+        self.assertEqual(buildings.pick([(locked, 590)], target, AMOUNTS, {buildings.row_key(locked)}), (None, True))
+        # Unlocked, it is a row like any other.
+        self.assertEqual(buildings.pick([(row('Ricochet Cannon', 'ricochet_cannon', 4), 590)], target, AMOUNTS),
+                         (None, False))
 
     def test_a_row_the_catalog_does_not_know_is_matched_by_its_name(self):
         unknown = row('Mystery Machine', None)

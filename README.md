@@ -12,8 +12,9 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 > [!WARNING]
 > Automating Clash of Clans violates Supercell's Terms of Service. **Your account can be banned.**
 > There is no anti-ban or detection evasion. Use it only on an account you are willing to lose.
-> The bot never buys anything, never spends gems, never upgrades anything but walls (with `--walls`) and the
-> buildings, research, pets and hero equipment you picked (with `--buildings`), and never logs in for you.
+> The bot never buys anything, never spends gems (the one exception: a Goblin Builder or Goblin Researcher you switched
+> on yourself, up to your gem limit per hire), never upgrades anything but walls (with `--walls`) and the buildings,
+> research, pets and hero equipment you picked (with `--buildings`), and never logs in for you.
 
 ---
 
@@ -29,7 +30,7 @@ reopening the emulator or the game by itself if anything closes or disconnects.
 | **Until full** | Attacks the Builder Base first, then the Home Village, and stops when gold and elixir are full in both. Capacity is read from the in-game storage tooltip, so it follows your Town Hall / storage level. |
 | **Popups** | Star bonus, reward chest and reward card, the "defence layout blocked" warning, the inactivity, "another device" and "client and server are out of sync" reloads, a lost connection, the game update offer, the Gold Pass offer and Google Play's "Rate this app" sheet are handled. Nothing is ever tapped on an unknown screen: the bot waits, settles and restarts the game, and stops after `--max-recoveries` without progress. |
 | **Walls** | `--walls` spends stored gold and elixir on walls, cheapest level first, then farms both full and repeats until every wall is maxed. It never spends gems. |
-| **Buildings** | `--buildings` keeps the Home Village builders, Laboratory and pet house busy on the buildings, research and pets picked in the dashboard, and upgrades the picked hero equipment, first pick first, each up to its target level (or Max), paying only gold, elixir, dark elixir or ore at the price the list shows. It never spends gems. |
+| **Buildings** | `--buildings` keeps the Home Village builders, Laboratory and pet house busy on the buildings, research and pets picked in the dashboard, and upgrades the picked hero equipment, first pick first, each up to its target level (or Max), paying only gold, elixir, dark elixir or ore at the price the list shows. A picked locked row is worked toward by upgrading the building it waits for. It spends gems only on a Goblin you switched on, up to your limit per hire. |
 | **Web dashboard** | Live log, a live view of the LDPlayer screen and full control from a phone or the PC, in a Clash-style look: start any command (army templates fill the options in), stop, open/close CoC, restart LDPlayer, set loot minimums, auto-detect LDPlayer, fit its screen, move deploy pins over a real attack screen, and scan the Home Village's builder list for what can still be upgraded. A Stats page (resource gains, attacks, walls, run history) and Discord notifications. Indonesian or English; the switch also sets the bot's terminal language. Installable as an app. |
 | **Speed** | Taps go through raw touch events, the camera is followed until it stops moving, and the battle speed is switched to **4x**. |
 | **Safety** | Every tap is gated on a recognised screen; dry-run (no `--live`) never sends input. A setup that cannot work (taps that cannot land, ADB debugging off, a loot minimum no opponent meets) stops the run with what to change. |
@@ -353,6 +354,36 @@ gem offer and "all builders busy" popups are closed with X, as for walls. Builde
 kept but not upgraded: their rows open dialogs of another layout that no calibration recognises yet (a Star
 Laboratory row can open the laboratory itself), so they are never tapped and the run says so in the log.
 
+A picked **locked** row (the game's padlock, "Terkunci"/"Locked") is worked toward the way a player does, in any Home
+Village list: it needs a builder like a building (more free than `keep_builders`), whatever its list. The row is
+tapped with the list in front and must open its info dialog (`locked_info`: "Meriam Pantul (Terkunci)" / "Ricochet
+Cannon (Locked)", "Tingkatkan Meriam ke level 21 untuk membuka!"); its green "Ayo"/"Go" button closes the list and
+selects the building it waits for on the village, where the one hammer button beside it ("Tingkatkan"/"Upgrade") is
+found by the wall button template (`walls.home.button`), its price read (white, gold or elixir) and checked against the
+resource on hand. The hammer opens that building's `building_confirm`, confirmed only when it shows that same price
+and resource, checked again in the very frame the tap follows, as for a row. No hammer (maxed or upgrading), a red or
+unread price, more than one button, a dark elixir price or any other dialog upgrades nothing and leaves the target for
+the next wait. It logs `Bangunan di-upgrade untuk membuka <name>` ("Building upgraded to unlock …"). The target stays
+picked until the game lists the row unlocked; from then on it is a normal row. A building's own upgrade dialog that
+points at another building first (the Town Hall's red "Perhatian!"/"Note!" bar with "Ayo"/"Go", told by the bar's red
+and the button's green, no text) is never confirmed: its green button is followed the same way. The Town Hall's
+"Peningkatan Terkunci"/"Upgrade Locked" popup (`upgrade_locked`) has its first required building's blue tile tapped;
+the game opens the builder list at that building's row, marked with a white border, and that row, when it is a locked
+one, is followed like a picked one. Rows opened from another tab leave the list on that tab, so it is opened again and
+its builders tab shown before it is closed.
+
+**Goblins** are the only thing the bot ever pays gems for, each only with its switch on (`goblin` in
+`config.local.json`, set on the dashboard's Upgrade page: `{"builder": false, "researcher": false, "max_gems": 0}`,
+`max_gems` 0–1000 per hire, 0 never). The Goblin Researcher shows as a second Laboratory slot ("1/2"): switched off,
+only the house's own slot counts (free minus the extra ones), so research waits for the Laboratory; switched on, any
+free slot is used and the confirm brings up the Goblin's offer. The Goblin Builder: switched on, a building is tapped
+even with no builder free. The offer (`goblin_offer`: one button for the Goblin Researcher, two for the builders,
+"Tukang Goblin"/"Goblin Builder" and "Bebaskan Tukang"/"Free a Builder") is paid at its cheapest gem button, only when
+every button's price reads cleanly and that one is at most `max_gems`, read again in the very frame the tap follows; it
+logs `Goblin disewa: <gems> permata untuk <name>` ("Goblin hired: …"). The gem watch then allows exactly that drop once
+and still stops the run on any other change. A builder freed for gems brings the upgrade dialog back, which is checked
+and confirmed again as before. Switched off, or over the limit, the offer is closed with X and the target waits.
+
 ### CLI options — `bot.py`
 
 | Option | Default | Description |
@@ -367,7 +398,7 @@ Laboratory row can open the laboratory itself), so they are never tapped and the
 | `--home RESOURCES` | – | Fill these Home Village resources (`gold`, `elixir`, `dark`, or `all`). Implies `--until-full`. |
 | `--first {builder,home}` | `builder` | Which village to work on first when both are chosen. |
 | `--walls {home,builder,both}` | – | Spend the stored gold and elixir on walls, then farm both full and repeat until every wall is maxed. Never uses gems. Needs `--live`; not with `--until-full`/`--builder`/`--home`. |
-| `--buildings` | off | Upgrade the Home Village buildings, Laboratory research, pets and hero equipment picked in the dashboard, first pick first, each up to its target level, leaving `keep_builders` free; waits for builders and slots and stops once every target is reached. Never uses gems. Needs `--live` and a saved Home Village pick; not with `--walls`/`--until-full`/`--builder`/`--home`. |
+| `--buildings` | off | Upgrade the Home Village buildings, Laboratory research, pets and hero equipment picked in the dashboard, first pick first, each up to its target level, leaving `keep_builders` free; waits for builders and slots and stops once every target is reached. Uses gems only for a Goblin switched on in `goblin`. Needs `--live` and a saved Home Village pick; not with `--walls`/`--until-full`/`--builder`/`--home`. |
 | `--hours N`, `--minutes N` | `0` | Stop `--until-full`/`--builder`/`--home`/`--walls`/`--buildings` after this long; the two add up (`--hours 1 --minutes 30` is 90 minutes; hours 0–1000, minutes 0–60,000). The attack or upgrade in progress is finished first, then the run ends in the village with exit code 0. `0` means no limit. With `--until-full`/`--builder`/`--home` it needs `--live`. |
 | `--max-upgrades N` | `0` | `--walls` only: stop in the village after N walls are upgraded (0–100,000). `0` means no limit. |
 | `--bulk-walls` | off | `--walls` only: upgrade many walls of the picked level with one Oke through "Tingkatkan Lebih Banyak", as many as the resource pays for, instead of one at a time. Both villages. Needs the `wall_bulk_confirm` screen calibrated (bundled). |
@@ -539,14 +570,19 @@ Indonesian against `buildings.json` (id and category: defenses, army, resources,
 does not know is kept as read, under other. Building names are read with Tesseract, the digits with the bot's own
 templates (`calibration/digits`, the timer letters in `calibration/units`, the badge's small digits in
 `calibration/badge`). The scan is refused while the bot is running, takes about a minute and works from the local and
-the online dashboard. Merges that are still locked (shown last with a padlock) are left out.
+the online dashboard. Rows still locked (shown last with a padlock, in any game language) come back too, named from
+the catalog with section `locked` and no level, time or cost, and are shown under their own "Terkunci"/"Locked" group
+in every list; they can be ticked like any row.
 The last scan is kept on the PC, in the same `.coc-auto/stats.sqlite3` as the stats (next to the config, not in git),
 and shown again when the dashboard is reopened, with its date and time; running upgrades count down from that scan,
 and **Scan again** reads the list afresh and replaces it.
 After a scan, tick the rows the **upgrade buildings** task (`--buildings`) should upgrade: the first ticked goes first
 (its number shows beside the name), and each ticked row takes the level to stop at, or stays empty for Max. A running
 upgrade can be ticked too: it is waited for and then upgraded on until its level or the list's end (maxed for the Town
-Hall). **Keep builders free** leaves that many builders for something else, walls for example.
+Hall). **Keep builders free** leaves that many builders for something else, walls for example. Below it, in the Home
+Village lists, **Use the Goblin Builder (uses gems)**, **Use the Goblin Researcher (Laboratory & pets)** and **max
+gems per hire** (0–1000, 0 never; both off by default) are saved with their own button as `goblin` in
+`config.local.json` (see [Upgrading buildings](#upgrading-buildings)); the device refuses anything else.
 **Save selection** sends the pick to the device, which checks it (known building ids, walls excluded; levels 1–200;
 0–10 builders) and saves it to `config.local.json` as `buildings`; the saved pick comes back with the settings when
 the dashboard connects, and is listed in order above the scan. It applies at the next Start. The run setup's
@@ -557,7 +593,7 @@ The page picks a village, then one of the tabs at the bottom of that village's l
 has its own scan button, its own last scan (kept in `.coc-auto/stats.sqlite3` like the buildings one, under its
 village) and its own pick. A Builder Base scan takes the boat there first. Any other tab's scan opens the list, taps
 that tab, reads it from its top to its end the same way, taps the builders tab again and closes the list; locked rows
-are left out. A tab sits where a row's upgrade dialog has its confirm button, so a tab is tapped only while the list's
+come under "Terkunci"/"Locked" here too. A tab sits where a row's upgrade dialog has its confirm button, so a tab is tapped only while the list's
 own close button shows undimmed: a dialog over the list is closed with its X first, anything else stops the scan with
 no tap. Names are matched against each list's own catalog (`buildings.json`, `research.json` for research and pets,
 `gear.json`, `builder.json`, `star.json`), so "Raksasa" (Giant) is not taken for "Bom Raksasa" (Giant Bomb). Hero
@@ -706,6 +742,9 @@ use a saved screenshot). "Taps" are the points the tool asks for.
 | `python calibrate.py --screen builder_wall_confirm` | Builder Base wall upgrade dialog | confirm, close |
 | `python calibrate.py --screen wall_bulk_confirm` | Bulk upgrade dialog ("Yakin ingin meningkatkan tembok yang dipilih …"), needed by `--bulk-walls` | confirm (Oke), close (Batal) |
 | `python calibrate.py --screen building_confirm` | A building's upgrade dialog, needed by `--buildings` (anchors: its X and the "Upgrade time" label; the wall dialog overrides it) | confirm, close |
+| `python calibrate.py --screen locked_info` | A locked row's info dialog ("Meriam Pantul (Terkunci)" / "Ricochet Cannon (Locked)"), used by `--buildings` (anchors: its X and both ends of the green "Ayo"/"Go" button, no text) | go, close |
+| `python calibrate.py --screen upgrade_locked` | "Peningkatan Terkunci" / "Upgrade Locked" (the Town Hall waits for buildings), used by `--buildings` (anchors: its X and both ends of the green "Oke"/"Okay" button) | close |
+| `python calibrate.py --screen goblin_offer` | The Goblin Researcher's one-button offer or the Goblin Builder's two-button one ("Hai, Chief!" / "Hey Chief!"), used by `--buildings` (anchors: its X and the gem on a green button; the two layouts are two anchor groups) | close (paid only by `--buildings` with the switch on, at the cheapest gem button found on screen) |
 
 The `--counts` values are the units on each troop card, left to right (for example `--counts 11 4` for 11
 dragons and 4 rage spells); with an `auto` card-bar plan they are only used for the first calibration. The wall
@@ -836,6 +875,7 @@ How to change it:
 | The server connection drops ("Sambungan terputus", or "Kesalahan sambungan" while loading) | Taps "Coba lagi", waiting 10 seconds between tries while the network is still down, and carries on. |
 | A game update is offered ("Pembaruan Tersedia!") | Updates the game: taps the game's update button, then the Play Store's own Update button, in the update dialog or on the game's store page (found by its text, only for Clash of Clans; install buttons and anything else in the store are never tapped), waits up to 30 minutes for the new version to install, opens CoC again and carries on. If the store shows no Update button (not signed in, no space) or the install does not finish, stops with exit code 5 and asks you to update CoC from the Play Store. A dry-run never updates. |
 | All builders are busy when a Builder Base wall is picked ("Semua tukang sibuk!") | Closes the gem offer with X and skips that village's walls; run again once a builder is free. With `--buildings` the building is skipped until the next wait. |
+| A Goblin offer appears ("Hai, Chief!" / "Hey Chief!": every builder or the Laboratory busy) | Closes it with X, unless `--buildings` has that Goblin switched on: then it pays the offer's cheapest gem button only when every price reads cleanly and that one is at most `goblin.max_gems`. The gem count must then be exactly that much lower, or the run stops. |
 | `--buildings`: an upgrade dialog does not show the row's price and resource (or ore costs), or the list moved under the bot | Closes the dialog with X (never confirms), lets the next target go first and tries again after the next wait. A row whose name reads differently when it is about to be tapped is not tapped; the screen is tidied and the list read again. |
 | Searching runs out of gold 3 attacks in a row (no opponent meets the loot `minimum`) | Stops in the village with exit code 6 and asks to lower the minimum, instead of burning the gold it should fill. |
 | A setup the bot cannot work with: LDPlayer's ADB debugging off, a `serial` that is not the `ld_index` instance, a touch node that does not exist or whose range is not the screen size, a 32-bit LDPlayer | Stops at once with exit code 6 and says what to change; restarting would only repeat it. The touch node is checked once per live run, before the first tap. |

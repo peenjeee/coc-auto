@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#45a8ee">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=buildings-7"><script type="module" src="app.js?v=buildings-7"></script>
+<link rel="stylesheet" href="style.css?v=buildings-8"><script type="module" src="app.js?v=buildings-8"></script>
 </head><body>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <header class="site-header"><div class="header-inner">
@@ -151,6 +151,12 @@
           <p id="buildings-pick-hint" class="hint"></p>
           <p id="buildings-picked" class="building-picked"></p>
           <div class="actions building-save"><label class="field-row"><span data-i18n="buildings_keep"></span> <input id="buildings-keep" type="number" min="0" max="10" value="0"></label><button id="buildings-save" type="button" data-i18n="buildings_save"></button></div>
+        </div>
+        <div id="goblin" class="group goblin">
+          <p class="hint" data-i18n="goblin_hint"></p>
+          <label class="toggle"><input id="goblin-builder" type="checkbox"> <span data-i18n="goblin_builder"></span></label>
+          <label class="toggle"><input id="goblin-researcher" type="checkbox"> <span data-i18n="goblin_researcher"></span></label>
+          <div class="actions building-save"><label class="field-row"><span data-i18n="goblin_max_gems"></span> <input id="goblin-max" type="number" min="0" max="1000" value="0"></label><button id="goblin-save" type="button" data-i18n="goblin_save"></button></div>
         </div>
         <div id="buildings-list" class="building-list" aria-live="polite"></div>
       </section>

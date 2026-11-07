@@ -60,6 +60,11 @@ TITLE_WORDS = {'other': ('other', 'lain'), 'suggested': ('sugg', 'saran')}
 COIN_MIN_PIXELS, DARK_MIN_PIXELS = 40, 90
 # Rows seen in two frames land within a few pixels of each other once the frames are lined up.
 SAME_ROW_PX = 12
+# A locked row ("Terkunci"/locked) is a darker card without price, timer or badge, told in any language by the padlock
+# at its right end: [x, x end) searched, best score (seen: locked rows 0.016 at most, anything else 0.11 at least) and
+# the card's rows from the padlock's top. Its name is white or, for what the next level brings, green.
+PADLOCK = Path(__file__).parent / 'calibration' / 'list-padlock.png'
+LOCK_COLUMNS, LOCK_MAX_SCORE, LOCK_CARD, LOCKED_TEXT = (1215, 1280), 0.05, (-3, 39), (190, 255)
 KEPT_LEFT = 936
 # From a card's top to below its level badge and price.
 CARD_DEPTH = 45
@@ -89,6 +94,7 @@ TIME_UNITS = {False: {'d': 86_400, 'h': 3600, 'm': 60, 's': 1}, True: {'h': 86_4
 # after the maximum.
 WAIT_MAX_SECONDS, WAIT_MARGIN_SECONDS = 600, 5
 MAX_TARGETS, MAX_LEVEL, MAX_KEEP_BUILDERS, NAME_MAX = 100, 200, 10, 40
+GOBLIN_OFF, MAX_GOBLIN_GEMS = {'builder': False, 'researcher': False, 'max_gems': 0}, 1000
 
 
 def cleaned(text: str) -> str:
@@ -277,24 +283,41 @@ def runs(flags: np.ndarray) -> list[tuple[int, int]]:
     return list(zip(edges[::2].tolist(), edges[1::2].tolist()))
 
 
+@lru_cache(maxsize=1)
+def padlock() -> np.ndarray:
+    image = cv2.imread(str(PADLOCK))
+    if image is None:
+        raise bot.BotError(f'Template gembok {PADLOCK.name} hilang')
+    return image
+
+
+def padlocks(area: np.ndarray) -> list[tuple[int, int]]:
+    """(top, bottom) in area of every locked row's card, placed from the padlock at its right end."""
+    scores = cv2.matchTemplate(area[:, slice(*LOCK_COLUMNS)], padlock(), cv2.TM_SQDIFF_NORMED).min(axis=1)
+    tops = [start + int(np.argmin(scores[start:end])) for start, end in runs(scores <= LOCK_MAX_SCORE)]
+    return [(top + LOCK_CARD[0], top + LOCK_CARD[1]) for top in tops]
+
+
 def items(image: np.ndarray, region: list) -> list[tuple[str, int]]:
-    """(kind, y) of every row wholly in view: 'card' at its top, 'bar' (a running upgrade) and 'title' at their
-    middle. Rows cut by the edge of the list show whole after a swipe."""
+    """(kind, y) of every row wholly in view: 'card' and 'locked' at its top, 'bar' (a running upgrade) and 'title' at
+    their middle. Rows cut by the edge of the list show whole after a swipe."""
     _, top, _, h = region
     area = image[top:top + h]
     edge = area[:, EDGE_COLUMNS[0]:EDGE_COLUMNS[1], 2].mean(axis=1) >= EDGE_MIN_RED
     left = area[:, BAR_COLUMNS[0]:BAR_COLUMNS[1]].astype(int)
     green = ((left[..., 1] > 120) & (left[..., 1] > left[..., 2] + 50)).all(axis=1)
     cards, bars = runs(edge), [(start, end) for start, end in runs(green) if end - start >= BAR_HEIGHT[0]]
+    locked = padlocks(area)
     hsv = cv2.cvtColor(area[:, TITLE_COLUMNS[0]:TITLE_COLUMNS[1]], cv2.COLOR_BGR2HSV)
     text = ((hsv[..., 1] <= 80) & (hsv[..., 2] >= 110) & (hsv[..., 2] <= 230)).sum(axis=1) >= TITLE_MIN_PIXELS
-    # Cards and bars carry text of their own; a title is text in the strip between them.
-    for start, end in cards + bars:
+    # Cards, bars and locked rows carry text of their own; a title is text in the strip between them.
+    for start, end in cards + bars + locked:
         text[max(0, start - TITLE_CLEARANCE):end + TITLE_CLEARANCE] = False
 
     def whole(spans: list, low: int, high: int) -> list:
         return [(start, end) for start, end in spans if low <= end - start <= high and start > 0 and end < h]
     found = [('card', top + start) for start, _ in whole(cards, CARD_MIN_HEIGHT, h)]
+    found += [('locked', top + start) for start, _ in whole(locked, 0, h)]
     found += [('bar', top + (start + end) // 2) for start, end in whole(bars, *BAR_HEIGHT)]
     found += [('title', top + (start + end) // 2) for start, end in whole(runs(text), *TITLE_HEIGHT)]
     return sorted(found, key=lambda item: item[1])
@@ -356,11 +379,23 @@ def listed(frames: list, region: list) -> list[tuple[str, int, int, np.ndarray]]
     for index, (offset, image) in enumerate(zip(offsets(frames, region), frames)):
         for kind, y in items(image, region):
             # A card cut off by the list's bottom edge loses its badge and price; the next frame shows it whole.
-            if kind == 'card' and index + 1 < len(frames) and y + CARD_DEPTH > region[1] + region[3]:
+            if kind in ('card', 'locked') and index + 1 < len(frames) and y + CARD_DEPTH > region[1] + region[3]:
                 continue
             if not any(kind == other and abs(offset + y - place) <= SAME_ROW_PX for other, place, _, _ in kept):
                 kept.append((kind, offset + y, y, image))
     return sorted(kept, key=lambda item: item[1])
+
+
+def read_lines(ordered: list, program: str, name_band: tuple) -> list[str]:
+    """The text line of each item listed: a title's grey words, a running bar's name, a card's name at name_band and a
+    locked row's there too, white or green."""
+    jobs = [(band(image, TITLE_BAND, y), program, *TITLE_TEXT) if kind == 'title' else
+            (band(image, BAR_NAME, y), program) if kind == 'bar' else
+            (band(image, name_band, y), program, *LOCKED_TEXT) if kind == 'locked' else
+            (band(image, name_band, y), program) for kind, _, y, image in ordered]
+    # Tesseract takes about half a second to start, so the lines are read side by side.
+    with ThreadPoolExecutor(OCR_WORKERS) as pool:
+        return list(pool.map(lambda job: ocr_line(*job), jobs))
 
 
 def placed_rows(frames: list, spec: dict, templates: dict, program: str,
@@ -368,16 +403,15 @@ def placed_rows(frames: list, spec: dict, templates: dict, program: str,
     """read_rows with each row's place down the list: its card's top as the first frame would show it."""
     region, digits, units = spec['row']['region'], templates['digits'], templates['units']
     ordered = listed(frames, region)
-    jobs = [(band(image, TITLE_BAND, y), program, *TITLE_TEXT) if kind == 'title' else
-            (band(image, BAR_NAME if kind == 'bar' else NAME_BAND, y), program) for kind, _, y, image in ordered]
-    # Tesseract takes about half a second to start, so the lines are read side by side.
-    with ThreadPoolExecutor(OCR_WORKERS) as pool:
-        texts = list(pool.map(lambda job: ocr_line(*job), jobs))
+    texts = read_lines(ordered, program, NAME_BAND)
     rows, section, titles = [], None, 0
     for (kind, place, y, image), text in zip(ordered, texts):
         if kind == 'title':
             section = title_section(text, titles)
             titles += 1
+        elif kind == 'locked':
+            rows.append(({**named(text, path), 'next_level': None, 'time': None, 'cost': None, 'currency': None,
+                          'section': 'locked'}, place))
         elif kind == 'bar':
             rows.append(({**named(text, path), 'next_level': None,
                           'time': read_time(band(image, BAR_TIME, y), digits, units), 'cost': None, 'currency': None,
@@ -521,6 +555,16 @@ def selection(value: object, listing: str = 'buildings') -> dict:
     return {'targets': checked, 'keep_builders': value['keep_builders']} if builders else {'targets': checked}
 
 
+def goblin(value: object) -> dict:
+    """The Goblin Builder and Goblin Researcher switches (config.local.json 'goblin'), checked: the only gems --buildings
+    may ever pay are for hiring one whose switch is on, at most max_gems a hire (0 never)."""
+    if not isinstance(value, dict) or set(value) != set(GOBLIN_OFF) or not all(
+            type(value[key]) is bool for key in ('builder', 'researcher')):
+        raise bot.BotError('Goblin perlu builder dan researcher (true/false) serta max_gems')
+    bot.integer(value['max_gems'], 0, MAX_GOBLIN_GEMS, 'max_gems')
+    return {key: value[key] for key in GOBLIN_OFF}
+
+
 def validate(config: dict, root: Path) -> dict:
     """--buildings: the wall calibration it shares (builder list, price and icon on the upgrade dialog's button, gem
     bars), its own (free builder counter, dark elixir icon, upgrade dialog) and every list's pick (a LISTS key each),
@@ -536,6 +580,7 @@ def validate(config: dict, root: Path) -> dict:
         raise bot.BotError('building_upgrade icons perlu ikon dark')
     if not set(CURRENCIES) <= set(config.get('capacity', {}).get('home', {})):
         raise bot.BotError('--buildings butuh kalibrasi: capacity home gold, elixir dan dark')
+    goblin(config.get('goblin', GOBLIN_OFF))
     empty = {listing: {'targets': []} for listing in LISTS}
     empty['buildings']['keep_builders'] = 0
     chosen = {listing: selection(config.get(listing, empty[listing]), listing) for listing in LISTS}
@@ -567,11 +612,17 @@ def pick(placed: list, targets: list, amounts: dict, refused: set = frozenset())
     """((row, place) to upgrade now or None, whether any target still has something left). The first target in
     priority order wins with a listed row that is not running, does not go past its level and is payable. A row
     going past the level means that target is reached; a running one, or one short of resources or not read, is left
-    for later."""
+    for later. A locked row has no level or price of its own: it wins as it is, the building it waits for being
+    upgraded at that one's price (upgrades.unlock), and stays pending until the game lists it unlocked."""
     pending = False
     for target in targets:
         for row, place in placed:
             if not matches(row, target):
+                continue
+            if row['section'] == 'locked':
+                pending = True
+                if row_key(row) not in refused:
+                    return (row, place), True
                 continue
             level = target['level']
             if row['section'] != 'in_progress' and level is not None and row['next_level'] is not None \
@@ -641,10 +692,11 @@ def find_card(runner: bot.Bot, spec: dict, frames: list, place: int, row: dict, 
     the catalog at path) is read again first, so a list that moved under the bot never gets another row tapped."""
     region = spec['row']['region']
     image, offset = frames[-1], offsets(frames, region)[-1]
+    wanted, colours = ('locked', LOCKED_TEXT) if row['section'] == 'locked' else ('card', ())
     for _ in range(bot.WALL_SCROLL_LIMIT):
         for kind, y in items(image, region):
-            if kind == 'card' and abs(offset + y - place) <= SAME_ROW_PX:
-                seen = named(ocr_line(band(image, name_band, y), program), path)
+            if kind == wanted and abs(offset + y - place) <= SAME_ROW_PX:
+                seen = named(ocr_line(band(image, name_band, y), program, *colours), path)
                 if (seen['id'], seen['name'], seen['count']) != (row['id'], row['name'], row['count']):
                     raise bot.WaitTimeout(f'Baris {row["name"]} berubah jadi {seen["name"]}; tidak ada input')
                 return y
