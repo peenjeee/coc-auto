@@ -1,1904 +1,2175 @@
 {
   "source": "https://github.com/ClashKingInc/ClashKingAssets",
   "revision": "fdac291ae7fbc2901221ff945834be534d0344ae",
-  "notice": "Clash of Clans game data and names by Supercell. IDs/names only; export levels/timers are authoritative.",
+  "notice": "Clash of Clans game data and names by Supercell. IDs, names and maximum levels from the pinned catalog; current levels/timers from the game export.",
   "items": {
     "1000000": {
       "id": "army_camp",
       "list": "buildings",
       "category": "army",
       "name": "Army Camp",
-      "name_id": "Kamp Tentara"
+      "name_id": "Kamp Tentara",
+      "max_level": 14
     },
     "1000001": {
       "id": "town_hall",
       "list": "buildings",
       "category": "other",
       "name": "Town Hall",
-      "name_id": "Balai Kota"
+      "name_id": "Balai Kota",
+      "max_level": 18
     },
     "1000002": {
       "id": "elixir_collector",
       "list": "buildings",
       "category": "resource",
       "name": "Elixir Collector",
-      "name_id": "Pengumpul Eliksir"
+      "name_id": "Pengumpul Eliksir",
+      "max_level": 17
     },
     "1000003": {
       "id": "elixir_storage",
       "list": "buildings",
       "category": "resource",
       "name": "Elixir Storage",
-      "name_id": "Penyimpanan Eliksir"
+      "name_id": "Penyimpanan Eliksir",
+      "max_level": 19
     },
     "1000004": {
       "id": "gold_mine",
       "list": "buildings",
       "category": "resource",
       "name": "Gold Mine",
-      "name_id": "Tambang Emas"
+      "name_id": "Tambang Emas",
+      "max_level": 17
     },
     "1000005": {
       "id": "gold_storage",
       "list": "buildings",
       "category": "resource",
       "name": "Gold Storage",
-      "name_id": "Penyimpanan Emas"
+      "name_id": "Penyimpanan Emas",
+      "max_level": 19
     },
     "1000006": {
       "id": "barracks",
       "list": "buildings",
       "category": "army",
       "name": "Barracks",
-      "name_id": "Barak"
+      "name_id": "Barak",
+      "max_level": 19
     },
     "1000007": {
       "id": "laboratory",
       "list": "buildings",
       "category": "army",
       "name": "Laboratory",
-      "name_id": "Laboratorium"
+      "name_id": "Laboratorium",
+      "max_level": 16
     },
     "1000008": {
       "id": "cannon",
       "list": "buildings",
       "category": "defense",
       "name": "Cannon",
-      "name_id": "Meriam"
+      "name_id": "Meriam",
+      "max_level": 21
     },
     "1000009": {
       "id": "archer_tower",
       "list": "buildings",
       "category": "defense",
       "name": "Archer Tower",
-      "name_id": "Menara Pemanah"
+      "name_id": "Menara Pemanah",
+      "max_level": 21
     },
     "1000010": {
       "id": "wall",
       "list": "buildings",
       "category": "defense",
       "name": "Wall",
-      "name_id": "Tembok"
+      "name_id": "Tembok",
+      "max_level": 19
     },
     "1000011": {
       "id": "wizard_tower",
       "list": "buildings",
       "category": "defense",
       "name": "Wizard Tower",
-      "name_id": "Menara Penyihir"
+      "name_id": "Menara Penyihir",
+      "max_level": 17
     },
     "1000012": {
       "id": "air_defense",
       "list": "buildings",
       "category": "defense",
       "name": "Air Defense",
-      "name_id": "Pertahanan Udara"
+      "name_id": "Pertahanan Udara",
+      "max_level": 16
     },
     "1000013": {
       "id": "mortar",
       "list": "buildings",
       "category": "defense",
       "name": "Mortar",
-      "name_id": "Mortir"
+      "name_id": "Mortir",
+      "max_level": 18
     },
     "1000014": {
       "id": "clan_castle",
       "list": "buildings",
       "category": "army",
       "name": "Clan Castle",
-      "name_id": "Kastel Klan"
+      "name_id": "Kastel Klan",
+      "max_level": 14
     },
     "1000015": {
       "id": "builders_hut",
       "list": "buildings",
       "category": "defense",
       "name": "Builder's Hut",
-      "name_id": "Pondok Tukang"
+      "name_id": "Pondok Tukang",
+      "max_level": 8
     },
     "1000019": {
       "id": "hidden_tesla",
       "list": "buildings",
       "category": "defense",
       "name": "Hidden Tesla",
-      "name_id": "Tesla Tersembunyi"
+      "name_id": "Tesla Tersembunyi",
+      "max_level": 17
     },
     "1000020": {
       "id": "spell_factory",
       "list": "buildings",
       "category": "army",
       "name": "Spell Factory",
-      "name_id": "Pabrik Mantra"
+      "name_id": "Pabrik Mantra",
+      "max_level": 9
     },
     "1000021": {
       "id": "x_bow",
       "list": "buildings",
       "category": "defense",
       "name": "X-Bow",
-      "name_id": "Busur X"
+      "name_id": "Busur X",
+      "max_level": 13
     },
     "1000023": {
       "id": "dark_elixir_drill",
       "list": "buildings",
       "category": "resource",
       "name": "Dark Elixir Drill",
-      "name_id": "Pengeboran Eliksir Hitam"
+      "name_id": "Pengeboran Eliksir Hitam",
+      "max_level": 11
     },
     "1000024": {
       "id": "dark_elixir_storage",
       "list": "buildings",
       "category": "resource",
       "name": "Dark Elixir Storage",
-      "name_id": "Penyimpanan Eliksir Hitam"
+      "name_id": "Penyimpanan Eliksir Hitam",
+      "max_level": 13
     },
     "1000026": {
       "id": "dark_barracks",
       "list": "buildings",
       "category": "army",
       "name": "Dark Barracks",
-      "name_id": "Barak Hitam"
+      "name_id": "Barak Hitam",
+      "max_level": 13
     },
     "1000027": {
       "id": "inferno_tower",
       "list": "buildings",
       "category": "defense",
       "name": "Inferno Tower",
-      "name_id": "Menara Inferno"
+      "name_id": "Menara Inferno",
+      "max_level": 12
     },
     "1000028": {
       "id": "air_sweeper",
       "list": "buildings",
       "category": "defense",
       "name": "Air Sweeper",
-      "name_id": "Penyapu Udara"
+      "name_id": "Penyapu Udara",
+      "max_level": 7
     },
     "1000029": {
       "id": "dark_spell_factory",
       "list": "buildings",
       "category": "army",
       "name": "Dark Spell Factory",
-      "name_id": "Pabrik Mantra Hitam"
+      "name_id": "Pabrik Mantra Hitam",
+      "max_level": 8
     },
     "1000031": {
       "id": "eagle_artillery",
       "list": "buildings",
       "category": "defense",
       "name": "Eagle Artillery",
-      "name_id": "Artileri Elang"
+      "name_id": "Artileri Elang",
+      "max_level": 7
     },
     "1000032": {
       "id": "bomb_tower",
       "list": "buildings",
       "category": "defense",
       "name": "Bomb Tower",
-      "name_id": "Menara Bom"
+      "name_id": "Menara Bom",
+      "max_level": 13
     },
     "1000033": {
       "id": "wall",
       "list": "builder",
       "category": "defense",
       "name": "Wall",
-      "name_id": "Tembok"
+      "name_id": "Tembok",
+      "max_level": 10
     },
     "1000034": {
       "id": "builder_hall",
       "list": "builder",
       "category": "other",
       "name": "Builder Hall",
-      "name_id": "Aula Tukang"
+      "name_id": "Aula Tukang",
+      "max_level": 10
     },
     "1000035": {
       "id": "elixir_collector",
       "list": "builder",
       "category": "resource",
       "name": "Elixir Collector",
-      "name_id": "Pengumpul Eliksir"
+      "name_id": "Pengumpul Eliksir",
+      "max_level": 10
     },
     "1000036": {
       "id": "elixir_storage",
       "list": "builder",
       "category": "resource",
       "name": "Elixir Storage",
-      "name_id": "Penyimpanan Eliksir"
+      "name_id": "Penyimpanan Eliksir",
+      "max_level": 10
     },
     "1000037": {
       "id": "gold_mine",
       "list": "builder",
       "category": "resource",
       "name": "Gold Mine",
-      "name_id": "Tambang Emas"
+      "name_id": "Tambang Emas",
+      "max_level": 10
     },
     "1000038": {
       "id": "gold_storage",
       "list": "builder",
       "category": "resource",
       "name": "Gold Storage",
-      "name_id": "Penyimpanan Emas"
+      "name_id": "Penyimpanan Emas",
+      "max_level": 10
     },
     "1000039": {
       "id": "clock_tower",
       "list": "builder",
       "category": "other",
       "name": "Clock Tower",
-      "name_id": "Menara Jam"
+      "name_id": "Menara Jam",
+      "max_level": 10
     },
     "1000040": {
       "id": "builder_barracks",
       "list": "builder",
       "category": "army",
       "name": "Builder Barracks",
-      "name_id": "Barak Tukang"
+      "name_id": "Barak Tukang",
+      "max_level": 12
     },
     "1000041": {
       "id": "double_cannon",
       "list": "builder",
       "category": "defense",
       "name": "Double Cannon",
-      "name_id": "Meriam Ganda"
+      "name_id": "Meriam Ganda",
+      "max_level": 10
     },
     "1000042": {
       "id": "army_camp",
       "list": "builder",
       "category": "army",
       "name": "Army Camp",
-      "name_id": "Kamp Tentara"
+      "name_id": "Kamp Tentara",
+      "max_level": null
     },
     "1000043": {
       "id": "hidden_tesla",
       "list": "builder",
       "category": "defense",
       "name": "Hidden Tesla",
-      "name_id": "Tesla Tersembunyi"
+      "name_id": "Tesla Tersembunyi",
+      "max_level": 10
     },
     "1000044": {
       "id": "cannon",
       "list": "builder",
       "category": "defense",
       "name": "Cannon",
-      "name_id": "Meriam"
+      "name_id": "Meriam",
+      "max_level": 10
     },
     "1000045": {
       "id": "multi_mortar",
       "list": "builder",
       "category": "defense",
       "name": "Multi Mortar",
-      "name_id": "Multi Mortir"
+      "name_id": "Multi Mortir",
+      "max_level": 10
     },
     "1000046": {
       "id": "star_laboratory",
       "list": "builder",
       "category": "army",
       "name": "Star Laboratory",
-      "name_id": "Laboratorium Bintang"
+      "name_id": "Laboratorium Bintang",
+      "max_level": 10
     },
     "1000047": {
       "id": null,
       "list": "builder",
       "category": "other",
       "name": "B.O.T.O’s Shack",
-      "name_id": "Gubuk B.O.T.O"
+      "name_id": "Gubuk B.O.T.O",
+      "max_level": null
     },
     "1000048": {
       "id": "archer_tower",
       "list": "builder",
       "category": "defense",
       "name": "Archer Tower",
-      "name_id": "Menara Pemanah"
+      "name_id": "Menara Pemanah",
+      "max_level": 10
     },
     "1000049": {
       "id": "reinforcement_camp",
       "list": "builder",
       "category": "army",
       "name": "Reinforcement Camp",
-      "name_id": "Kemah Bala Bantuan"
+      "name_id": "Kemah Bala Bantuan",
+      "max_level": null
     },
     "1000050": {
       "id": "firecrackers",
       "list": "builder",
       "category": "defense",
       "name": "Firecrackers",
-      "name_id": "Mercon"
+      "name_id": "Mercon",
+      "max_level": 10
     },
     "1000051": {
       "id": "guard_post",
       "list": "builder",
       "category": "defense",
       "name": "Guard Post",
-      "name_id": "Pos Jaga"
+      "name_id": "Pos Jaga",
+      "max_level": 10
     },
     "1000052": {
       "id": "mega_tesla",
       "list": "builder",
       "category": "defense",
       "name": "Mega Tesla",
-      "name_id": "Tesla Mega"
+      "name_id": "Tesla Mega",
+      "max_level": 10
     },
     "1000053": {
       "id": "battle_machine",
       "list": "builder",
       "category": "hero",
       "name": "Battle Machine",
-      "name_id": "Mesin Pertempuran"
+      "name_id": "Mesin Pertempuran",
+      "max_level": null
     },
     "1000054": {
       "id": "air_bombs",
       "list": "builder",
       "category": "defense",
       "name": "Air Bombs",
-      "name_id": "Bom Udara"
+      "name_id": "Bom Udara",
+      "max_level": 10
     },
     "1000055": {
       "id": "crusher",
       "list": "builder",
       "category": "defense",
       "name": "Crusher",
-      "name_id": "Peremuk"
+      "name_id": "Peremuk",
+      "max_level": 10
     },
     "1000056": {
       "id": "roaster",
       "list": "builder",
       "category": "defense",
       "name": "Roaster",
-      "name_id": "Pemanggang"
+      "name_id": "Pemanggang",
+      "max_level": 10
     },
     "1000057": {
       "id": "giant_cannon",
       "list": "builder",
       "category": "defense",
       "name": "Giant Cannon",
-      "name_id": "Meriam Raksasa"
+      "name_id": "Meriam Raksasa",
+      "max_level": 10
     },
     "1000058": {
       "id": "gem_mine",
       "list": "builder",
       "category": "resource",
       "name": "Gem Mine",
-      "name_id": "Tambang Permata"
+      "name_id": "Tambang Permata",
+      "max_level": 10
     },
     "1000059": {
       "id": "workshop",
       "list": "buildings",
       "category": "army",
       "name": "Workshop",
-      "name_id": "Bengkel"
+      "name_id": "Bengkel",
+      "max_level": 9
     },
     "1000063": {
       "id": "lava_launcher",
       "list": "builder",
       "category": "defense",
       "name": "Lava Launcher",
-      "name_id": "Peluncur Lava"
+      "name_id": "Peluncur Lava",
+      "max_level": 10
     },
     "1000064": {
       "id": null,
       "list": "buildings",
       "category": "other",
       "name": "B.O.B's Hut",
-      "name_id": "Pondok B.O.B"
+      "name_id": "Pondok B.O.B",
+      "max_level": null
     },
     "1000065": {
       "id": "b_o_b_control",
       "list": "builder",
       "category": "resource",
       "name": "B.O.B Control",
-      "name_id": "Pusat Kendali B.O.B"
+      "name_id": "Pusat Kendali B.O.B",
+      "max_level": 5
     },
     "1000067": {
       "id": "scattershot",
       "list": "buildings",
       "category": "defense",
       "name": "Scattershot",
-      "name_id": "Katapel Tempur"
+      "name_id": "Katapel Tempur",
+      "max_level": 7
     },
     "1000068": {
       "id": "pet_house",
       "list": "buildings",
       "category": "army",
       "name": "Pet House",
-      "name_id": "Rumah Hewan"
+      "name_id": "Rumah Hewan",
+      "max_level": 12
     },
     "1000070": {
       "id": "blacksmith",
       "list": "buildings",
       "category": "army",
       "name": "Blacksmith",
-      "name_id": "Bengkel Pandai Besi"
+      "name_id": "Bengkel Pandai Besi",
+      "max_level": 10
     },
     "1000071": {
       "id": "hero_hall",
       "list": "buildings",
       "category": "army",
       "name": "Hero Hall",
-      "name_id": "Aula Pahlawan"
+      "name_id": "Aula Pahlawan",
+      "max_level": 12
     },
     "1000072": {
       "id": "spell_tower",
       "list": "buildings",
       "category": "defense",
       "name": "Spell Tower",
-      "name_id": "Menara Mantra"
+      "name_id": "Menara Mantra",
+      "max_level": 4
     },
     "1000077": {
       "id": "monolith",
       "list": "buildings",
       "category": "defense",
       "name": "Monolith",
-      "name_id": "Monolit"
+      "name_id": "Monolit",
+      "max_level": 5
     },
     "1000078": {
       "id": "otto_outpost",
       "list": "builder",
       "category": "defense",
       "name": "O.T.T.O's Outpost",
-      "name_id": "Pos Jaga O.T.T.O"
+      "name_id": "Pos Jaga O.T.T.O",
+      "max_level": 10
     },
     "1000079": {
       "id": "multi_gear_tower",
       "list": "buildings",
       "category": "defense",
       "name": "Multi-Gear Tower",
-      "name_id": "Menara Pilihan Ganda"
+      "name_id": "Menara Pilihan Ganda",
+      "max_level": 3
     },
     "1000080": {
       "id": "battle_copter",
       "list": "builder",
       "category": "hero",
       "name": "Battle Copter",
-      "name_id": "Helikopter Tempur"
+      "name_id": "Helikopter Tempur",
+      "max_level": null
     },
     "1000081": {
       "id": "x_bow",
       "list": "builder",
       "category": "defense",
       "name": "X-Bow",
-      "name_id": "Busur X"
+      "name_id": "Busur X",
+      "max_level": 5
     },
     "1000082": {
       "id": "healing_hut",
       "list": "builder",
       "category": "army",
       "name": "Healing Hut",
-      "name_id": "Pondok Penyembuhan"
+      "name_id": "Pondok Penyembuhan",
+      "max_level": 6
     },
     "1000083": {
       "id": null,
       "list": "buildings",
       "category": "resource",
       "name": "Sour Elixir Cauldron",
-      "name_id": "Kuali Eliksir Edan"
+      "name_id": "Kuali Eliksir Edan",
+      "max_level": null
     },
     "1000084": {
       "id": "multi_archer_tower",
       "list": "buildings",
       "category": "defense",
       "name": "Multi-Archer Tower",
-      "name_id": "Menara Perserikatan Pemanah"
+      "name_id": "Menara Perserikatan Pemanah",
+      "max_level": 4
     },
     "1000085": {
       "id": "ricochet_cannon",
       "list": "buildings",
       "category": "defense",
       "name": "Ricochet Cannon",
-      "name_id": "Meriam Pantul"
+      "name_id": "Meriam Pantul",
+      "max_level": 4
     },
     "1000086": {
       "id": "revenge_tower",
       "list": "buildings",
       "category": "defense",
       "name": "Revenge Tower",
-      "name_id": "Menara Pembalasan"
+      "name_id": "Menara Pembalasan",
+      "max_level": 2
     },
     "1000089": {
       "id": "firespitter",
       "list": "buildings",
       "category": "defense",
       "name": "Firespitter",
-      "name_id": "Pelontar Api"
+      "name_id": "Pelontar Api",
+      "max_level": 3
     },
     "1000093": {
       "id": null,
       "list": "buildings",
       "category": "other",
       "name": "Helper Hut",
-      "name_id": "Balai Latihan Kerja"
+      "name_id": "Balai Latihan Kerja",
+      "max_level": null
     },
     "1000097": {
       "id": "crafting_station",
       "list": "buildings",
       "category": "defense",
       "name": "Crafting Station",
-      "name_id": "Platform DIY"
+      "name_id": "Platform DIY",
+      "max_level": null
     },
     "1000102": {
       "id": "super_wizard_tower",
       "list": "buildings",
       "category": "defense",
       "name": "Super Wizard Tower",
-      "name_id": "Menara Penyihir Super"
+      "name_id": "Menara Penyihir Super",
+      "max_level": 2
     },
     "12000000": {
       "id": "bomb",
       "list": "buildings",
       "category": "trap",
       "name": "Bomb",
-      "name_id": "Bom"
+      "name_id": "Bom",
+      "max_level": 14
     },
     "12000001": {
       "id": "spring_trap",
       "list": "buildings",
       "category": "trap",
       "name": "Spring Trap",
-      "name_id": "Jebakan Pegas"
+      "name_id": "Jebakan Pegas",
+      "max_level": 13
     },
     "12000005": {
       "id": "air_bomb",
       "list": "buildings",
       "category": "trap",
       "name": "Air Bomb",
-      "name_id": "Bom Udara"
+      "name_id": "Bom Udara",
+      "max_level": 13
     },
     "12000002": {
       "id": "giant_bomb",
       "list": "buildings",
       "category": "trap",
       "name": "Giant Bomb",
-      "name_id": "Bom Raksasa"
+      "name_id": "Bom Raksasa",
+      "max_level": 12
     },
     "12000006": {
       "id": "seeking_air_mine",
       "list": "buildings",
       "category": "trap",
       "name": "Seeking Air Mine",
-      "name_id": "Ranjau Udara Pencari"
+      "name_id": "Ranjau Udara Pencari",
+      "max_level": 8
     },
     "12000008": {
       "id": "skeleton_trap",
       "list": "buildings",
       "category": "trap",
       "name": "Skeleton Trap",
-      "name_id": "Jebakan Jerangkong"
+      "name_id": "Jebakan Jerangkong",
+      "max_level": 5
     },
     "12000016": {
       "id": "tornado_trap",
       "list": "buildings",
       "category": "trap",
       "name": "Tornado Trap",
-      "name_id": "Jebakan Tornado"
+      "name_id": "Jebakan Tornado",
+      "max_level": 3
     },
     "12000020": {
       "id": "giga_bomb",
       "list": "buildings",
       "category": "trap",
       "name": "Giga Bomb",
-      "name_id": "Bom Giga"
+      "name_id": "Bom Giga",
+      "max_level": 4
     },
     "12000011": {
       "id": "push_trap",
       "list": "builder",
       "category": "trap",
       "name": "Push Trap",
-      "name_id": "Jebakan Dorong"
+      "name_id": "Jebakan Dorong",
+      "max_level": 10
     },
     "12000013": {
       "id": "mine",
       "list": "builder",
       "category": "trap",
       "name": "Mine",
-      "name_id": "Ranjau"
+      "name_id": "Ranjau",
+      "max_level": 10
     },
     "12000010": {
       "id": "spring_trap",
       "list": "builder",
       "category": "trap",
       "name": "Spring Trap",
-      "name_id": "Jebakan Pegas"
+      "name_id": "Jebakan Pegas",
+      "max_level": 5
     },
     "12000014": {
       "id": "mega_mine",
       "list": "builder",
       "category": "trap",
       "name": "Mega Mine",
-      "name_id": "Ranjau Mega"
+      "name_id": "Ranjau Mega",
+      "max_level": 10
     },
     "28000000": {
       "id": "barbarian_king",
       "list": "buildings",
       "category": "hero",
       "name": "Barbarian King",
-      "name_id": "Raja Barbar"
+      "name_id": "Raja Barbar",
+      "max_level": 110
     },
     "28000001": {
       "id": "archer_queen",
       "list": "buildings",
       "category": "hero",
       "name": "Archer Queen",
-      "name_id": "Ratu Pemanah"
+      "name_id": "Ratu Pemanah",
+      "max_level": 110
     },
     "28000002": {
       "id": "grand_warden",
       "list": "buildings",
       "category": "hero",
       "name": "Grand Warden",
-      "name_id": "Wali Besar"
+      "name_id": "Wali Besar",
+      "max_level": 85
     },
     "28000003": {
       "id": "battle_machine",
       "list": "builder",
       "category": "hero",
       "name": "Battle Machine",
-      "name_id": "Mesin Pertempuran"
+      "name_id": "Mesin Pertempuran",
+      "max_level": 35
     },
     "28000004": {
       "id": "royal_champion",
       "list": "buildings",
       "category": "hero",
       "name": "Royal Champion",
-      "name_id": "Jawara Royale"
+      "name_id": "Jawara Royale",
+      "max_level": 55
     },
     "28000005": {
       "id": "battle_copter",
       "list": "builder",
       "category": "hero",
       "name": "Battle Copter",
-      "name_id": "Helikopter Tempur"
+      "name_id": "Helikopter Tempur",
+      "max_level": 35
     },
     "28000006": {
       "id": "minion_prince",
       "list": "buildings",
       "category": "hero",
       "name": "Minion Prince",
-      "name_id": "Pangeran Minion"
+      "name_id": "Pangeran Minion",
+      "max_level": 95
     },
     "28000007": {
       "id": "dragon_duke",
       "list": "buildings",
       "category": "hero",
       "name": "Dragon Duke",
-      "name_id": "Adipati Naga"
+      "name_id": "Adipati Naga",
+      "max_level": 25
     },
     "4000000": {
       "id": "barbarian",
       "list": "lab",
       "category": "troop",
       "name": "Barbarian",
-      "name_id": "Orang Barbar"
+      "name_id": "Orang Barbar",
+      "max_level": 13
     },
     "4000001": {
       "id": "archer",
       "list": "lab",
       "category": "troop",
       "name": "Archer",
-      "name_id": "Pemanah"
+      "name_id": "Pemanah",
+      "max_level": 14
     },
     "4000002": {
       "id": "goblin",
       "list": "lab",
       "category": "troop",
       "name": "Goblin",
-      "name_id": "Goblin"
+      "name_id": "Goblin",
+      "max_level": 10
     },
     "4000003": {
       "id": "giant",
       "list": "lab",
       "category": "troop",
       "name": "Giant",
-      "name_id": "Raksasa"
+      "name_id": "Raksasa",
+      "max_level": 14
     },
     "4000004": {
       "id": "wall_breaker",
       "list": "lab",
       "category": "troop",
       "name": "Wall Breaker",
-      "name_id": "Penghancur Tembok"
+      "name_id": "Penghancur Tembok",
+      "max_level": 14
     },
     "4000005": {
       "id": "balloon",
       "list": "lab",
       "category": "troop",
       "name": "Balloon",
-      "name_id": "Balon"
+      "name_id": "Balon",
+      "max_level": 13
     },
     "4000006": {
       "id": "wizard",
       "list": "lab",
       "category": "troop",
       "name": "Wizard",
-      "name_id": "Penyihir"
+      "name_id": "Penyihir",
+      "max_level": 14
     },
     "4000007": {
       "id": "healer",
       "list": "lab",
       "category": "troop",
       "name": "Healer",
-      "name_id": "Penyembuh"
+      "name_id": "Penyembuh",
+      "max_level": 11
     },
     "4000008": {
       "id": "dragon",
       "list": "lab",
       "category": "troop",
       "name": "Dragon",
-      "name_id": "Naga"
+      "name_id": "Naga",
+      "max_level": 13
     },
     "4000009": {
       "id": "pekka",
       "list": "lab",
       "category": "troop",
       "name": "P.E.K.K.A",
-      "name_id": "P.E.K.K.A"
+      "name_id": "P.E.K.K.A",
+      "max_level": 13
     },
     "4000010": {
       "id": "minion",
       "list": "lab",
       "category": "dark_troop",
       "name": "Minion",
-      "name_id": "Minion"
+      "name_id": "Minion",
+      "max_level": 14
     },
     "4000011": {
       "id": "hog_rider",
       "list": "lab",
       "category": "dark_troop",
       "name": "Hog Rider",
-      "name_id": "Penunggang Babi"
+      "name_id": "Penunggang Babi",
+      "max_level": 15
     },
     "4000012": {
       "id": "valkyrie",
       "list": "lab",
       "category": "dark_troop",
       "name": "Valkyrie",
-      "name_id": "Valkyrie"
+      "name_id": "Valkyrie",
+      "max_level": 12
     },
     "4000013": {
       "id": "golem",
       "list": "lab",
       "category": "dark_troop",
       "name": "Golem",
-      "name_id": "Golem"
+      "name_id": "Golem",
+      "max_level": 15
     },
     "4000015": {
       "id": "witch",
       "list": "lab",
       "category": "dark_troop",
       "name": "Witch",
-      "name_id": "Nenek Sihir"
+      "name_id": "Nenek Sihir",
+      "max_level": 8
     },
     "4000017": {
       "id": "lava_hound",
       "list": "lab",
       "category": "dark_troop",
       "name": "Lava Hound",
-      "name_id": "Anjing Lava"
+      "name_id": "Anjing Lava",
+      "max_level": 8
     },
     "4000022": {
       "id": "bowler",
       "list": "lab",
       "category": "dark_troop",
       "name": "Bowler",
-      "name_id": "Bowler"
+      "name_id": "Bowler",
+      "max_level": 10
     },
     "4000023": {
       "id": "baby_dragon",
       "list": "lab",
       "category": "troop",
       "name": "Baby Dragon",
-      "name_id": "Bayi Naga"
+      "name_id": "Bayi Naga",
+      "max_level": 12
     },
     "4000024": {
       "id": "miner",
       "list": "lab",
       "category": "troop",
       "name": "Miner",
-      "name_id": "Penambang"
+      "name_id": "Penambang",
+      "max_level": 12
     },
     "4000026": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Super Barbarian",
-      "name_id": "Orang Barbar Super"
+      "name_id": "Orang Barbar Super",
+      "max_level": 13
     },
     "4000027": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Super Archer",
-      "name_id": "Pemanah Super"
+      "name_id": "Pemanah Super",
+      "max_level": 14
     },
     "4000028": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Super Wall Breaker",
-      "name_id": "Peremuk Tembok Super"
+      "name_id": "Peremuk Tembok Super",
+      "max_level": 14
     },
     "4000029": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Super Giant",
-      "name_id": "Raksasa Super"
+      "name_id": "Raksasa Super",
+      "max_level": 14
     },
     "4000030": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Ice Wizard",
-      "name_id": "Penyihir Es"
+      "name_id": "Penyihir Es",
+      "max_level": 13
     },
     "4000031": {
       "id": "raging_barbarian",
       "list": "star",
       "category": "troop",
       "name": "Raged Barbarian",
-      "name_id": "Orang Barbar Murka"
+      "name_id": "Orang Barbar Murka",
+      "max_level": 20
     },
     "4000032": {
       "id": "sneaky_archer",
       "list": "star",
       "category": "troop",
       "name": "Sneaky Archer",
-      "name_id": "Pemanah Licik"
+      "name_id": "Pemanah Licik",
+      "max_level": 20
     },
     "4000033": {
       "id": "beta_minion",
       "list": "star",
       "category": "troop",
       "name": "Beta Minion",
-      "name_id": "Minion Beta"
+      "name_id": "Minion Beta",
+      "max_level": 20
     },
     "4000034": {
       "id": "boxer_giant",
       "list": "star",
       "category": "troop",
       "name": "Boxer Giant",
-      "name_id": "Raksasa Petinju"
+      "name_id": "Raksasa Petinju",
+      "max_level": 20
     },
     "4000035": {
       "id": "bomber",
       "list": "star",
       "category": "troop",
       "name": "Bomber",
-      "name_id": "Pengebom"
+      "name_id": "Pengebom",
+      "max_level": 20
     },
     "4000036": {
       "id": "power_pekka",
       "list": "star",
       "category": "troop",
       "name": "Power P.E.K.K.A",
-      "name_id": "P.E.K.K.A Perkasa"
+      "name_id": "P.E.K.K.A Perkasa",
+      "max_level": 20
     },
     "4000037": {
       "id": "cannon_cart",
       "list": "star",
       "category": "troop",
       "name": "Cannon Cart",
-      "name_id": "Gerobak Meriam"
+      "name_id": "Gerobak Meriam",
+      "max_level": 20
     },
     "4000038": {
       "id": "drop_ship",
       "list": "star",
       "category": "troop",
       "name": "Drop Ship",
-      "name_id": "Kapal Drop"
+      "name_id": "Kapal Drop",
+      "max_level": 20
     },
     "4000041": {
       "id": "baby_dragon",
       "list": "star",
       "category": "troop",
       "name": "Baby Dragon",
-      "name_id": "Bayi Naga"
+      "name_id": "Bayi Naga",
+      "max_level": 20
     },
     "4000042": {
       "id": "night_witch",
       "list": "star",
       "category": "troop",
       "name": "Night Witch",
-      "name_id": "Nenek Sihir Malam"
+      "name_id": "Nenek Sihir Malam",
+      "max_level": 20
     },
     "4000045": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Battle Ram",
-      "name_id": "Pendobrak"
+      "name_id": "Pendobrak",
+      "max_level": 13
     },
     "4000047": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Royal Ghost",
-      "name_id": "Hantu Royale"
+      "name_id": "Hantu Royale",
+      "max_level": 13
     },
     "4000048": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Pumpkin Barbarian",
-      "name_id": "Orang Barbar Labu"
+      "name_id": "Orang Barbar Labu",
+      "max_level": 13
     },
     "4000050": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Giant Skeleton",
-      "name_id": "Jerangkong Raksasa"
+      "name_id": "Jerangkong Raksasa",
+      "max_level": 13
     },
     "4000051": {
       "id": "wall_wrecker",
       "list": "lab",
       "category": "siege",
       "name": "Wall Wrecker",
-      "name_id": "Pelantak Tubruk"
+      "name_id": "Pelantak Tubruk",
+      "max_level": 6
     },
     "4000052": {
       "id": "battle_blimp",
       "list": "lab",
       "category": "siege",
       "name": "Battle Blimp",
-      "name_id": "Zeppelin Tempur"
+      "name_id": "Zeppelin Tempur",
+      "max_level": 6
     },
     "4000053": {
       "id": "yeti",
       "list": "lab",
       "category": "troop",
       "name": "Yeti",
-      "name_id": "Yeti"
+      "name_id": "Yeti",
+      "max_level": 8
     },
     "4000055": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Sneaky Goblin",
-      "name_id": "Goblin Senyap"
+      "name_id": "Goblin Senyap",
+      "max_level": 10
     },
     "4000056": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Super Miner",
-      "name_id": "Penambang Super"
+      "name_id": "Penambang Super",
+      "max_level": 12
     },
     "4000057": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Rocket Balloon",
-      "name_id": "Balon Roket"
+      "name_id": "Balon Roket",
+      "max_level": 13
     },
     "4000058": {
       "id": "ice_golem",
       "list": "lab",
       "category": "dark_troop",
       "name": "Ice Golem",
-      "name_id": "Golem Es"
+      "name_id": "Golem Es",
+      "max_level": 9
     },
     "4000059": {
       "id": "electro_dragon",
       "list": "lab",
       "category": "troop",
       "name": "Electro Dragon",
-      "name_id": "Naga Elektro"
+      "name_id": "Naga Elektro",
+      "max_level": 9
     },
     "4000061": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Skeleton Barrel",
-      "name_id": "Tong Jerangkong"
+      "name_id": "Tong Jerangkong",
+      "max_level": 13
     },
     "4000062": {
       "id": "stone_slammer",
       "list": "lab",
       "category": "siege",
       "name": "Stone Slammer",
-      "name_id": "Pengangkut Batu"
+      "name_id": "Pengangkut Batu",
+      "max_level": 6
     },
     "4000063": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Inferno Dragon",
-      "name_id": "Naga Inferno"
+      "name_id": "Naga Inferno",
+      "max_level": 12
     },
     "4000064": {
       "id": null,
       "list": "lab",
       "category": "dark_troop",
       "name": "Super Valkyrie",
-      "name_id": "Valkyrie Super"
+      "name_id": "Valkyrie Super",
+      "max_level": 12
     },
     "4000065": {
       "id": "dragon_rider",
       "list": "lab",
       "category": "troop",
       "name": "Dragon Rider",
-      "name_id": "Penunggang Naga"
+      "name_id": "Penunggang Naga",
+      "max_level": 6
     },
     "4000066": {
       "id": null,
       "list": "lab",
       "category": "dark_troop",
       "name": "Super Witch",
-      "name_id": "Nenek Sihir Super"
+      "name_id": "Nenek Sihir Super",
+      "max_level": 8
     },
     "4000067": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "M.E.C.H.A",
-      "name_id": "M.E.C.H.A"
+      "name_id": "M.E.C.H.A",
+      "max_level": 13
     },
     "4000070": {
       "id": "hog_glider",
       "list": "star",
       "category": "troop",
       "name": "Hog Glider",
-      "name_id": "Babi Layang"
+      "name_id": "Babi Layang",
+      "max_level": 20
     },
     "4000072": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Party Wizard",
-      "name_id": "Penyihir Pesta"
+      "name_id": "Penyihir Pesta",
+      "max_level": 13
     },
     "4000075": {
       "id": "siege_barracks",
       "list": "lab",
       "category": "siege",
       "name": "Siege Barracks",
-      "name_id": "Barak Pengepungan"
+      "name_id": "Barak Pengepungan",
+      "max_level": 6
     },
     "4000076": {
       "id": null,
       "list": "lab",
       "category": "dark_troop",
       "name": "Ice Hound",
-      "name_id": "Anjing Es"
+      "name_id": "Anjing Es",
+      "max_level": 8
     },
     "4000080": {
       "id": null,
       "list": "lab",
       "category": "dark_troop",
       "name": "Super Bowler",
-      "name_id": "Bowler Super"
+      "name_id": "Bowler Super",
+      "max_level": 10
     },
     "4000081": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Super Dragon",
-      "name_id": "Naga Super"
+      "name_id": "Naga Super",
+      "max_level": 13
     },
     "4000082": {
       "id": "headhunter",
       "list": "lab",
       "category": "dark_troop",
       "name": "Headhunter",
-      "name_id": "Pemburu"
+      "name_id": "Pemburu",
+      "max_level": 4
     },
     "4000083": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Super Wizard",
-      "name_id": "Penyihir Super"
+      "name_id": "Penyihir Super",
+      "max_level": 14
     },
     "4000084": {
       "id": null,
       "list": "lab",
       "category": "dark_troop",
       "name": "Super Minion",
-      "name_id": "Minion Super"
+      "name_id": "Minion Super",
+      "max_level": 14
     },
     "4000087": {
       "id": "log_launcher",
       "list": "lab",
       "category": "siege",
       "name": "Log Launcher",
-      "name_id": "Peluncur Sang Kayu"
+      "name_id": "Peluncur Sang Kayu",
+      "max_level": 6
     },
     "4000091": {
       "id": "flame_flinger",
       "list": "lab",
       "category": "siege",
       "name": "Flame Flinger",
-      "name_id": "Katapel Api"
+      "name_id": "Katapel Api",
+      "max_level": 5
     },
     "4000092": {
       "id": "battle_drill",
       "list": "lab",
       "category": "siege",
       "name": "Battle Drill",
-      "name_id": "Penggali Tempur"
+      "name_id": "Penggali Tempur",
+      "max_level": 6
     },
     "4000094": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Ram Rider",
-      "name_id": "Penunggang Domba"
+      "name_id": "Penunggang Domba",
+      "max_level": 13
     },
     "4000095": {
       "id": "electro_titan",
       "list": "lab",
       "category": "troop",
       "name": "Electro Titan",
-      "name_id": "Titan Elektro"
+      "name_id": "Titan Elektro",
+      "max_level": 5
     },
     "4000097": {
       "id": "apprentice_warden",
       "list": "lab",
       "category": "dark_troop",
       "name": "Apprentice Warden",
-      "name_id": "Wali Muda"
+      "name_id": "Wali Muda",
+      "max_level": 4
     },
     "4000098": {
       "id": null,
       "list": "lab",
       "category": "dark_troop",
       "name": "Super Hog Rider",
-      "name_id": "Penunggang Babi Super"
+      "name_id": "Penunggang Babi Super",
+      "max_level": 15
     },
     "4000101": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Barcher",
-      "name_id": "Pemanah Barbar"
+      "name_id": "Pemanah Barbar",
+      "max_level": 13
     },
     "4000102": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Witch Golem",
-      "name_id": "Nenek Golem"
+      "name_id": "Nenek Golem",
+      "max_level": 13
     },
     "4000103": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Hog Wizard",
-      "name_id": "Penyihir Babi"
+      "name_id": "Penyihir Babi",
+      "max_level": 13
     },
     "4000104": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Lavaloon",
-      "name_id": "Balon Lava"
+      "name_id": "Balon Lava",
+      "max_level": 13
     },
     "4000106": {
       "id": "electrofire_wizard",
       "list": "star",
       "category": "troop",
       "name": "Electrofire Wizard",
-      "name_id": "Penyihir Elektro-Api"
+      "name_id": "Penyihir Elektro-Api",
+      "max_level": 20
     },
     "4000109": {
       "id": "nenek_puing",
       "list": "lab",
       "category": "dark_troop",
       "name": "Ruin Witch",
-      "name_id": "Nenek Puing"
+      "name_id": "Nenek Puing",
+      "max_level": 4
     },
     "4000110": {
       "id": "root_rider",
       "list": "lab",
       "category": "troop",
       "name": "Root Rider",
-      "name_id": "Penunggang Akar"
+      "name_id": "Penunggang Akar",
+      "max_level": 4
     },
     "4000118": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "C.O.O.K.I.E",
-      "name_id": "C.O.O.K.I.E"
+      "name_id": "C.O.O.K.I.E",
+      "max_level": 13
     },
     "4000119": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Firecracker",
-      "name_id": "Penembak Mercon"
+      "name_id": "Penembak Mercon",
+      "max_level": 13
     },
     "4000120": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Azure Dragon",
-      "name_id": "Naga Nilakandi"
+      "name_id": "Naga Nilakandi",
+      "max_level": 13
     },
     "4000121": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Barbarian Kicker",
-      "name_id": "Orang Barbar Penendang"
+      "name_id": "Orang Barbar Penendang",
+      "max_level": 13
     },
     "4000122": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Giant Thrower",
-      "name_id": "Raksasa Pelempar"
+      "name_id": "Raksasa Pelempar",
+      "max_level": 13
     },
     "4000123": {
       "id": "druid",
       "list": "lab",
       "category": "dark_troop",
       "name": "Druid",
-      "name_id": "Pawang"
+      "name_id": "Pawang",
+      "max_level": 6
     },
     "4000125": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Broom Witch",
-      "name_id": "Nenek Sihir Kurir"
+      "name_id": "Nenek Sihir Kurir",
+      "max_level": 13
     },
     "4000130": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Ice Minion",
-      "name_id": "Minion Es"
+      "name_id": "Minion Es",
+      "max_level": 13
     },
     "4000132": {
       "id": "thrower",
       "list": "lab",
       "category": "troop",
       "name": "Thrower",
-      "name_id": "Pelempar"
+      "name_id": "Pelempar",
+      "max_level": 4
     },
     "4000135": {
       "id": "troop_launcher",
       "list": "lab",
       "category": "siege",
       "name": "Troop Launcher",
-      "name_id": "Pelontar Peleton"
+      "name_id": "Pelontar Peleton",
+      "max_level": 4
     },
     "4000136": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Debt Collector",
-      "name_id": "Penagih Utang"
+      "name_id": "Penagih Utang",
+      "max_level": 13
     },
     "4000142": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Snake Barrel",
-      "name_id": "Tong Ular"
+      "name_id": "Tong Ular",
+      "max_level": 13
     },
     "4000147": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Super Yeti",
-      "name_id": "Yeti Super"
+      "name_id": "Yeti Super",
+      "max_level": 8
     },
     "4000150": {
       "id": "furnace",
       "list": "lab",
       "category": "dark_troop",
       "name": "Furnace",
-      "name_id": "Tungku"
+      "name_id": "Tungku",
+      "max_level": 4
     },
     "4000156": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Giant Giant",
-      "name_id": "Raksasa Kolosal"
+      "name_id": "Raksasa Kolosal",
+      "max_level": 16
     },
     "4000157": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "K.A.N.E",
-      "name_id": "K.A.N.E"
+      "name_id": "K.A.N.E",
+      "max_level": 16
     },
     "4000158": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "The Disarmer",
-      "name_id": "Wanita Besi"
+      "name_id": "Wanita Besi",
+      "max_level": 13
     },
     "4000159": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "YEETer",
-      "name_id": "YEETer"
+      "name_id": "YEETer",
+      "max_level": 16
     },
     "4000167": {
       "id": "meteor_golem",
       "list": "lab",
       "category": "troop",
       "name": "Meteor Golem",
-      "name_id": "Golem Meteor"
+      "name_id": "Golem Meteor",
+      "max_level": 13
     },
     "4000177": {
       "id": "meteor_golem",
       "list": "lab",
       "category": "troop",
       "name": "Meteor Golem",
-      "name_id": "Golem Meteor"
+      "name_id": "Golem Meteor",
+      "max_level": 3
     },
     "4000185": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Elephant Rider",
-      "name_id": "Penunggang Gajah"
+      "name_id": "Penunggang Gajah",
+      "max_level": 18
     },
     "4000188": {
       "id": "sky_wagon",
       "list": "lab",
       "category": "siege",
       "name": "Sky Wagon",
-      "name_id": "Kereta Langit"
+      "name_id": "Kereta Langit",
+      "max_level": 4
     },
     "4000190": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Yeti Undertaker",
-      "name_id": "Yeti Undertaker"
+      "name_id": "Yeti Undertaker",
+      "max_level": 18
     },
     "4000194": {
       "id": null,
       "list": "lab",
       "category": "troop",
       "name": "Totem Thrower",
-      "name_id": "Pelempar Totem"
+      "name_id": "Pelempar Totem",
+      "max_level": 18
     },
     "26000000": {
       "id": "lightning_spell",
       "list": "lab",
       "category": "spell",
       "name": "Lightning Spell",
-      "name_id": "Mantra Kilat"
+      "name_id": "Mantra Kilat",
+      "max_level": 13
     },
     "26000001": {
       "id": "healing_spell",
       "list": "lab",
       "category": "spell",
       "name": "Healing Spell",
-      "name_id": "Mantra Penyembuh"
+      "name_id": "Mantra Penyembuh",
+      "max_level": 12
     },
     "26000002": {
       "id": "rage_spell",
       "list": "lab",
       "category": "spell",
       "name": "Rage Spell",
-      "name_id": "Mantra Amarah"
+      "name_id": "Mantra Amarah",
+      "max_level": 7
     },
     "26000003": {
       "id": "jump_spell",
       "list": "lab",
       "category": "spell",
       "name": "Jump Spell",
-      "name_id": "Mantra Lompat"
+      "name_id": "Mantra Lompat",
+      "max_level": 5
     },
     "26000005": {
       "id": "freeze_spell",
       "list": "lab",
       "category": "spell",
       "name": "Freeze Spell",
-      "name_id": "Mantra Pembeku"
+      "name_id": "Mantra Pembeku",
+      "max_level": 8
     },
     "26000006": {
       "id": null,
       "list": "lab",
       "category": "spell",
       "name": "Santa's Surprise",
-      "name_id": "Kejutan Santa"
+      "name_id": "Kejutan Santa",
+      "max_level": 13
     },
     "26000009": {
       "id": "poison_spell",
       "list": "lab",
       "category": "dark_spell",
       "name": "Poison Spell",
-      "name_id": "Mantra Racun"
+      "name_id": "Mantra Racun",
+      "max_level": 12
     },
     "26000010": {
       "id": "earthquake_spell",
       "list": "lab",
       "category": "dark_spell",
       "name": "Earthquake Spell",
-      "name_id": "Mantra Gempa Bumi"
+      "name_id": "Mantra Gempa Bumi",
+      "max_level": 8
     },
     "26000011": {
       "id": "haste_spell",
       "list": "lab",
       "category": "dark_spell",
       "name": "Haste Spell",
-      "name_id": "Mantra Gesit"
+      "name_id": "Mantra Gesit",
+      "max_level": 7
     },
     "26000016": {
       "id": "clone_spell",
       "list": "lab",
       "category": "spell",
       "name": "Clone Spell",
-      "name_id": "Mantra Klona"
+      "name_id": "Mantra Klona",
+      "max_level": 9
     },
     "26000017": {
       "id": "skeleton_spell",
       "list": "lab",
       "category": "dark_spell",
       "name": "Skeleton Spell",
-      "name_id": "Mantra Jerangkong"
+      "name_id": "Mantra Jerangkong",
+      "max_level": 8
     },
     "26000028": {
       "id": "bat_spell",
       "list": "lab",
       "category": "dark_spell",
       "name": "Bat Spell",
-      "name_id": "Mantra Kelelawar"
+      "name_id": "Mantra Kelelawar",
+      "max_level": 8
     },
     "26000035": {
       "id": "invisibility_spell",
       "list": "lab",
       "category": "spell",
       "name": "Invisibility Spell",
-      "name_id": "Mantra Penghilang"
+      "name_id": "Mantra Penghilang",
+      "max_level": 4
     },
     "26000053": {
       "id": "recall_spell",
       "list": "lab",
       "category": "spell",
       "name": "Recall Spell",
-      "name_id": "Mantra Pemanggil"
+      "name_id": "Mantra Pemanggil",
+      "max_level": 7
     },
     "26000070": {
       "id": "overgrowth_spell",
       "list": "lab",
       "category": "dark_spell",
       "name": "Overgrowth Spell",
-      "name_id": "Mantra Tumbuh Lebat"
+      "name_id": "Mantra Tumbuh Lebat",
+      "max_level": 5
     },
     "26000073": {
       "id": null,
       "list": "lab",
       "category": "spell",
       "name": "Bag of Frostmites",
-      "name_id": "Kantong Kutu Es"
+      "name_id": "Kantong Kutu Es",
+      "max_level": 13
     },
     "26000098": {
       "id": "revive_spell",
       "list": "lab",
       "category": "spell",
       "name": "Revive Spell",
-      "name_id": "Mantra Pembangkit"
+      "name_id": "Mantra Pembangkit",
+      "max_level": 5
     },
     "26000109": {
       "id": "ice_block_spell",
       "list": "lab",
       "category": "dark_spell",
       "name": "Ice Block Spell",
-      "name_id": "Mantra Kristal Es"
+      "name_id": "Mantra Kristal Es",
+      "max_level": 6
     },
     "26000120": {
       "id": "totem_spell",
       "list": "lab",
       "category": "spell",
       "name": "Totem Spell",
-      "name_id": "Mantra Totem"
+      "name_id": "Mantra Totem",
+      "max_level": 4
     },
     "26000123": {
       "id": "anarki_spell",
       "list": "lab",
       "category": "spell",
       "name": "Angry Spell",
-      "name_id": "Mantra Anarki"
+      "name_id": "Mantra Anarki",
+      "max_level": 4
     },
     "73000000": {
       "id": "lassi",
       "list": "pets",
       "category": "pet",
       "name": "L.A.S.S.I",
-      "name_id": "L.A.S.S.I"
+      "name_id": "L.A.S.S.I",
+      "max_level": 15
     },
     "73000001": {
       "id": "mighty_yak",
       "list": "pets",
       "category": "pet",
       "name": "Mighty Yak",
-      "name_id": "Kerbau Perkasa"
+      "name_id": "Kerbau Perkasa",
+      "max_level": 15
     },
     "73000002": {
       "id": "electro_owl",
       "list": "pets",
       "category": "pet",
       "name": "Electro Owl",
-      "name_id": "Burung Hantu Elektro"
+      "name_id": "Burung Hantu Elektro",
+      "max_level": 15
     },
     "73000003": {
       "id": "unicorn",
       "list": "pets",
       "category": "pet",
       "name": "Unicorn",
-      "name_id": "Unicorn"
+      "name_id": "Unicorn",
+      "max_level": 15
     },
     "73000004": {
       "id": "phoenix",
       "list": "pets",
       "category": "pet",
       "name": "Phoenix",
-      "name_id": "Feniks"
+      "name_id": "Feniks",
+      "max_level": 10
     },
     "73000007": {
       "id": "poison_lizard",
       "list": "pets",
       "category": "pet",
       "name": "Poison Lizard",
-      "name_id": "Kadal Beracun"
+      "name_id": "Kadal Beracun",
+      "max_level": 15
     },
     "73000008": {
       "id": "diggy",
       "list": "pets",
       "category": "pet",
       "name": "Diggy",
-      "name_id": "Tenggiling"
+      "name_id": "Tenggiling",
+      "max_level": 15
     },
     "73000009": {
       "id": "frosty",
       "list": "pets",
       "category": "pet",
       "name": "Frosty",
-      "name_id": "Gading Es"
+      "name_id": "Gading Es",
+      "max_level": 15
     },
     "73000010": {
       "id": "spirit_fox",
       "list": "pets",
       "category": "pet",
       "name": "Spirit Fox",
-      "name_id": "Rubah Roh"
+      "name_id": "Rubah Roh",
+      "max_level": 10
     },
     "73000011": {
       "id": "angry_jelly",
       "list": "pets",
       "category": "pet",
       "name": "Angry Jelly",
-      "name_id": "Ubur Tempur"
+      "name_id": "Ubur Tempur",
+      "max_level": 10
     },
     "73000016": {
       "id": "sneezy",
       "list": "pets",
       "category": "pet",
       "name": "Sneezy",
-      "name_id": "Haciu"
+      "name_id": "Haciu",
+      "max_level": 10
     },
     "73000017": {
       "id": "greedy_raven",
       "list": "pets",
       "category": "pet",
       "name": "Greedy Raven",
-      "name_id": "Gagak Tamak"
+      "name_id": "Gagak Tamak",
+      "max_level": 10
     },
     "90000000": {
       "id": "barbarian_puppet",
       "list": "gear",
       "category": "equipment",
       "name": "Barbarian Puppet",
-      "name_id": "Boneka Barbar"
+      "name_id": "Boneka Barbar",
+      "max_level": 18
     },
     "90000001": {
       "id": "rage_vial",
       "list": "gear",
       "category": "equipment",
       "name": "Rage Vial",
-      "name_id": "Botol Amarah"
+      "name_id": "Botol Amarah",
+      "max_level": 18
     },
     "90000002": {
       "id": "archer_puppet",
       "list": "gear",
       "category": "equipment",
       "name": "Archer Puppet",
-      "name_id": "Boneka Pemanah"
+      "name_id": "Boneka Pemanah",
+      "max_level": 18
     },
     "90000003": {
       "id": "invisibility_vial",
       "list": "gear",
       "category": "equipment",
       "name": "Invisibility Vial",
-      "name_id": "Botol Penghilang"
+      "name_id": "Botol Penghilang",
+      "max_level": 18
     },
     "90000004": {
       "id": "eternal_tome",
       "list": "gear",
       "category": "equipment",
       "name": "Eternal Tome",
-      "name_id": "Kitab Mahasakti"
+      "name_id": "Kitab Mahasakti",
+      "max_level": 18
     },
     "90000005": {
       "id": "life_gem",
       "list": "gear",
       "category": "equipment",
       "name": "Life Gem",
-      "name_id": "Permata Kehidupan"
+      "name_id": "Permata Kehidupan",
+      "max_level": 18
     },
     "90000006": {
       "id": "seeking_shield",
       "list": "gear",
       "category": "equipment",
       "name": "Seeking Shield",
-      "name_id": "Perisai Pelacak"
+      "name_id": "Perisai Pelacak",
+      "max_level": 18
     },
     "90000007": {
       "id": "royal_gem",
       "list": "gear",
       "category": "equipment",
       "name": "Royal Gem",
-      "name_id": "Permata Royal"
+      "name_id": "Permata Royal",
+      "max_level": 18
     },
     "90000008": {
       "id": "earthquake_boots",
       "list": "gear",
       "category": "equipment",
       "name": "Earthquake Boots",
-      "name_id": "Sepatu Bot Gempa Bumi"
+      "name_id": "Sepatu Bot Gempa Bumi",
+      "max_level": 18
     },
     "90000009": {
       "id": "hog_rider_puppet",
       "list": "gear",
       "category": "equipment",
       "name": "Hog Rider Puppet",
-      "name_id": "Boneka Penunggang Babi"
+      "name_id": "Boneka Penunggang Babi",
+      "max_level": 18
     },
     "90000010": {
       "id": "giant_gauntlet",
       "list": "gear",
       "category": "equipment",
       "name": "Giant Gauntlet",
-      "name_id": "Sarung Tinju Raksasa"
+      "name_id": "Sarung Tinju Raksasa",
+      "max_level": 27
     },
     "90000011": {
       "id": "vampstache",
       "list": "gear",
       "category": "equipment",
       "name": "Vampstache",
-      "name_id": "Kumis Vampir"
+      "name_id": "Kumis Vampir",
+      "max_level": 18
     },
     "90000012": {
       "id": "haste_vial",
       "list": "gear",
       "category": "equipment",
       "name": "Haste Vial",
-      "name_id": "Botol Gesit"
+      "name_id": "Botol Gesit",
+      "max_level": 18
     },
     "90000013": {
       "id": "rocket_spear",
       "list": "gear",
       "category": "equipment",
       "name": "Rocket Spear",
-      "name_id": "Tombak Roket"
+      "name_id": "Tombak Roket",
+      "max_level": 27
     },
     "90000014": {
       "id": "spiky_ball",
       "list": "gear",
       "category": "equipment",
       "name": "Spiky Ball",
-      "name_id": "Bola Berduri"
+      "name_id": "Bola Berduri",
+      "max_level": 27
     },
     "90000015": {
       "id": "frozen_arrow",
       "list": "gear",
       "category": "equipment",
       "name": "Frozen Arrow",
-      "name_id": "Panah Es"
+      "name_id": "Panah Es",
+      "max_level": 27
     },
     "90000016": {
       "id": "monolith_arrow",
       "list": "gear",
       "category": "equipment",
       "name": "Monolith Arrow",
-      "name_id": "Panah Monolit"
+      "name_id": "Panah Monolit",
+      "max_level": 27
     },
     "90000017": {
       "id": "giant_arrow",
       "list": "gear",
       "category": "equipment",
       "name": "Giant Arrow",
-      "name_id": "Panah Raksasa"
+      "name_id": "Panah Raksasa",
+      "max_level": 18
     },
     "90000019": {
       "id": "heroic_torch",
       "list": "gear",
       "category": "equipment",
       "name": "Heroic Torch",
-      "name_id": "Obor Heroik"
+      "name_id": "Obor Heroik",
+      "max_level": 27
     },
     "90000020": {
       "id": "healer_puppet",
       "list": "gear",
       "category": "equipment",
       "name": "Healer Puppet",
-      "name_id": "Boneka Penyembuh"
+      "name_id": "Boneka Penyembuh",
+      "max_level": 18
     },
     "90000022": {
       "id": "fireball",
       "list": "gear",
       "category": "equipment",
       "name": "Fireball",
-      "name_id": "Bola Api"
+      "name_id": "Bola Api",
+      "max_level": 27
     },
     "90000024": {
       "id": "rage_gem",
       "list": "gear",
       "category": "equipment",
       "name": "Rage Gem",
-      "name_id": "Permata Amarah"
+      "name_id": "Permata Amarah",
+      "max_level": 18
     },
     "90000032": {
       "id": "snake_bracelet",
       "list": "gear",
       "category": "equipment",
       "name": "Snake Bracelet",
-      "name_id": "Gelang Ular"
+      "name_id": "Gelang Ular",
+      "max_level": 27
     },
     "90000034": {
       "id": "healing_tome",
       "list": "gear",
       "category": "equipment",
       "name": "Healing Tome",
-      "name_id": "Kitab Penyembuh"
+      "name_id": "Kitab Penyembuh",
+      "max_level": 18
     },
     "90000035": {
       "id": "dark_crown",
       "list": "gear",
       "category": "equipment",
       "name": "Dark Crown",
-      "name_id": "Mahkota Hitam"
+      "name_id": "Mahkota Hitam",
+      "max_level": 27
     },
     "90000039": {
       "id": "magic_mirror",
       "list": "gear",
       "category": "equipment",
       "name": "Magic Mirror",
-      "name_id": "Cermin Ajaib"
+      "name_id": "Cermin Ajaib",
+      "max_level": 27
     },
     "90000040": {
       "id": "electro_boots",
       "list": "gear",
       "category": "equipment",
       "name": "Electro Boots",
-      "name_id": "Sepatu Bot Elektro"
+      "name_id": "Sepatu Bot Elektro",
+      "max_level": 27
     },
     "90000041": {
       "id": "lavaloon_puppet",
       "list": "gear",
       "category": "equipment",
       "name": "Lavaloon Puppet",
-      "name_id": "Boneka Balon Lava"
+      "name_id": "Boneka Balon Lava",
+      "max_level": 27
     },
     "90000042": {
       "id": "henchmen_puppet",
       "list": "gear",
       "category": "equipment",
       "name": "Henchmen Puppet",
-      "name_id": "Boneka Pengawal"
+      "name_id": "Boneka Pengawal",
+      "max_level": 18
     },
     "90000043": {
       "id": "dark_orb",
       "list": "gear",
       "category": "equipment",
       "name": "Dark Orb",
-      "name_id": "Kristal Kegelapan"
+      "name_id": "Kristal Kegelapan",
+      "max_level": 18
     },
     "90000044": {
       "id": "metal_pants",
       "list": "gear",
       "category": "equipment",
       "name": "Metal Pants",
-      "name_id": "Celana Besi"
+      "name_id": "Celana Besi",
+      "max_level": 18
     },
     "90000047": {
       "id": "dumbel_sakti",
       "list": "gear",
       "category": "equipment",
       "name": "Noble Iron",
-      "name_id": "Dumbel Sakti"
+      "name_id": "Dumbel Sakti",
+      "max_level": 18
     },
     "90000048": {
       "id": "action_figure",
       "list": "gear",
       "category": "equipment",
       "name": "Action Figure",
-      "name_id": "Figur Karakter"
+      "name_id": "Figur Karakter",
+      "max_level": 27
     },
     "90000049": {
       "id": "meteor_staff",
       "list": "gear",
       "category": "equipment",
       "name": "Meteor Staff",
-      "name_id": "Tongkat Meteor"
+      "name_id": "Tongkat Meteor",
+      "max_level": 27
     },
     "90000050": {
       "id": "frost_flake",
       "list": "gear",
       "category": "equipment",
       "name": "Frost Flake",
-      "name_id": "Serpihan Beku"
+      "name_id": "Serpihan Beku",
+      "max_level": 27
     },
     "90000051": {
       "id": "stick_horse",
       "list": "gear",
       "category": "equipment",
       "name": "Stick Horse",
-      "name_id": "Kuda Kayu"
+      "name_id": "Kuda Kayu",
+      "max_level": 27
     },
     "90000052": {
       "id": "jantung_api",
       "list": "gear",
       "category": "equipment",
       "name": "Fire Heart",
-      "name_id": "Jantung Api"
+      "name_id": "Jantung Api",
+      "max_level": 18
     },
     "90000053": {
       "id": "ransel_roket",
       "list": "gear",
       "category": "equipment",
       "name": "Rocket Backpack",
-      "name_id": "Ransel Roket"
+      "name_id": "Ransel Roket",
+      "max_level": 27
     },
     "90000056": {
       "id": "pemancar_kejut",
       "list": "gear",
       "category": "equipment",
       "name": "Stun Blaster",
-      "name_id": "Pemancar Kejut"
+      "name_id": "Pemancar Kejut",
+      "max_level": 18
     },
     "90000057": {
       "id": "flame_blower",
       "list": "gear",
       "category": "equipment",
       "name": "Flame Blower",
-      "name_id": "Pelontar Api"
+      "name_id": "Pelontar Api",
+      "max_level": 18
     },
     "90000059": {
       "id": "electro_fangs",
       "list": "gear",
       "category": "equipment",
       "name": "Electro Fangs",
-      "name_id": "Taring Elektro"
+      "name_id": "Taring Elektro",
+      "max_level": 18
     },
     "90000060": {
       "id": "revenge_deck",
       "list": "gear",
       "category": "equipment",
       "name": "Revenge Deck",
-      "name_id": "Dek Pembalasan"
+      "name_id": "Dek Pembalasan",
+      "max_level": 27
     },
     "90000061": {
       "id": "liontin_portal",
       "list": "gear",
       "category": "equipment",
       "name": "Portal Pendant",
-      "name_id": "Liontin Portal"
+      "name_id": "Liontin Portal",
+      "max_level": 27
     }
   }
 }

@@ -56,6 +56,7 @@ STATIC_FILES = {'/icons/stats/attacks.png': 'icons/stats/attacks.png',
                 '/icons/icon-maskable-512.png': 'icons/icon-maskable-512.png',
                 '/icons/apple-touch-icon.png': 'icons/apple-touch-icon.png',
                 '/upgrade-icons.js': 'upgrade-icons.js', '/upgrade-portrait.js': 'upgrade-portrait.js',
+                '/upgrade-availability.js': 'upgrade-availability.js', '/upgrade-max-levels.js': 'upgrade-max-levels.js',
                 **{'/' + path.relative_to(WEB_DIR).as_posix(): path.relative_to(WEB_DIR).as_posix()
                    for folder in ('icons/entities', 'icons/upgrades')
                    for path in (WEB_DIR / folder).rglob('*')

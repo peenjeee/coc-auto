@@ -582,7 +582,9 @@ six tabs with the game's exact current levels, grouped counts and running-upgrad
 The screen must be 1280x720, the game must use English or Indonesian, and LDPlayer clipboard synchronization must
 be enabled. Stop farming first; sync is refused while a task runs. The sync returns to the village after copying the export.
 Game IDs are mapped using the pinned `village-export-catalog.json`; `scripts/sync_export_catalog.py` refreshes it.
-Different levels of the same building stay separate. Unknown IDs and modular items without a building level are
+Different levels of the same building stay separate. Completed groups at their pinned global maximum level are hidden from
+the available list. Lower-level copies, running upgrades, unknown IDs and levels newer than the catalog stay visible.
+Filtering also applies to saved scans; it does not remove raw inventory or existing queue selections. Unknown IDs and modular items without a building level are
 shown read-only, rather than assigned a guessed level. Walls use the separate wall-upgrade task.
 The export does not supply upgrade prices or the game's suggested/locked-row ordering. Sync does not invent those
 values. The upgrade worker still finds actual upgrade rows and checks current prices, resource icons, dialogs and

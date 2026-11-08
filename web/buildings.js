@@ -2,6 +2,7 @@
 // Each list has an ordered queue and optional target levels. Syncing starts no upgrades.
 import { t } from './i18n.js?v=3';
 import { upgradePortraitSource, upgradePortraitFallback } from './upgrade-portrait.js?v=4';
+import { isFullyUpgraded } from './upgrade-availability.js?v=1';
 
 // Each list's categories, in the order shown; a row the device could not name comes under other.
 const CATEGORIES = {
@@ -209,10 +210,11 @@ export class BuildingsPanel {
     this.clocks = [];
     const list = $('buildings-list');
     list.replaceChildren();
-    const rows = (this.rows ?? []).filter(row => String(row.name ?? '').toLocaleLowerCase().includes(this.search.trim().toLocaleLowerCase()));
+    const available = (this.rows ?? []).filter(row => !isFullyUpgraded(row));
+    const rows = available.filter(row => String(row.name ?? '').toLocaleLowerCase().includes(this.search.trim().toLocaleLowerCase()));
     $('upgrade-count').textContent = this.rows ? t('upgrade_results', { count: rows.length }) : '';
     if (!rows.length) {
-      list.append(element('p', t(!this.rows ? 'upgrade_scan_empty' : this.rows.length ? 'upgrade_no_results' : 'buildings_empty'), 'upgrade-empty'));
+      list.append(element('p', t(!this.rows ? 'upgrade_scan_empty' : available.length ? 'upgrade_no_results' : 'buildings_empty'), 'upgrade-empty'));
       return;
     }
     for (const row of rows) list.append(this.catalogRow(row));
