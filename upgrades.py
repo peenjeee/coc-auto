@@ -20,6 +20,7 @@ import bot
 import buildings
 import gear
 import messages
+import upgrade_history
 
 LOG = logging.getLogger(__name__)
 # Free slots on the open list's tab bar ([x, y, w, h] at 1280x720), free/total. The Home builders' counter there does
@@ -361,7 +362,7 @@ def marked_row(image: np.ndarray, spec: dict) -> int | None:
 
 
 def upgrade(runner: bot.Bot, listing: str, spec: dict, frames: list, place: int, row: dict, program: str,
-            digits: dict, rules: dict = RULES_OFF, amounts: dict | None = None) -> bool:
+            digits: dict, rules: dict = RULES_OFF, amounts: dict | None = None, indonesian: bool = False) -> bool:
     """Tap the row with the list in front (the game opens its upgrade dialog) and confirm only when the dialog asks
     the row's own price; False when the dialog was closed unconfirmed. A building's dialog that points at another
     building first (a red note with Go, or the Town Hall's "Upgrade Locked") has that one upgraded instead, never its
@@ -396,7 +397,7 @@ def upgrade(runner: bot.Bot, listing: str, spec: dict, frames: list, place: int,
     done = settle(runner, dialog, check, 0 if listing in UNPAID_GEMS else goblin_gems(rules, builds), row['name'],
                   button)
     if done:
-        LOG.info(DONE[listing], row['name'], row['next_level'])
+        report_upgrade(runner,listing,row,indonesian)
     return done
 
 
@@ -443,7 +444,7 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
             try:
                 done = (unlock(runner, listing, spec, frames, place, row, program, rules, amounts) if locked else
                         upgrade(runner, listing, spec, frames, place, row, program, templates['digits'], rules,
-                                amounts))
+                                amounts,indonesian))
             except bot.NoFreeBuilder as exc:
                 LOG.warning('Upgrade %s dilewati: %s', row['name'], exc)
             if done:
@@ -465,6 +466,31 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
     return done, pending, buildings.pause_seconds([item for item, _ in placed], indonesian), short
 
 
+def report_upgrade(runner, listing, row, indonesian=False):
+    target = row.get('next_level')
+    root = getattr(runner,'root',None)
+    if root is not None:
+        try:
+            target = upgrade_history.record(root,listing,row,buildings.seconds(row.get('time'),indonesian),
+                                            allow_inference=not getattr(runner,'level_history_uncertain',False))
+        except Exception:
+            # A reporting failure must not retry a purchase that already succeeded.
+            runner.level_history_uncertain=True
+            try:
+                upgrade_history.invalidate(root)
+            except OSError:
+                pass
+            LOG.warning('Riwayat level upgrade tidak tersimpan; level hanya dari layar')
+    try:
+        name = upgrade_history.canonical_name(listing,row)
+    except (OSError,ValueError,KeyError):
+        name = row['name']
+    if type(target) is int and 1 <= target <= 200:
+        LOG.info(DONE[listing],name,target)
+    else:
+        LOG.info(DONE[listing].split(' ke level')[0],name)
+
+
 def pause(runner: bot.Bot, seconds_left: int, reason: str) -> None:
     """Wait for the soonest running upgrade: with CoC closed when that is at least CLOSED_WAIT_MIN_SECONDS away (at
     most CLOSED_WAIT_MAX_SECONDS, then the lists are read again), opened again afterwards on the village; otherwise
@@ -475,9 +501,9 @@ def pause(runner: bot.Bot, seconds_left: int, reason: str) -> None:
     closed = runner.live and seconds_left >= CLOSED_WAIT_MIN_SECONDS
     if not closed:
         seconds_left = min(seconds_left, buildings.WAIT_MAX_SECONDS)
-    LOG.info('Menunggu %s detik: %s', seconds_left, reason)
+    LOG.info('Menunggu %s: %s', messages.duration(seconds_left), reason)
     if closed:
-        LOG.info('CoC ditutup selama menunggu; dibuka lagi setelah %s detik', seconds_left)
+        LOG.info('CoC ditutup selama menunggu; dibuka kembali dalam %s', messages.duration(seconds_left))
         runner.device.stop_game()
     time.sleep(seconds_left if runner.poll else 0)
     if closed:

@@ -9,6 +9,19 @@ globalThis.fetch = async (url) => ({ ok: true, json: async () => JSON.parse(awai
 const { translate } = await import('./web/messages.js');
 const catalog = JSON.parse(await fs.readFile(new URL('messages_en.json', root), 'utf8'));
 
+test('upgrade names and compact waits render correctly in retained device logs',()=>{
+  assert.equal(translate('INFO: Bangunan di-upgrade: Jawara Royale ke level 48'),
+    'INFO: Building upgraded: Royal Champion to level 48');
+  assert.equal(translate('INFO: Building upgraded: Jawara Royale to level None'),
+    'INFO: Building upgraded: Royal Champion');
+  assert.equal(translate('INFO: Menunggu 12125 detik: belum ada pilihan yang bisa di-upgrade sekarang'),
+    'INFO: Waiting 3h 22m 5s: nothing picked can be upgraded right now');
+  assert.equal(translate('INFO: CoC ditutup selama menunggu; dibuka lagi setelah 12125 detik'),
+    'INFO: CoC closed during the wait; reopening in 3h 22m 5s');
+  assert.equal(translate('INFO: Bangunan di-upgrade: Jawara Royale ke level 48','id'),
+    'INFO: Bangunan di-upgrade: Jawara Royale ke level 48');
+});
+
 test('browser and terminal ship the same catalog', async () => {
   assert.deepEqual(JSON.parse(await fs.readFile(new URL('web/messages_en.json', root), 'utf8')), catalog);
 });

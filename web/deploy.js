@@ -2,7 +2,7 @@
 // deploy point (troops, siege and heroes; the Battle Machine/Copter in the Builder Base); numbered pins are the
 // Home Village spell points (rounds of front, left, right), its --ring pins round the map edge, the spell pins over
 // the middle of the base for --ring and its --quake pins on the walls, or the Builder Base points, one per troop card.
-import { t } from './i18n.js';
+import { t } from './i18n.js?v=3';
 
 const SCREENS = ['home_scout', 'home_ring', 'home_spell_spread', 'home_quake', 'builder_scout', 'builder_stage2'];
 // The ring, spell spread and quake tabs move other pins on the same Home Village attack screen.

@@ -72,9 +72,34 @@ def catalog() -> tuple[dict, list]:
     return english, patterns
 
 
+def duration(seconds: int) -> str:
+    remaining = max(0,int(seconds))
+    parts = []
+    for unit,size in (('d',86400),('h',3600),('m',60),('s',1)):
+        amount,remaining = divmod(remaining,size)
+        if amount:
+            parts.append(f'{amount}{unit}')
+    return ' '.join(parts) or '0s'
+
+
+def readable(text: str) -> str:
+    # Keep retained logs readable too; do not invent levels for older None entries.
+    text = re.sub(r'\b(Menunggu|Waiting) (\d+) (?:detik|seconds):',
+                  lambda match: match[1]+' '+duration(int(match[2]))+':',text)
+    text = re.sub(r'(CoC ditutup selama menunggu; dibuka lagi setelah) (\d+) detik',
+                  lambda match: 'CoC ditutup selama menunggu; dibuka kembali dalam '+duration(int(match[2])),text)
+    text = re.sub(r'(CoC closed during the wait; opened again after) (\d+) seconds',
+                  lambda match: 'CoC closed during the wait; reopening in '+duration(int(match[2])),text)
+    text = re.sub(r'((?:Bangunan|Riset|Hewan|Peralatan) di-upgrade: .+?) ke level None$',r'\1',text)
+    return re.sub(r'((?:Building|Research|Pet|Equipment) upgraded: .+?) to level None$',r'\1',text)
+
+
 def translate(text: object) -> object:
     """text in the chosen language; text the catalog does not know, and anything that is not text, as it is."""
-    if _language == 'id' or not isinstance(text, str):
+    if not isinstance(text, str):
+        return text
+    text = readable(text)
+    if _language == 'id':
         return text
     exact, patterns = catalog()
     if text in exact:

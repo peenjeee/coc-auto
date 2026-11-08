@@ -131,14 +131,15 @@ class DeviceActions:
         self.adb().launch(bot.GAME_ACTIVITY)
 
     def scan_buildings(self, listing: str = 'buildings') -> list[dict]:
-        """Every row of one builder list tab (buildings.LISTS), in its own village; the list is only opened, swiped,
-        switched between its tabs and closed."""
+        """Copy the game's village JSON once, refreshing all six upgrade lists without OCR."""
         import bot
-        import buildings
+        import village_export
         config, root = bot.load_config(self.config_path), self.config_path.parent
-        bot.validate_walls(config, root, (buildings.LISTS[listing][0],))
-        return buildings.scan(bot.Bot(config, root, self.adb(), live=True), listing,
-                              root / '.coc-auto' / 'scan-frames' / listing)
+        if listing not in village_export.SECTIONS:
+            raise SettingRefused('Unknown upgrade list')
+        snapshot = village_export.scan(bot.Bot(config, root, self.adb(), live=True))
+        self.last_village_scan = snapshot
+        return snapshot['lists'][listing]
 
     def close_coc(self) -> None:
         self.adb().stop_game()

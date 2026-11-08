@@ -26,3 +26,5 @@ config.local.json.tmp
 .coc-auto/
 
 !web/icons/stats/*.png
+
+!web/icons/upgrades/*.png

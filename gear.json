@@ -28,6 +28,20 @@
     "jantung_api": ["Fire Heart", "Jantung Api"],
     "ransel_roket": ["Rocket Backpack", "Ransel Roket"],
     "dumbel_sakti": ["Noble Iron", "Dumbel Sakti"],
-    "pemancar_kejut": ["Stun Blaster", "Pemancar Kejut"]
+    "pemancar_kejut": ["Stun Blaster", "Pemancar Kejut"],
+    "rocket_spear": ["Rocket Spear", "Tombak Roket"],
+    "spiky_ball": ["Spiky Ball", "Bola Berduri"],
+    "frozen_arrow": ["Frozen Arrow", "Panah Es"],
+    "monolith_arrow": ["Monolith Arrow", "Panah Monolit"],
+    "heroic_torch": ["Heroic Torch", "Obor Heroik"],
+    "dark_crown": ["Dark Crown", "Mahkota Hitam"],
+    "electro_boots": ["Electro Boots", "Sepatu Bot Elektro"],
+    "lavaloon_puppet": ["Lavaloon Puppet", "Boneka Balon Lava"],
+    "action_figure": ["Action Figure", "Figur Karakter"],
+    "meteor_staff": ["Meteor Staff", "Tongkat Meteor"],
+    "frost_flake": ["Frost Flake", "Serpihan Beku"],
+    "stick_horse": ["Stick Horse", "Kuda Kayu"],
+    "electro_fangs": ["Electro Fangs", "Taring Elektro"],
+    "revenge_deck": ["Revenge Deck", "Dek Pembalasan"]
   }
 }

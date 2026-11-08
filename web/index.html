@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#45a8ee">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=buildings-8"><script type="module" src="app.js?v=buildings-9"></script>
+<link rel="stylesheet" href="style.css?v=buildings-15"><script type="module" src="app.js?v=buildings-21"></script>
 </head><body>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <header class="site-header"><div class="header-inner">
@@ -129,36 +129,50 @@
 </div></div></section>
       <section id="view-stats" class="page-panel" role="tabpanel" aria-labelledby="tab-stats" hidden></section>
 <section id="view-buildings" class="panel settings page-panel" role="tabpanel" aria-labelledby="tab-buildings" hidden>
-        <div class="card-head">
-          <h2 id="buildings-title" class="card-title"></h2>
-          <button id="buildings-scan" type="button" class="primary"></button>
+        <h2 id="buildings-title" class="upgrade-sr-only"></h2>
+        <div class="tabs upgrade-navigation" role="tablist" aria-label="Upgrade categories">
+          <button id="upgrade-tab-buildings" type="button" role="tab" aria-controls="upgrade-workspace" data-list="buildings"><img src="icons/upgrades/buildings.webp" alt="" width="32" height="32"><span data-i18n="buildings_tab_buildings"></span></button>
+          <button id="upgrade-tab-lab" type="button" role="tab" aria-controls="upgrade-workspace" data-list="lab"><img src="icons/upgrades/lab.webp" alt="" width="32" height="32"><span data-i18n="buildings_tab_lab"></span></button>
+          <button id="upgrade-tab-pets" type="button" role="tab" aria-controls="upgrade-workspace" data-list="pets"><img src="icons/upgrades/pets.png" alt="" width="32" height="32"><span data-i18n="buildings_tab_pets"></span></button>
+          <button id="upgrade-tab-gear" type="button" role="tab" aria-controls="upgrade-workspace" data-list="gear"><img src="icons/upgrades/equipment.webp" alt="" width="32" height="32"><span data-i18n="buildings_tab_gear"></span></button>
+          <button id="upgrade-tab-builder" type="button" role="tab" aria-controls="upgrade-workspace" data-list="builder"><img src="icons/upgrades/builder.webp" alt="" width="32" height="32"><span data-i18n="upgrade_builder_tab"></span></button>
+          <button id="upgrade-tab-star" type="button" role="tab" aria-controls="upgrade-workspace" data-list="star"><img src="icons/upgrades/star.webp" alt="" width="32" height="32"><span data-i18n="upgrade_star_tab"></span></button>
         </div>
-        <div class="tabs segmented" role="tablist" aria-label="Village">
-          <button type="button" role="tab" data-village="home" data-i18n="home_village"></button>
-          <button type="button" role="tab" data-village="builder" data-i18n="builder_village"></button>
+        <div id="upgrade-workspace" role="tabpanel" aria-labelledby="upgrade-tab-buildings">
+        <div class="upgrade-layout">
+          <section class="upgrade-catalog" aria-labelledby="upgrade-catalog-title">
+            <div class="upgrade-section-head"><h3 id="upgrade-catalog-title" data-i18n="upgrade_available"></h3><button id="buildings-scan" type="button"></button></div>
+            <div class="upgrade-catalog-meta"><span id="upgrade-village" class="hint"></span><span id="buildings-scanned" class="hint" hidden></span></div>
+            <label class="upgrade-search"><span class="upgrade-sr-only" data-i18n="upgrade_search"></span><input id="upgrade-search" type="search" autocomplete="off"></label>
+            <span id="upgrade-count" class="upgrade-sr-only" role="status"></span>
+            <div id="buildings-list" class="upgrade-list"></div>
+        <details class="upgrade-help"><summary data-i18n="upgrade_how"></summary><p id="buildings-hint" class="hint"></p><p id="buildings-pick-hint" class="hint"></p></details>
+        <details id="goblin" class="group goblin upgrade-goblin">
+          <summary><img class="upgrade-goblin-icon" src="icons/upgrades/goblin_helper.png" alt="" width="32" height="32"><span class="upgrade-disclosure-copy"><span data-i18n="upgrade_goblin_title"></span><span class="upgrade-disclosure-tag" data-i18n="upgrade_goblin_optional"></span></span><span class="upgrade-disclosure-chevron" aria-hidden="true"></span></summary>
+          <div class="goblin-config">
+            <label class="goblin-option"><span class="goblin-option-copy"><strong data-i18n="goblin_builder_title"></strong><small data-i18n="goblin_builder_scope"></small></span><input id="goblin-builder" type="checkbox" role="switch"></label>
+            <label class="goblin-option"><span class="goblin-option-copy"><strong data-i18n="goblin_researcher_title"></strong><small data-i18n="goblin_researcher_scope"></small></span><input id="goblin-researcher" type="checkbox" role="switch"></label>
+            <div class="goblin-config-footer"><label class="goblin-limit"><span data-i18n="goblin_limit"></span><input id="goblin-max" type="number" min="0" max="1000" step="1" value="0"></label><button id="goblin-save" type="button" data-i18n="goblin_save_short"></button></div>
+            <p class="hint goblin-spend-note" data-i18n="goblin_spend_note"></p>
+          </div>
+        </details>
+          </section>
+          <section class="upgrade-queue" aria-labelledby="upgrade-queue-title">
+            <div class="upgrade-section-head"><h3 id="upgrade-queue-title" data-i18n="upgrade_queue"></h3><span id="upgrade-queue-count" class="upgrade-counter"></span></div>
+            <p id="upgrade-drag-help" class="upgrade-sr-only" data-i18n="upgrade_drag_help"></p>
+            <p id="upgrade-reorder-status" class="upgrade-sr-only" role="status"></p>
+            <ol id="buildings-picked" class="upgrade-picked"></ol>
+            <p id="upgrade-drop-hint" hidden data-i18n="upgrade_drop_here"></p>
+            <div class="upgrade-queue-footer">
+              <label class="upgrade-keep"><span data-i18n="buildings_keep"></span><input id="buildings-keep" type="number" min="0" max="10" step="1" value="0"></label>
+              <p class="upgrade-save-timing" data-i18n="upgrade_save_timing"></p>
+              <p id="upgrade-save-status" class="hint" role="status"></p>
+              <button id="buildings-save" class="primary" type="button" data-i18n="upgrade_save"></button>
+            </div>
+          </section>
         </div>
-        <div class="tabs segmented" role="tablist">
-          <button type="button" role="tab" data-list="buildings" data-i18n="buildings_tab_buildings"></button>
-          <button type="button" role="tab" data-list="lab" data-i18n="buildings_tab_lab"></button>
-          <button type="button" role="tab" data-list="pets" data-i18n="buildings_tab_pets"></button>
-          <button type="button" role="tab" data-list="gear" data-i18n="buildings_tab_gear"></button>
-          <button type="button" role="tab" data-list="builder" data-i18n="buildings_tab_buildings"></button>
-          <button type="button" role="tab" data-list="star" data-i18n="buildings_tab_star"></button>
         </div>
-        <p id="buildings-hint" class="hint"></p>
-        <p id="buildings-scanned" class="hint" hidden></p>
-        <div class="group buildings">
-          <p id="buildings-pick-hint" class="hint"></p>
-          <p id="buildings-picked" class="building-picked"></p>
-          <div class="actions building-save"><label class="field-row"><span data-i18n="buildings_keep"></span> <input id="buildings-keep" type="number" min="0" max="10" value="0"></label><button id="buildings-save" type="button" data-i18n="buildings_save"></button></div>
-        </div>
-        <div id="goblin" class="group goblin">
-          <p class="hint" data-i18n="goblin_hint"></p>
-          <label class="toggle"><input id="goblin-builder" type="checkbox"> <span data-i18n="goblin_builder"></span></label>
-          <label class="toggle"><input id="goblin-researcher" type="checkbox"> <span data-i18n="goblin_researcher"></span></label>
-          <div class="actions building-save"><label class="field-row"><span data-i18n="goblin_max_gems"></span> <input id="goblin-max" type="number" min="0" max="1000" value="0"></label><button id="goblin-save" type="button" data-i18n="goblin_save"></button></div>
-        </div>
-        <div id="buildings-list" class="building-list" aria-live="polite"></div>
+
       </section>
 <section id="view-deploy" class="panel deploy-editor page-panel" role="tabpanel" aria-labelledby="tab-deploy" hidden>
         <div class="card-head">

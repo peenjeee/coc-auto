@@ -1,0 +1,1904 @@
+{
+  "source": "https://github.com/ClashKingInc/ClashKingAssets",
+  "revision": "fdac291ae7fbc2901221ff945834be534d0344ae",
+  "notice": "Clash of Clans game data and names by Supercell. IDs/names only; export levels/timers are authoritative.",
+  "items": {
+    "1000000": {
+      "id": "army_camp",
+      "list": "buildings",
+      "category": "army",
+      "name": "Army Camp",
+      "name_id": "Kamp Tentara"
+    },
+    "1000001": {
+      "id": "town_hall",
+      "list": "buildings",
+      "category": "other",
+      "name": "Town Hall",
+      "name_id": "Balai Kota"
+    },
+    "1000002": {
+      "id": "elixir_collector",
+      "list": "buildings",
+      "category": "resource",
+      "name": "Elixir Collector",
+      "name_id": "Pengumpul Eliksir"
+    },
+    "1000003": {
+      "id": "elixir_storage",
+      "list": "buildings",
+      "category": "resource",
+      "name": "Elixir Storage",
+      "name_id": "Penyimpanan Eliksir"
+    },
+    "1000004": {
+      "id": "gold_mine",
+      "list": "buildings",
+      "category": "resource",
+      "name": "Gold Mine",
+      "name_id": "Tambang Emas"
+    },
+    "1000005": {
+      "id": "gold_storage",
+      "list": "buildings",
+      "category": "resource",
+      "name": "Gold Storage",
+      "name_id": "Penyimpanan Emas"
+    },
+    "1000006": {
+      "id": "barracks",
+      "list": "buildings",
+      "category": "army",
+      "name": "Barracks",
+      "name_id": "Barak"
+    },
+    "1000007": {
+      "id": "laboratory",
+      "list": "buildings",
+      "category": "army",
+      "name": "Laboratory",
+      "name_id": "Laboratorium"
+    },
+    "1000008": {
+      "id": "cannon",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Cannon",
+      "name_id": "Meriam"
+    },
+    "1000009": {
+      "id": "archer_tower",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Archer Tower",
+      "name_id": "Menara Pemanah"
+    },
+    "1000010": {
+      "id": "wall",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Wall",
+      "name_id": "Tembok"
+    },
+    "1000011": {
+      "id": "wizard_tower",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Wizard Tower",
+      "name_id": "Menara Penyihir"
+    },
+    "1000012": {
+      "id": "air_defense",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Air Defense",
+      "name_id": "Pertahanan Udara"
+    },
+    "1000013": {
+      "id": "mortar",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Mortar",
+      "name_id": "Mortir"
+    },
+    "1000014": {
+      "id": "clan_castle",
+      "list": "buildings",
+      "category": "army",
+      "name": "Clan Castle",
+      "name_id": "Kastel Klan"
+    },
+    "1000015": {
+      "id": "builders_hut",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Builder's Hut",
+      "name_id": "Pondok Tukang"
+    },
+    "1000019": {
+      "id": "hidden_tesla",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Hidden Tesla",
+      "name_id": "Tesla Tersembunyi"
+    },
+    "1000020": {
+      "id": "spell_factory",
+      "list": "buildings",
+      "category": "army",
+      "name": "Spell Factory",
+      "name_id": "Pabrik Mantra"
+    },
+    "1000021": {
+      "id": "x_bow",
+      "list": "buildings",
+      "category": "defense",
+      "name": "X-Bow",
+      "name_id": "Busur X"
+    },
+    "1000023": {
+      "id": "dark_elixir_drill",
+      "list": "buildings",
+      "category": "resource",
+      "name": "Dark Elixir Drill",
+      "name_id": "Pengeboran Eliksir Hitam"
+    },
+    "1000024": {
+      "id": "dark_elixir_storage",
+      "list": "buildings",
+      "category": "resource",
+      "name": "Dark Elixir Storage",
+      "name_id": "Penyimpanan Eliksir Hitam"
+    },
+    "1000026": {
+      "id": "dark_barracks",
+      "list": "buildings",
+      "category": "army",
+      "name": "Dark Barracks",
+      "name_id": "Barak Hitam"
+    },
+    "1000027": {
+      "id": "inferno_tower",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Inferno Tower",
+      "name_id": "Menara Inferno"
+    },
+    "1000028": {
+      "id": "air_sweeper",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Air Sweeper",
+      "name_id": "Penyapu Udara"
+    },
+    "1000029": {
+      "id": "dark_spell_factory",
+      "list": "buildings",
+      "category": "army",
+      "name": "Dark Spell Factory",
+      "name_id": "Pabrik Mantra Hitam"
+    },
+    "1000031": {
+      "id": "eagle_artillery",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Eagle Artillery",
+      "name_id": "Artileri Elang"
+    },
+    "1000032": {
+      "id": "bomb_tower",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Bomb Tower",
+      "name_id": "Menara Bom"
+    },
+    "1000033": {
+      "id": "wall",
+      "list": "builder",
+      "category": "defense",
+      "name": "Wall",
+      "name_id": "Tembok"
+    },
+    "1000034": {
+      "id": "builder_hall",
+      "list": "builder",
+      "category": "other",
+      "name": "Builder Hall",
+      "name_id": "Aula Tukang"
+    },
+    "1000035": {
+      "id": "elixir_collector",
+      "list": "builder",
+      "category": "resource",
+      "name": "Elixir Collector",
+      "name_id": "Pengumpul Eliksir"
+    },
+    "1000036": {
+      "id": "elixir_storage",
+      "list": "builder",
+      "category": "resource",
+      "name": "Elixir Storage",
+      "name_id": "Penyimpanan Eliksir"
+    },
+    "1000037": {
+      "id": "gold_mine",
+      "list": "builder",
+      "category": "resource",
+      "name": "Gold Mine",
+      "name_id": "Tambang Emas"
+    },
+    "1000038": {
+      "id": "gold_storage",
+      "list": "builder",
+      "category": "resource",
+      "name": "Gold Storage",
+      "name_id": "Penyimpanan Emas"
+    },
+    "1000039": {
+      "id": "clock_tower",
+      "list": "builder",
+      "category": "other",
+      "name": "Clock Tower",
+      "name_id": "Menara Jam"
+    },
+    "1000040": {
+      "id": "builder_barracks",
+      "list": "builder",
+      "category": "army",
+      "name": "Builder Barracks",
+      "name_id": "Barak Tukang"
+    },
+    "1000041": {
+      "id": "double_cannon",
+      "list": "builder",
+      "category": "defense",
+      "name": "Double Cannon",
+      "name_id": "Meriam Ganda"
+    },
+    "1000042": {
+      "id": "army_camp",
+      "list": "builder",
+      "category": "army",
+      "name": "Army Camp",
+      "name_id": "Kamp Tentara"
+    },
+    "1000043": {
+      "id": "hidden_tesla",
+      "list": "builder",
+      "category": "defense",
+      "name": "Hidden Tesla",
+      "name_id": "Tesla Tersembunyi"
+    },
+    "1000044": {
+      "id": "cannon",
+      "list": "builder",
+      "category": "defense",
+      "name": "Cannon",
+      "name_id": "Meriam"
+    },
+    "1000045": {
+      "id": "multi_mortar",
+      "list": "builder",
+      "category": "defense",
+      "name": "Multi Mortar",
+      "name_id": "Multi Mortir"
+    },
+    "1000046": {
+      "id": "star_laboratory",
+      "list": "builder",
+      "category": "army",
+      "name": "Star Laboratory",
+      "name_id": "Laboratorium Bintang"
+    },
+    "1000047": {
+      "id": null,
+      "list": "builder",
+      "category": "other",
+      "name": "B.O.T.O’s Shack",
+      "name_id": "Gubuk B.O.T.O"
+    },
+    "1000048": {
+      "id": "archer_tower",
+      "list": "builder",
+      "category": "defense",
+      "name": "Archer Tower",
+      "name_id": "Menara Pemanah"
+    },
+    "1000049": {
+      "id": "reinforcement_camp",
+      "list": "builder",
+      "category": "army",
+      "name": "Reinforcement Camp",
+      "name_id": "Kemah Bala Bantuan"
+    },
+    "1000050": {
+      "id": "firecrackers",
+      "list": "builder",
+      "category": "defense",
+      "name": "Firecrackers",
+      "name_id": "Mercon"
+    },
+    "1000051": {
+      "id": "guard_post",
+      "list": "builder",
+      "category": "defense",
+      "name": "Guard Post",
+      "name_id": "Pos Jaga"
+    },
+    "1000052": {
+      "id": "mega_tesla",
+      "list": "builder",
+      "category": "defense",
+      "name": "Mega Tesla",
+      "name_id": "Tesla Mega"
+    },
+    "1000053": {
+      "id": "battle_machine",
+      "list": "builder",
+      "category": "hero",
+      "name": "Battle Machine",
+      "name_id": "Mesin Pertempuran"
+    },
+    "1000054": {
+      "id": "air_bombs",
+      "list": "builder",
+      "category": "defense",
+      "name": "Air Bombs",
+      "name_id": "Bom Udara"
+    },
+    "1000055": {
+      "id": "crusher",
+      "list": "builder",
+      "category": "defense",
+      "name": "Crusher",
+      "name_id": "Peremuk"
+    },
+    "1000056": {
+      "id": "roaster",
+      "list": "builder",
+      "category": "defense",
+      "name": "Roaster",
+      "name_id": "Pemanggang"
+    },
+    "1000057": {
+      "id": "giant_cannon",
+      "list": "builder",
+      "category": "defense",
+      "name": "Giant Cannon",
+      "name_id": "Meriam Raksasa"
+    },
+    "1000058": {
+      "id": "gem_mine",
+      "list": "builder",
+      "category": "resource",
+      "name": "Gem Mine",
+      "name_id": "Tambang Permata"
+    },
+    "1000059": {
+      "id": "workshop",
+      "list": "buildings",
+      "category": "army",
+      "name": "Workshop",
+      "name_id": "Bengkel"
+    },
+    "1000063": {
+      "id": "lava_launcher",
+      "list": "builder",
+      "category": "defense",
+      "name": "Lava Launcher",
+      "name_id": "Peluncur Lava"
+    },
+    "1000064": {
+      "id": null,
+      "list": "buildings",
+      "category": "other",
+      "name": "B.O.B's Hut",
+      "name_id": "Pondok B.O.B"
+    },
+    "1000065": {
+      "id": "b_o_b_control",
+      "list": "builder",
+      "category": "resource",
+      "name": "B.O.B Control",
+      "name_id": "Pusat Kendali B.O.B"
+    },
+    "1000067": {
+      "id": "scattershot",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Scattershot",
+      "name_id": "Katapel Tempur"
+    },
+    "1000068": {
+      "id": "pet_house",
+      "list": "buildings",
+      "category": "army",
+      "name": "Pet House",
+      "name_id": "Rumah Hewan"
+    },
+    "1000070": {
+      "id": "blacksmith",
+      "list": "buildings",
+      "category": "army",
+      "name": "Blacksmith",
+      "name_id": "Bengkel Pandai Besi"
+    },
+    "1000071": {
+      "id": "hero_hall",
+      "list": "buildings",
+      "category": "army",
+      "name": "Hero Hall",
+      "name_id": "Aula Pahlawan"
+    },
+    "1000072": {
+      "id": "spell_tower",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Spell Tower",
+      "name_id": "Menara Mantra"
+    },
+    "1000077": {
+      "id": "monolith",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Monolith",
+      "name_id": "Monolit"
+    },
+    "1000078": {
+      "id": "otto_outpost",
+      "list": "builder",
+      "category": "defense",
+      "name": "O.T.T.O's Outpost",
+      "name_id": "Pos Jaga O.T.T.O"
+    },
+    "1000079": {
+      "id": "multi_gear_tower",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Multi-Gear Tower",
+      "name_id": "Menara Pilihan Ganda"
+    },
+    "1000080": {
+      "id": "battle_copter",
+      "list": "builder",
+      "category": "hero",
+      "name": "Battle Copter",
+      "name_id": "Helikopter Tempur"
+    },
+    "1000081": {
+      "id": "x_bow",
+      "list": "builder",
+      "category": "defense",
+      "name": "X-Bow",
+      "name_id": "Busur X"
+    },
+    "1000082": {
+      "id": "healing_hut",
+      "list": "builder",
+      "category": "army",
+      "name": "Healing Hut",
+      "name_id": "Pondok Penyembuhan"
+    },
+    "1000083": {
+      "id": null,
+      "list": "buildings",
+      "category": "resource",
+      "name": "Sour Elixir Cauldron",
+      "name_id": "Kuali Eliksir Edan"
+    },
+    "1000084": {
+      "id": "multi_archer_tower",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Multi-Archer Tower",
+      "name_id": "Menara Perserikatan Pemanah"
+    },
+    "1000085": {
+      "id": "ricochet_cannon",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Ricochet Cannon",
+      "name_id": "Meriam Pantul"
+    },
+    "1000086": {
+      "id": "revenge_tower",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Revenge Tower",
+      "name_id": "Menara Pembalasan"
+    },
+    "1000089": {
+      "id": "firespitter",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Firespitter",
+      "name_id": "Pelontar Api"
+    },
+    "1000093": {
+      "id": null,
+      "list": "buildings",
+      "category": "other",
+      "name": "Helper Hut",
+      "name_id": "Balai Latihan Kerja"
+    },
+    "1000097": {
+      "id": "crafting_station",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Crafting Station",
+      "name_id": "Platform DIY"
+    },
+    "1000102": {
+      "id": "super_wizard_tower",
+      "list": "buildings",
+      "category": "defense",
+      "name": "Super Wizard Tower",
+      "name_id": "Menara Penyihir Super"
+    },
+    "12000000": {
+      "id": "bomb",
+      "list": "buildings",
+      "category": "trap",
+      "name": "Bomb",
+      "name_id": "Bom"
+    },
+    "12000001": {
+      "id": "spring_trap",
+      "list": "buildings",
+      "category": "trap",
+      "name": "Spring Trap",
+      "name_id": "Jebakan Pegas"
+    },
+    "12000005": {
+      "id": "air_bomb",
+      "list": "buildings",
+      "category": "trap",
+      "name": "Air Bomb",
+      "name_id": "Bom Udara"
+    },
+    "12000002": {
+      "id": "giant_bomb",
+      "list": "buildings",
+      "category": "trap",
+      "name": "Giant Bomb",
+      "name_id": "Bom Raksasa"
+    },
+    "12000006": {
+      "id": "seeking_air_mine",
+      "list": "buildings",
+      "category": "trap",
+      "name": "Seeking Air Mine",
+      "name_id": "Ranjau Udara Pencari"
+    },
+    "12000008": {
+      "id": "skeleton_trap",
+      "list": "buildings",
+      "category": "trap",
+      "name": "Skeleton Trap",
+      "name_id": "Jebakan Jerangkong"
+    },
+    "12000016": {
+      "id": "tornado_trap",
+      "list": "buildings",
+      "category": "trap",
+      "name": "Tornado Trap",
+      "name_id": "Jebakan Tornado"
+    },
+    "12000020": {
+      "id": "giga_bomb",
+      "list": "buildings",
+      "category": "trap",
+      "name": "Giga Bomb",
+      "name_id": "Bom Giga"
+    },
+    "12000011": {
+      "id": "push_trap",
+      "list": "builder",
+      "category": "trap",
+      "name": "Push Trap",
+      "name_id": "Jebakan Dorong"
+    },
+    "12000013": {
+      "id": "mine",
+      "list": "builder",
+      "category": "trap",
+      "name": "Mine",
+      "name_id": "Ranjau"
+    },
+    "12000010": {
+      "id": "spring_trap",
+      "list": "builder",
+      "category": "trap",
+      "name": "Spring Trap",
+      "name_id": "Jebakan Pegas"
+    },
+    "12000014": {
+      "id": "mega_mine",
+      "list": "builder",
+      "category": "trap",
+      "name": "Mega Mine",
+      "name_id": "Ranjau Mega"
+    },
+    "28000000": {
+      "id": "barbarian_king",
+      "list": "buildings",
+      "category": "hero",
+      "name": "Barbarian King",
+      "name_id": "Raja Barbar"
+    },
+    "28000001": {
+      "id": "archer_queen",
+      "list": "buildings",
+      "category": "hero",
+      "name": "Archer Queen",
+      "name_id": "Ratu Pemanah"
+    },
+    "28000002": {
+      "id": "grand_warden",
+      "list": "buildings",
+      "category": "hero",
+      "name": "Grand Warden",
+      "name_id": "Wali Besar"
+    },
+    "28000003": {
+      "id": "battle_machine",
+      "list": "builder",
+      "category": "hero",
+      "name": "Battle Machine",
+      "name_id": "Mesin Pertempuran"
+    },
+    "28000004": {
+      "id": "royal_champion",
+      "list": "buildings",
+      "category": "hero",
+      "name": "Royal Champion",
+      "name_id": "Jawara Royale"
+    },
+    "28000005": {
+      "id": "battle_copter",
+      "list": "builder",
+      "category": "hero",
+      "name": "Battle Copter",
+      "name_id": "Helikopter Tempur"
+    },
+    "28000006": {
+      "id": "minion_prince",
+      "list": "buildings",
+      "category": "hero",
+      "name": "Minion Prince",
+      "name_id": "Pangeran Minion"
+    },
+    "28000007": {
+      "id": "dragon_duke",
+      "list": "buildings",
+      "category": "hero",
+      "name": "Dragon Duke",
+      "name_id": "Adipati Naga"
+    },
+    "4000000": {
+      "id": "barbarian",
+      "list": "lab",
+      "category": "troop",
+      "name": "Barbarian",
+      "name_id": "Orang Barbar"
+    },
+    "4000001": {
+      "id": "archer",
+      "list": "lab",
+      "category": "troop",
+      "name": "Archer",
+      "name_id": "Pemanah"
+    },
+    "4000002": {
+      "id": "goblin",
+      "list": "lab",
+      "category": "troop",
+      "name": "Goblin",
+      "name_id": "Goblin"
+    },
+    "4000003": {
+      "id": "giant",
+      "list": "lab",
+      "category": "troop",
+      "name": "Giant",
+      "name_id": "Raksasa"
+    },
+    "4000004": {
+      "id": "wall_breaker",
+      "list": "lab",
+      "category": "troop",
+      "name": "Wall Breaker",
+      "name_id": "Penghancur Tembok"
+    },
+    "4000005": {
+      "id": "balloon",
+      "list": "lab",
+      "category": "troop",
+      "name": "Balloon",
+      "name_id": "Balon"
+    },
+    "4000006": {
+      "id": "wizard",
+      "list": "lab",
+      "category": "troop",
+      "name": "Wizard",
+      "name_id": "Penyihir"
+    },
+    "4000007": {
+      "id": "healer",
+      "list": "lab",
+      "category": "troop",
+      "name": "Healer",
+      "name_id": "Penyembuh"
+    },
+    "4000008": {
+      "id": "dragon",
+      "list": "lab",
+      "category": "troop",
+      "name": "Dragon",
+      "name_id": "Naga"
+    },
+    "4000009": {
+      "id": "pekka",
+      "list": "lab",
+      "category": "troop",
+      "name": "P.E.K.K.A",
+      "name_id": "P.E.K.K.A"
+    },
+    "4000010": {
+      "id": "minion",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Minion",
+      "name_id": "Minion"
+    },
+    "4000011": {
+      "id": "hog_rider",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Hog Rider",
+      "name_id": "Penunggang Babi"
+    },
+    "4000012": {
+      "id": "valkyrie",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Valkyrie",
+      "name_id": "Valkyrie"
+    },
+    "4000013": {
+      "id": "golem",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Golem",
+      "name_id": "Golem"
+    },
+    "4000015": {
+      "id": "witch",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Witch",
+      "name_id": "Nenek Sihir"
+    },
+    "4000017": {
+      "id": "lava_hound",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Lava Hound",
+      "name_id": "Anjing Lava"
+    },
+    "4000022": {
+      "id": "bowler",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Bowler",
+      "name_id": "Bowler"
+    },
+    "4000023": {
+      "id": "baby_dragon",
+      "list": "lab",
+      "category": "troop",
+      "name": "Baby Dragon",
+      "name_id": "Bayi Naga"
+    },
+    "4000024": {
+      "id": "miner",
+      "list": "lab",
+      "category": "troop",
+      "name": "Miner",
+      "name_id": "Penambang"
+    },
+    "4000026": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Super Barbarian",
+      "name_id": "Orang Barbar Super"
+    },
+    "4000027": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Super Archer",
+      "name_id": "Pemanah Super"
+    },
+    "4000028": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Super Wall Breaker",
+      "name_id": "Peremuk Tembok Super"
+    },
+    "4000029": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Super Giant",
+      "name_id": "Raksasa Super"
+    },
+    "4000030": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Ice Wizard",
+      "name_id": "Penyihir Es"
+    },
+    "4000031": {
+      "id": "raging_barbarian",
+      "list": "star",
+      "category": "troop",
+      "name": "Raged Barbarian",
+      "name_id": "Orang Barbar Murka"
+    },
+    "4000032": {
+      "id": "sneaky_archer",
+      "list": "star",
+      "category": "troop",
+      "name": "Sneaky Archer",
+      "name_id": "Pemanah Licik"
+    },
+    "4000033": {
+      "id": "beta_minion",
+      "list": "star",
+      "category": "troop",
+      "name": "Beta Minion",
+      "name_id": "Minion Beta"
+    },
+    "4000034": {
+      "id": "boxer_giant",
+      "list": "star",
+      "category": "troop",
+      "name": "Boxer Giant",
+      "name_id": "Raksasa Petinju"
+    },
+    "4000035": {
+      "id": "bomber",
+      "list": "star",
+      "category": "troop",
+      "name": "Bomber",
+      "name_id": "Pengebom"
+    },
+    "4000036": {
+      "id": "power_pekka",
+      "list": "star",
+      "category": "troop",
+      "name": "Power P.E.K.K.A",
+      "name_id": "P.E.K.K.A Perkasa"
+    },
+    "4000037": {
+      "id": "cannon_cart",
+      "list": "star",
+      "category": "troop",
+      "name": "Cannon Cart",
+      "name_id": "Gerobak Meriam"
+    },
+    "4000038": {
+      "id": "drop_ship",
+      "list": "star",
+      "category": "troop",
+      "name": "Drop Ship",
+      "name_id": "Kapal Drop"
+    },
+    "4000041": {
+      "id": "baby_dragon",
+      "list": "star",
+      "category": "troop",
+      "name": "Baby Dragon",
+      "name_id": "Bayi Naga"
+    },
+    "4000042": {
+      "id": "night_witch",
+      "list": "star",
+      "category": "troop",
+      "name": "Night Witch",
+      "name_id": "Nenek Sihir Malam"
+    },
+    "4000045": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Battle Ram",
+      "name_id": "Pendobrak"
+    },
+    "4000047": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Royal Ghost",
+      "name_id": "Hantu Royale"
+    },
+    "4000048": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Pumpkin Barbarian",
+      "name_id": "Orang Barbar Labu"
+    },
+    "4000050": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Giant Skeleton",
+      "name_id": "Jerangkong Raksasa"
+    },
+    "4000051": {
+      "id": "wall_wrecker",
+      "list": "lab",
+      "category": "siege",
+      "name": "Wall Wrecker",
+      "name_id": "Pelantak Tubruk"
+    },
+    "4000052": {
+      "id": "battle_blimp",
+      "list": "lab",
+      "category": "siege",
+      "name": "Battle Blimp",
+      "name_id": "Zeppelin Tempur"
+    },
+    "4000053": {
+      "id": "yeti",
+      "list": "lab",
+      "category": "troop",
+      "name": "Yeti",
+      "name_id": "Yeti"
+    },
+    "4000055": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Sneaky Goblin",
+      "name_id": "Goblin Senyap"
+    },
+    "4000056": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Super Miner",
+      "name_id": "Penambang Super"
+    },
+    "4000057": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Rocket Balloon",
+      "name_id": "Balon Roket"
+    },
+    "4000058": {
+      "id": "ice_golem",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Ice Golem",
+      "name_id": "Golem Es"
+    },
+    "4000059": {
+      "id": "electro_dragon",
+      "list": "lab",
+      "category": "troop",
+      "name": "Electro Dragon",
+      "name_id": "Naga Elektro"
+    },
+    "4000061": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Skeleton Barrel",
+      "name_id": "Tong Jerangkong"
+    },
+    "4000062": {
+      "id": "stone_slammer",
+      "list": "lab",
+      "category": "siege",
+      "name": "Stone Slammer",
+      "name_id": "Pengangkut Batu"
+    },
+    "4000063": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Inferno Dragon",
+      "name_id": "Naga Inferno"
+    },
+    "4000064": {
+      "id": null,
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Super Valkyrie",
+      "name_id": "Valkyrie Super"
+    },
+    "4000065": {
+      "id": "dragon_rider",
+      "list": "lab",
+      "category": "troop",
+      "name": "Dragon Rider",
+      "name_id": "Penunggang Naga"
+    },
+    "4000066": {
+      "id": null,
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Super Witch",
+      "name_id": "Nenek Sihir Super"
+    },
+    "4000067": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "M.E.C.H.A",
+      "name_id": "M.E.C.H.A"
+    },
+    "4000070": {
+      "id": "hog_glider",
+      "list": "star",
+      "category": "troop",
+      "name": "Hog Glider",
+      "name_id": "Babi Layang"
+    },
+    "4000072": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Party Wizard",
+      "name_id": "Penyihir Pesta"
+    },
+    "4000075": {
+      "id": "siege_barracks",
+      "list": "lab",
+      "category": "siege",
+      "name": "Siege Barracks",
+      "name_id": "Barak Pengepungan"
+    },
+    "4000076": {
+      "id": null,
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Ice Hound",
+      "name_id": "Anjing Es"
+    },
+    "4000080": {
+      "id": null,
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Super Bowler",
+      "name_id": "Bowler Super"
+    },
+    "4000081": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Super Dragon",
+      "name_id": "Naga Super"
+    },
+    "4000082": {
+      "id": "headhunter",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Headhunter",
+      "name_id": "Pemburu"
+    },
+    "4000083": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Super Wizard",
+      "name_id": "Penyihir Super"
+    },
+    "4000084": {
+      "id": null,
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Super Minion",
+      "name_id": "Minion Super"
+    },
+    "4000087": {
+      "id": "log_launcher",
+      "list": "lab",
+      "category": "siege",
+      "name": "Log Launcher",
+      "name_id": "Peluncur Sang Kayu"
+    },
+    "4000091": {
+      "id": "flame_flinger",
+      "list": "lab",
+      "category": "siege",
+      "name": "Flame Flinger",
+      "name_id": "Katapel Api"
+    },
+    "4000092": {
+      "id": "battle_drill",
+      "list": "lab",
+      "category": "siege",
+      "name": "Battle Drill",
+      "name_id": "Penggali Tempur"
+    },
+    "4000094": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Ram Rider",
+      "name_id": "Penunggang Domba"
+    },
+    "4000095": {
+      "id": "electro_titan",
+      "list": "lab",
+      "category": "troop",
+      "name": "Electro Titan",
+      "name_id": "Titan Elektro"
+    },
+    "4000097": {
+      "id": "apprentice_warden",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Apprentice Warden",
+      "name_id": "Wali Muda"
+    },
+    "4000098": {
+      "id": null,
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Super Hog Rider",
+      "name_id": "Penunggang Babi Super"
+    },
+    "4000101": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Barcher",
+      "name_id": "Pemanah Barbar"
+    },
+    "4000102": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Witch Golem",
+      "name_id": "Nenek Golem"
+    },
+    "4000103": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Hog Wizard",
+      "name_id": "Penyihir Babi"
+    },
+    "4000104": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Lavaloon",
+      "name_id": "Balon Lava"
+    },
+    "4000106": {
+      "id": "electrofire_wizard",
+      "list": "star",
+      "category": "troop",
+      "name": "Electrofire Wizard",
+      "name_id": "Penyihir Elektro-Api"
+    },
+    "4000109": {
+      "id": "nenek_puing",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Ruin Witch",
+      "name_id": "Nenek Puing"
+    },
+    "4000110": {
+      "id": "root_rider",
+      "list": "lab",
+      "category": "troop",
+      "name": "Root Rider",
+      "name_id": "Penunggang Akar"
+    },
+    "4000118": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "C.O.O.K.I.E",
+      "name_id": "C.O.O.K.I.E"
+    },
+    "4000119": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Firecracker",
+      "name_id": "Penembak Mercon"
+    },
+    "4000120": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Azure Dragon",
+      "name_id": "Naga Nilakandi"
+    },
+    "4000121": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Barbarian Kicker",
+      "name_id": "Orang Barbar Penendang"
+    },
+    "4000122": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Giant Thrower",
+      "name_id": "Raksasa Pelempar"
+    },
+    "4000123": {
+      "id": "druid",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Druid",
+      "name_id": "Pawang"
+    },
+    "4000125": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Broom Witch",
+      "name_id": "Nenek Sihir Kurir"
+    },
+    "4000130": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Ice Minion",
+      "name_id": "Minion Es"
+    },
+    "4000132": {
+      "id": "thrower",
+      "list": "lab",
+      "category": "troop",
+      "name": "Thrower",
+      "name_id": "Pelempar"
+    },
+    "4000135": {
+      "id": "troop_launcher",
+      "list": "lab",
+      "category": "siege",
+      "name": "Troop Launcher",
+      "name_id": "Pelontar Peleton"
+    },
+    "4000136": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Debt Collector",
+      "name_id": "Penagih Utang"
+    },
+    "4000142": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Snake Barrel",
+      "name_id": "Tong Ular"
+    },
+    "4000147": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Super Yeti",
+      "name_id": "Yeti Super"
+    },
+    "4000150": {
+      "id": "furnace",
+      "list": "lab",
+      "category": "dark_troop",
+      "name": "Furnace",
+      "name_id": "Tungku"
+    },
+    "4000156": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Giant Giant",
+      "name_id": "Raksasa Kolosal"
+    },
+    "4000157": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "K.A.N.E",
+      "name_id": "K.A.N.E"
+    },
+    "4000158": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "The Disarmer",
+      "name_id": "Wanita Besi"
+    },
+    "4000159": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "YEETer",
+      "name_id": "YEETer"
+    },
+    "4000167": {
+      "id": "meteor_golem",
+      "list": "lab",
+      "category": "troop",
+      "name": "Meteor Golem",
+      "name_id": "Golem Meteor"
+    },
+    "4000177": {
+      "id": "meteor_golem",
+      "list": "lab",
+      "category": "troop",
+      "name": "Meteor Golem",
+      "name_id": "Golem Meteor"
+    },
+    "4000185": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Elephant Rider",
+      "name_id": "Penunggang Gajah"
+    },
+    "4000188": {
+      "id": "sky_wagon",
+      "list": "lab",
+      "category": "siege",
+      "name": "Sky Wagon",
+      "name_id": "Kereta Langit"
+    },
+    "4000190": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Yeti Undertaker",
+      "name_id": "Yeti Undertaker"
+    },
+    "4000194": {
+      "id": null,
+      "list": "lab",
+      "category": "troop",
+      "name": "Totem Thrower",
+      "name_id": "Pelempar Totem"
+    },
+    "26000000": {
+      "id": "lightning_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Lightning Spell",
+      "name_id": "Mantra Kilat"
+    },
+    "26000001": {
+      "id": "healing_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Healing Spell",
+      "name_id": "Mantra Penyembuh"
+    },
+    "26000002": {
+      "id": "rage_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Rage Spell",
+      "name_id": "Mantra Amarah"
+    },
+    "26000003": {
+      "id": "jump_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Jump Spell",
+      "name_id": "Mantra Lompat"
+    },
+    "26000005": {
+      "id": "freeze_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Freeze Spell",
+      "name_id": "Mantra Pembeku"
+    },
+    "26000006": {
+      "id": null,
+      "list": "lab",
+      "category": "spell",
+      "name": "Santa's Surprise",
+      "name_id": "Kejutan Santa"
+    },
+    "26000009": {
+      "id": "poison_spell",
+      "list": "lab",
+      "category": "dark_spell",
+      "name": "Poison Spell",
+      "name_id": "Mantra Racun"
+    },
+    "26000010": {
+      "id": "earthquake_spell",
+      "list": "lab",
+      "category": "dark_spell",
+      "name": "Earthquake Spell",
+      "name_id": "Mantra Gempa Bumi"
+    },
+    "26000011": {
+      "id": "haste_spell",
+      "list": "lab",
+      "category": "dark_spell",
+      "name": "Haste Spell",
+      "name_id": "Mantra Gesit"
+    },
+    "26000016": {
+      "id": "clone_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Clone Spell",
+      "name_id": "Mantra Klona"
+    },
+    "26000017": {
+      "id": "skeleton_spell",
+      "list": "lab",
+      "category": "dark_spell",
+      "name": "Skeleton Spell",
+      "name_id": "Mantra Jerangkong"
+    },
+    "26000028": {
+      "id": "bat_spell",
+      "list": "lab",
+      "category": "dark_spell",
+      "name": "Bat Spell",
+      "name_id": "Mantra Kelelawar"
+    },
+    "26000035": {
+      "id": "invisibility_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Invisibility Spell",
+      "name_id": "Mantra Penghilang"
+    },
+    "26000053": {
+      "id": "recall_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Recall Spell",
+      "name_id": "Mantra Pemanggil"
+    },
+    "26000070": {
+      "id": "overgrowth_spell",
+      "list": "lab",
+      "category": "dark_spell",
+      "name": "Overgrowth Spell",
+      "name_id": "Mantra Tumbuh Lebat"
+    },
+    "26000073": {
+      "id": null,
+      "list": "lab",
+      "category": "spell",
+      "name": "Bag of Frostmites",
+      "name_id": "Kantong Kutu Es"
+    },
+    "26000098": {
+      "id": "revive_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Revive Spell",
+      "name_id": "Mantra Pembangkit"
+    },
+    "26000109": {
+      "id": "ice_block_spell",
+      "list": "lab",
+      "category": "dark_spell",
+      "name": "Ice Block Spell",
+      "name_id": "Mantra Kristal Es"
+    },
+    "26000120": {
+      "id": "totem_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Totem Spell",
+      "name_id": "Mantra Totem"
+    },
+    "26000123": {
+      "id": "anarki_spell",
+      "list": "lab",
+      "category": "spell",
+      "name": "Angry Spell",
+      "name_id": "Mantra Anarki"
+    },
+    "73000000": {
+      "id": "lassi",
+      "list": "pets",
+      "category": "pet",
+      "name": "L.A.S.S.I",
+      "name_id": "L.A.S.S.I"
+    },
+    "73000001": {
+      "id": "mighty_yak",
+      "list": "pets",
+      "category": "pet",
+      "name": "Mighty Yak",
+      "name_id": "Kerbau Perkasa"
+    },
+    "73000002": {
+      "id": "electro_owl",
+      "list": "pets",
+      "category": "pet",
+      "name": "Electro Owl",
+      "name_id": "Burung Hantu Elektro"
+    },
+    "73000003": {
+      "id": "unicorn",
+      "list": "pets",
+      "category": "pet",
+      "name": "Unicorn",
+      "name_id": "Unicorn"
+    },
+    "73000004": {
+      "id": "phoenix",
+      "list": "pets",
+      "category": "pet",
+      "name": "Phoenix",
+      "name_id": "Feniks"
+    },
+    "73000007": {
+      "id": "poison_lizard",
+      "list": "pets",
+      "category": "pet",
+      "name": "Poison Lizard",
+      "name_id": "Kadal Beracun"
+    },
+    "73000008": {
+      "id": "diggy",
+      "list": "pets",
+      "category": "pet",
+      "name": "Diggy",
+      "name_id": "Tenggiling"
+    },
+    "73000009": {
+      "id": "frosty",
+      "list": "pets",
+      "category": "pet",
+      "name": "Frosty",
+      "name_id": "Gading Es"
+    },
+    "73000010": {
+      "id": "spirit_fox",
+      "list": "pets",
+      "category": "pet",
+      "name": "Spirit Fox",
+      "name_id": "Rubah Roh"
+    },
+    "73000011": {
+      "id": "angry_jelly",
+      "list": "pets",
+      "category": "pet",
+      "name": "Angry Jelly",
+      "name_id": "Ubur Tempur"
+    },
+    "73000016": {
+      "id": "sneezy",
+      "list": "pets",
+      "category": "pet",
+      "name": "Sneezy",
+      "name_id": "Haciu"
+    },
+    "73000017": {
+      "id": "greedy_raven",
+      "list": "pets",
+      "category": "pet",
+      "name": "Greedy Raven",
+      "name_id": "Gagak Tamak"
+    },
+    "90000000": {
+      "id": "barbarian_puppet",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Barbarian Puppet",
+      "name_id": "Boneka Barbar"
+    },
+    "90000001": {
+      "id": "rage_vial",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Rage Vial",
+      "name_id": "Botol Amarah"
+    },
+    "90000002": {
+      "id": "archer_puppet",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Archer Puppet",
+      "name_id": "Boneka Pemanah"
+    },
+    "90000003": {
+      "id": "invisibility_vial",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Invisibility Vial",
+      "name_id": "Botol Penghilang"
+    },
+    "90000004": {
+      "id": "eternal_tome",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Eternal Tome",
+      "name_id": "Kitab Mahasakti"
+    },
+    "90000005": {
+      "id": "life_gem",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Life Gem",
+      "name_id": "Permata Kehidupan"
+    },
+    "90000006": {
+      "id": "seeking_shield",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Seeking Shield",
+      "name_id": "Perisai Pelacak"
+    },
+    "90000007": {
+      "id": "royal_gem",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Royal Gem",
+      "name_id": "Permata Royal"
+    },
+    "90000008": {
+      "id": "earthquake_boots",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Earthquake Boots",
+      "name_id": "Sepatu Bot Gempa Bumi"
+    },
+    "90000009": {
+      "id": "hog_rider_puppet",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Hog Rider Puppet",
+      "name_id": "Boneka Penunggang Babi"
+    },
+    "90000010": {
+      "id": "giant_gauntlet",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Giant Gauntlet",
+      "name_id": "Sarung Tinju Raksasa"
+    },
+    "90000011": {
+      "id": "vampstache",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Vampstache",
+      "name_id": "Kumis Vampir"
+    },
+    "90000012": {
+      "id": "haste_vial",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Haste Vial",
+      "name_id": "Botol Gesit"
+    },
+    "90000013": {
+      "id": "rocket_spear",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Rocket Spear",
+      "name_id": "Tombak Roket"
+    },
+    "90000014": {
+      "id": "spiky_ball",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Spiky Ball",
+      "name_id": "Bola Berduri"
+    },
+    "90000015": {
+      "id": "frozen_arrow",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Frozen Arrow",
+      "name_id": "Panah Es"
+    },
+    "90000016": {
+      "id": "monolith_arrow",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Monolith Arrow",
+      "name_id": "Panah Monolit"
+    },
+    "90000017": {
+      "id": "giant_arrow",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Giant Arrow",
+      "name_id": "Panah Raksasa"
+    },
+    "90000019": {
+      "id": "heroic_torch",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Heroic Torch",
+      "name_id": "Obor Heroik"
+    },
+    "90000020": {
+      "id": "healer_puppet",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Healer Puppet",
+      "name_id": "Boneka Penyembuh"
+    },
+    "90000022": {
+      "id": "fireball",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Fireball",
+      "name_id": "Bola Api"
+    },
+    "90000024": {
+      "id": "rage_gem",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Rage Gem",
+      "name_id": "Permata Amarah"
+    },
+    "90000032": {
+      "id": "snake_bracelet",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Snake Bracelet",
+      "name_id": "Gelang Ular"
+    },
+    "90000034": {
+      "id": "healing_tome",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Healing Tome",
+      "name_id": "Kitab Penyembuh"
+    },
+    "90000035": {
+      "id": "dark_crown",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Dark Crown",
+      "name_id": "Mahkota Hitam"
+    },
+    "90000039": {
+      "id": "magic_mirror",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Magic Mirror",
+      "name_id": "Cermin Ajaib"
+    },
+    "90000040": {
+      "id": "electro_boots",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Electro Boots",
+      "name_id": "Sepatu Bot Elektro"
+    },
+    "90000041": {
+      "id": "lavaloon_puppet",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Lavaloon Puppet",
+      "name_id": "Boneka Balon Lava"
+    },
+    "90000042": {
+      "id": "henchmen_puppet",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Henchmen Puppet",
+      "name_id": "Boneka Pengawal"
+    },
+    "90000043": {
+      "id": "dark_orb",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Dark Orb",
+      "name_id": "Kristal Kegelapan"
+    },
+    "90000044": {
+      "id": "metal_pants",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Metal Pants",
+      "name_id": "Celana Besi"
+    },
+    "90000047": {
+      "id": "dumbel_sakti",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Noble Iron",
+      "name_id": "Dumbel Sakti"
+    },
+    "90000048": {
+      "id": "action_figure",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Action Figure",
+      "name_id": "Figur Karakter"
+    },
+    "90000049": {
+      "id": "meteor_staff",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Meteor Staff",
+      "name_id": "Tongkat Meteor"
+    },
+    "90000050": {
+      "id": "frost_flake",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Frost Flake",
+      "name_id": "Serpihan Beku"
+    },
+    "90000051": {
+      "id": "stick_horse",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Stick Horse",
+      "name_id": "Kuda Kayu"
+    },
+    "90000052": {
+      "id": "jantung_api",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Fire Heart",
+      "name_id": "Jantung Api"
+    },
+    "90000053": {
+      "id": "ransel_roket",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Rocket Backpack",
+      "name_id": "Ransel Roket"
+    },
+    "90000056": {
+      "id": "pemancar_kejut",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Stun Blaster",
+      "name_id": "Pemancar Kejut"
+    },
+    "90000057": {
+      "id": "flame_blower",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Flame Blower",
+      "name_id": "Pelontar Api"
+    },
+    "90000059": {
+      "id": "electro_fangs",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Electro Fangs",
+      "name_id": "Taring Elektro"
+    },
+    "90000060": {
+      "id": "revenge_deck",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Revenge Deck",
+      "name_id": "Dek Pembalasan"
+    },
+    "90000061": {
+      "id": "liontin_portal",
+      "list": "gear",
+      "category": "equipment",
+      "name": "Portal Pendant",
+      "name_id": "Liontin Portal"
+    }
+  }
+}

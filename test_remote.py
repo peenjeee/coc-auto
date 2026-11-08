@@ -314,6 +314,33 @@ class BuildingScanTests(unittest.TestCase):
         self.assertEqual(supervisor.command(*signed('get_buildings'))['data']['rows'], self.ROWS)
         self.assertEqual([tuple(row) for row in supervisor.statistics.db.execute('SELECT task FROM runs')], [('Farming',)])
 
+    def test_one_game_export_updates_all_six_lists_with_the_export_timestamp(self):
+        supervisor = self.supervisor()
+        stamp = time.time()-2
+        snapshot = {'scanned_at':stamp, 'lists':{name:[{**self.ROWS[0], 'source':'game_export',
+                    'current_level':7}] for name in remote.SCAN_LISTS}}
+        self.device.last_village_scan = snapshot
+        self.device.scan_buildings = Mock(return_value=snapshot['lists']['gear'])
+        result = supervisor.command(*signed('scan_buildings',{'list':'gear'}))
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['data']['source'],'game_export')
+        self.assertEqual(len(result['data']['lists']),6)
+        self.assertEqual(result['data']['scanned_at'],stamp)
+        self.device.scan_buildings.assert_called_once_with('gear')
+        for name, village in remote.SCAN_LISTS.items():
+            self.assertEqual(supervisor.statistics.last_scan(village,name),
+                             {'scanned_at':stamp,'rows':snapshot['lists'][name]})
+
+    def test_failed_export_preserves_every_previous_scan(self):
+        supervisor = self.supervisor()
+        for name, village in remote.SCAN_LISTS.items():
+            supervisor.statistics.keep_scan(village,name,self.ROWS,1000)
+        self.device.scan_buildings = Mock(side_effect=RuntimeError('stale export'))
+        result = supervisor.command(*signed('scan_buildings'))
+        self.assertFalse(result['ok'])
+        for name, village in remote.SCAN_LISTS.items():
+            self.assertEqual(supervisor.statistics.last_scan(village,name),{'scanned_at':1000,'rows':self.ROWS})
+
 
 REPO = Path(remote.__file__).resolve().parent
 
@@ -679,6 +706,23 @@ class DashboardTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(self.request('GET', path)[0], 200)
                 self.assertEqual(self.last_headers.get('Content-Type'), kind)
+
+    def test_upgrade_modules_and_bundled_portraits_are_served(self):
+        web = Path(self.temp.name) / 'web'
+        for name in ('upgrade-icons.js', 'upgrade-portrait.js'):
+            (web / name).write_text('export const example = 1;', encoding='utf-8')
+            self.assertEqual(self.request('GET', '/' + name)[0], 200)
+            self.assertEqual(self.last_headers['Content-Type'], 'text/javascript; charset=utf-8')
+        for folder in ('icons/entities', 'icons/upgrades'):
+            name = next(path for path in remote.STATIC_FILES.values()
+                        if path.startswith(folder + '/') and path.endswith('.webp'))
+            image = web / name
+            image.parent.mkdir(parents=True, exist_ok=True)
+            image.write_bytes(b'portrait')
+            self.assertEqual(self.request('GET', '/' + name), (200, 'portrait'))
+            self.assertEqual(self.last_headers['Content-Type'], 'image/webp')
+        self.assertEqual(self.request('GET', '/icons/entities/../../remote.py')[0], 404)
+        self.assertEqual(self.request('GET', '/icons/entities/not-bundled.webp')[0], 404)
 
     def test_the_sample_deploy_maps_are_served_as_images(self):
         maps = Path(self.temp.name) / 'web' / 'maps'

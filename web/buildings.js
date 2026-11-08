@@ -1,8 +1,7 @@
-// Building scan: every row of one of the game's builder list tabs (in the Home Village buildings, Laboratory, pets
-// and hero equipment; in the Builder Base buildings and Star Laboratory) read on the device, grouped by category.
-// Rows are ticked here, first ticked first, each up to a level or Max, a running upgrade too: the Home Village lists
-// for the "Upgrade buildings" task, the Builder Base lists only kept for now. The scan itself upgrades nothing.
-import { t } from './i18n.js';
+// Village sync: the game's JSON export supplies levels, counts and running timers for all six lists.
+// Each list has an ordered queue and optional target levels. Syncing starts no upgrades.
+import { t } from './i18n.js?v=3';
+import { upgradePortraitSource, upgradePortraitFallback } from './upgrade-portrait.js?v=4';
 
 // Each list's categories, in the order shown; a row the device could not name comes under other.
 const CATEGORIES = {
@@ -21,7 +20,7 @@ const COINS = {
   builder: { gold: 'icons/resources/builder_gold.webp', elixir: 'icons/resources/builder_elixir.webp' },
 };
 const ORES = ['shiny', 'glowy', 'starry'];
-// The device opens, swipes and reads the whole list before it answers, which takes about a minute.
+// The device navigates Settings and copies fresh village JSON before it answers.
 export const SCAN_WAIT_MS = 180000;
 const MAX_LEVEL = 200;
 const MAX_KEEP = 10;
@@ -57,15 +56,29 @@ export class BuildingsPanel {
      * per list: the rows read (null while the device keeps no scan of it), when, and the pick, first one first */
     this.lists = Object.fromEntries(LISTS.map((list) => [list, { rows: null, scannedAt: Date.now(), targets: [] }]));
     this.list = 'buildings';
+    this.baselines = {};
+    this.keep = 0;
+    this.search = '';
+    $('upgrade-search').addEventListener('input', (event) => { this.search = event.target.value; this.renderCatalog(); });
+    $('buildings-keep').addEventListener('input', () => { this.keep = Number($('buildings-keep').value); this.renderStatus(); });
+    for (const id of ['goblin-builder', 'goblin-researcher', 'goblin-max']) $(id).addEventListener('input', () => { this.goblinDirty = true; });
     for (const tab of document.querySelectorAll('[data-list]')) {
-      tab.addEventListener('click', () => { this.list = tab.dataset.list; this.render(); });
+      tab.addEventListener('click', () => { this.list = tab.dataset.list; this.search = ''; $('upgrade-search').value = ''; this.render(); });
     }
-    for (const tab of document.querySelectorAll('[data-village]')) {
-      tab.addEventListener('click', () => { this.list = LISTS.find((list) => VILLAGE[list] === tab.dataset.village); this.render(); });
-    }
+    for (const group of document.querySelectorAll('#view-buildings .tabs')) group.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      const tabs = [...group.querySelectorAll('button')].filter(tab => !tab.hidden && !tab.disabled);
+      const current = tabs.indexOf(event.target);
+      if (current < 0) return;
+      event.preventDefault();
+      const index = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[index].click(); tabs[index].focus();
+    });
     $('buildings-scan').addEventListener('click', () => send('scan_buildings', { list: this.list },
       { wait: SCAN_WAIT_MS, label: this.text('buildings_scan') }));
     $('buildings-save').addEventListener('click', () => {
+      const inputs = [...$('buildings-picked').querySelectorAll('input'), ...(this.list === 'buildings' ? [$('buildings-keep')] : [])];
+      if (inputs.some((input) => !input.reportValidity())) return;
       const keep = Number.parseInt($('buildings-keep').value, 10);
       // Only buildings leave builders free; research and pets have their own queues.
       send('set_buildings', { list: this.list, buildings: this.list === 'buildings'
@@ -74,6 +87,7 @@ export class BuildingsPanel {
     });
     // The only gems the bot ever pays: a Goblin hired for an upgrade, each kind only when switched on.
     $('goblin-save').addEventListener('click', () => {
+      if (!$('goblin-max').reportValidity()) return;
       const gems = Number.parseInt($('goblin-max').value, 10);
       send('set_goblin', { goblin: { builder: $('goblin-builder').checked, researcher: $('goblin-researcher').checked,
         max_gems: Number.isInteger(gems) ? Math.min(MAX_GOBLIN_GEMS, Math.max(0, gems)) : 0 } });
@@ -89,6 +103,10 @@ export class BuildingsPanel {
   /** @param {{list?: unknown, rows?: unknown, scanned_at?: unknown}} data the rows the device read from one list, top
    * first, and when (unix seconds); rows null when the device keeps no scan of it */
   load(data) {
+    if (Array.isArray(data?.lists)) {
+      for (const scan of data.lists) this.load(scan);
+      return;
+    }
     // A device from before the lab and pet lists answers for the buildings only.
     const kept = this.lists[LISTS.includes(data?.list) ? data.list : 'buildings'];
     kept.rows = Array.isArray(data?.rows) ? data.rows.filter((row) => row && typeof row === 'object') : null;
@@ -108,18 +126,23 @@ export class BuildingsPanel {
    * settings the device keeps, each list's pick under its name */
   select(saved) {
     for (const list of LISTS) {
+      if (this.baselines[list] !== undefined && this.signature(list) !== this.baselines[list]) continue;
       const targets = Array.isArray(saved?.[list]?.targets) ? saved[list].targets : [];
       this.lists[list].targets = targets.filter((target) => target && typeof target.name === 'string').map((target) => ({
         id: typeof target.id === 'string' ? target.id : null,
         name: target.name,
         level: Number.isInteger(target.level) ? target.level : null,
       }));
+      if (list === 'buildings') this.keep = Number.isInteger(saved?.buildings?.keep_builders) ? saved.buildings.keep_builders : 0;
+      this.baselines[list] = this.signature(list);
     }
-    $('buildings-keep').value = String(Number.isInteger(saved?.buildings?.keep_builders) ? saved.buildings.keep_builders : 0);
+    $('buildings-keep').value = String(this.keep);
     // A device from before the Goblin switches has them off.
-    $('goblin-builder').checked = saved?.goblin?.builder === true;
-    $('goblin-researcher').checked = saved?.goblin?.researcher === true;
-    $('goblin-max').value = String(Number.isInteger(saved?.goblin?.max_gems) ? saved.goblin.max_gems : 0);
+    if (!this.goblinDirty) {
+      $('goblin-builder').checked = saved?.goblin?.builder === true;
+      $('goblin-researcher').checked = saved?.goblin?.researcher === true;
+      $('goblin-max').value = String(Number.isInteger(saved?.goblin?.max_gems) ? saved.goblin.max_gems : 0);
+    }
     this.render();
   }
 
@@ -130,11 +153,11 @@ export class BuildingsPanel {
 
   render() {
     const village = VILLAGE[this.list];
-    for (const tab of document.querySelectorAll('[data-list], [data-village]')) {
-      const selected = tab.dataset.list ? tab.dataset.list === this.list : tab.dataset.village === village;
+    for (const tab of document.querySelectorAll('[data-list]')) {
+      const selected = tab.dataset.list === this.list;
       tab.classList.toggle('active', selected);
       tab.setAttribute('aria-selected', String(selected));
-      if (tab.dataset.list) tab.hidden = VILLAGE[tab.dataset.list] !== village;
+      tab.tabIndex = selected ? 0 : -1;
     }
     $('buildings-title').textContent = this.text('buildings_title');
     $('buildings-hint').textContent = this.text('buildings_hint');
@@ -142,36 +165,221 @@ export class BuildingsPanel {
     $('buildings-keep').closest('label').hidden = this.list !== 'buildings';
     $('goblin').hidden = village !== 'home';
     this.renderPicked();
-    this.clocks = [];
-    $('buildings-scan').textContent = this.rows ? t('buildings_rescan') : this.text('buildings_scan');
+    $('upgrade-search').placeholder = t('upgrade_search');
+    $('upgrade-workspace').setAttribute('aria-labelledby', `upgrade-tab-${this.list}`);
+    $('upgrade-village').textContent = t(village === 'home' ? 'home_village' : 'builder_village');
+    $('view-buildings').querySelector('.upgrade-navigation').setAttribute('aria-label', t('upgrade_categories'));
+    $('buildings-scan').textContent = t(this.rows ? 'upgrade_rescan' : 'upgrade_scan');
     const scanned = $('buildings-scanned');
     scanned.hidden = !this.rows;
     if (this.rows) scanned.textContent = t('buildings_scanned_at', { time: new Date(this.scannedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) });
+    this.renderCatalog();
+  }
+
+  signature(list = this.list) {
+    return JSON.stringify([this.lists[list].targets, list === 'buildings' ? this.keep : null]);
+  }
+
+  renderStatus() {
+    $('upgrade-save-status').textContent = t(this.baselines[this.list] !== undefined && this.signature() === this.baselines[this.list] ? 'upgrade_saved' : 'upgrade_unsaved');
+  }
+
+  // Accept a successful save only when the returned queue matches this draft. Other settings replies
+  // and edits made while the request was in flight must not overwrite unsaved work.
+  acknowledge(saved) {
+    for (const list of LISTS) {
+      if (!saved?.[list]) continue;
+      const signature = JSON.stringify([saved[list].targets ?? [], list === 'buildings' ? saved[list].keep_builders ?? 0 : null]);
+      if (signature === this.signature(list)) this.baselines[list] = signature;
+    }
+    this.renderStatus();
+  }
+
+  acknowledgeGoblin(saved) {
+    const settings = saved?.goblin;
+    if (!settings) return;
+    // The user can still edit inputs while a save is in flight. Only clear the draft when
+    // the acknowledged values match the current form.
+    this.goblinDirty = $('goblin-builder').checked !== (settings.builder === true)
+      || $('goblin-researcher').checked !== (settings.researcher === true)
+      || Number($('goblin-max').value) !== (settings.max_gems ?? 0);
+  }
+
+  renderCatalog() {
+    this.clocks = [];
     const list = $('buildings-list');
-    list.textContent = '';
-    if (!this.rows) return;
-    if (!this.rows.length) {
-      list.append(element('p', t('buildings_empty'), 'hint'));
+    list.replaceChildren();
+    const rows = (this.rows ?? []).filter(row => String(row.name ?? '').toLocaleLowerCase().includes(this.search.trim().toLocaleLowerCase()));
+    $('upgrade-count').textContent = this.rows ? t('upgrade_results', { count: rows.length }) : '';
+    if (!rows.length) {
+      list.append(element('p', t(!this.rows ? 'upgrade_scan_empty' : this.rows.length ? 'upgrade_no_results' : 'buildings_empty'), 'upgrade-empty'));
       return;
     }
-    const categories = CATEGORIES[this.list];
-    const open = this.rows.filter((row) => row.section !== 'locked');
-    for (const category of categories) {
-      const rows = open.filter((row) => (categories.includes(row.category) ? row.category : 'other') === category);
-      if (rows.length) list.append(this.group(category, rows));
-    }
-    // Rows with the game's padlock come last, under their own group; a ticked one is worked toward by upgrading what
-    // it waits for.
-    const locked = this.rows.filter((row) => row.section === 'locked');
-    if (locked.length) list.append(this.group('locked', locked));
+    for (const row of rows) list.append(this.catalogRow(row));
     this.tick();
   }
 
   renderPicked() {
-    const level = (target) => (target.level === null ? t('buildings_max') : `→ ${target.level}`);
-    $('buildings-picked').textContent = this.targets.length
-      ? t('buildings_picked', { list: this.targets.map((target, index) => `${index + 1}. ${target.name} ${level(target)}`).join(', ') })
-      : t('buildings_picked_none');
+    const list = $('buildings-picked');
+    list.classList.remove('drop-at-end');
+    $('upgrade-drop-hint').hidden = true;
+    list.replaceChildren();
+    $('upgrade-queue-count').textContent = String(this.targets.length);
+    if (!this.targets.length) list.append(element('li', t('upgrade_queue_empty'), 'upgrade-empty'));
+    this.targets.forEach((target, index) => {
+      const item = element('li', undefined, 'upgrade-queue-item');
+      const heading = element('div', undefined, 'upgrade-queue-name');
+      const handle = element('button', undefined, 'upgrade-grip');
+      handle.type = 'button';
+      handle.setAttribute('aria-label', `${t('upgrade_reorder')}: ${target.name}`);
+      handle.setAttribute('aria-describedby', 'upgrade-drag-help');
+      for (let dot = 0; dot < 6; dot++) {
+        const mark = element('span'); mark.setAttribute('aria-hidden', 'true'); handle.append(mark);
+      }
+      let portrait = this.portrait(target, true);
+      const refreshPortrait = () => { const next = this.portrait(target, true); portrait.replaceWith(next); portrait = next; };
+      heading.append(handle, element('span', String(index + 1), 'upgrade-rank'), portrait, element('strong', target.name));
+      item.dataset.queueIndex = String(index);
+      this.bindDrag(handle, item, target);
+      const actions = element('div', undefined, 'upgrade-queue-actions');
+      const remove = element('button', '×');
+      remove.type = 'button';
+      remove.setAttribute('aria-label', `${t('upgrade_remove')}: ${target.name}`);
+      remove.addEventListener('click', () => { this.targets.splice(index, 1); this.render(); });
+      actions.append(remove);
+      heading.append(actions);
+      const controls = element('div', undefined, 'upgrade-target-controls');
+      const group = element('div', undefined, 'upgrade-target-mode');
+      group.setAttribute('role', 'group');
+      group.setAttribute('aria-label', `${t('buildings_target')}: ${target.name}`);
+      const label = element('label', undefined, 'upgrade-level-label');
+      const caption = element('span', t('upgrade_level'), 'upgrade-sr-only');
+      const input = element('input', undefined, 'building-level');
+      Object.assign(input, { type: 'number', min: 1, max: MAX_LEVEL, step: 1, required: true, value: target.level ?? '' });
+      input.setAttribute('aria-label', `${t('buildings_target')}: ${target.name}`);
+      input.disabled = target.level === null;
+      label.hidden = target.level === null;
+      input.addEventListener('input', () => { if (input.validity.valid) { target.level = Number(input.value); refreshPortrait(); this.renderStatus(); } });
+      for (const [mode, text] of [['max', t('buildings_max')], ['level', t('upgrade_level')]]) {
+        const button = element('button', text);
+        button.type = 'button';
+        button.dataset.targetMode = mode;
+        button.setAttribute('aria-pressed', String((target.level === null) === (mode === 'max')));
+        button.setAttribute('aria-label', `${text}: ${target.name}`);
+        button.addEventListener('click', () => {
+          const max = mode === 'max';
+          target.level = max ? null : target.level ?? Math.min(MAX_LEVEL, Math.max(1, Number(this.rows?.find(row => sameBuilding(target, row))?.next_level) || 1));
+          input.disabled = max; label.hidden = max;
+          input.value = target.level ?? '';
+          refreshPortrait();
+          for (const option of group.querySelectorAll('button')) option.setAttribute('aria-pressed', String(option.dataset.targetMode === mode));
+          if (!max) { input.focus(); input.select(); }
+          this.renderStatus();
+        });
+        group.append(button);
+      }
+      label.append(caption, input);
+      controls.append(group, label);
+      item.append(heading, controls);
+      list.append(item);
+    });
+    this.renderStatus();
+  }
+
+  moveTarget(from, to) {
+    if (from === to || from < 0 || to < 0 || to >= this.targets.length) return;
+    const [target] = this.targets.splice(from, 1);
+    this.targets.splice(to, 0, target);
+    this.render();
+    this.focusGrip(to);
+    $('upgrade-reorder-status').textContent = t('upgrade_moved', { name: target.name, position: to + 1, total: this.targets.length });
+  }
+
+  focusGrip(index) {
+    $('buildings-picked').querySelectorAll('.upgrade-grip')[index]?.focus({ preventScroll: true });
+  }
+
+  bindDrag(handle, item, target) {
+    let drag = null;
+    handle.addEventListener('keydown', event => {
+      if (drag && event.key === 'Escape') { event.preventDefault(); finish({ pointerId: drag.pointer }, true); return; }
+      if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const from = this.targets.indexOf(target);
+      const to = event.key === 'Home' ? 0 : event.key === 'End' ? this.targets.length - 1 : from + (event.key === 'ArrowUp' ? -1 : 1);
+      this.moveTarget(from, to);
+    });
+    handle.addEventListener('pointerdown', event => {
+      if (handle.disabled || event.isPrimary === false || event.button !== 0) return;
+      event.preventDefault();
+      handle.focus({ preventScroll: true });
+      handle.setPointerCapture(event.pointerId);
+      drag = { pointer: event.pointerId, targets: [...this.targets], list: this.list, startY: event.clientY, startScroll: item.ownerDocument.defaultView.scrollY, y: event.clientY, moved: false, before: null };
+      $('upgrade-drop-hint').hidden = false;
+      item.classList.add('is-dragging');
+      handle.classList.add('is-dragging');
+    });
+    const view = item.ownerDocument.defaultView;
+    let frame = null;
+    const update = y => {
+      if (!drag || !item.isConnected) return;
+      const list = $('buildings-picked');
+      const rows = [...list.querySelectorAll('.upgrade-queue-item')].filter(row => row !== item);
+      const before = rows.find(row => {
+        const rect = row.getBoundingClientRect();
+        return y < rect.top + rect.height / 2;
+      });
+      drag.before = before ? drag.targets[Number(before.dataset.queueIndex)] : null;
+      item.style.transform = `translateY(${y - drag.startY + view.scrollY - drag.startScroll}px)`;
+      for (const row of rows) row.classList.toggle('drop-before', row === before);
+      list.classList.toggle('drop-at-end', !before);
+    };
+    const scroll = () => {
+      frame = null;
+      if (!drag || !drag.moved || !item.isConnected) return;
+      const height = view.innerHeight;
+      const y = drag.y;
+      const margin = Math.min(80, height / 4);
+      const speed = y < margin ? -Math.ceil((margin - y) / 6) : y > height - margin ? Math.ceil((y - height + margin) / 6) : 0;
+      if (speed) {
+        const previous = view.scrollY;
+        view.scrollBy(0, Math.max(-18, Math.min(18, speed)));
+        if (previous !== view.scrollY) update(y);
+      }
+      frame = view.requestAnimationFrame(scroll);
+    };
+    handle.addEventListener('pointermove', event => {
+      if (!drag || drag.pointer !== event.pointerId) return;
+      event.preventDefault();
+      drag.y = event.clientY;
+      if (!drag.moved && Math.abs(event.clientY - drag.startY) < 4) return;
+      drag.moved = true;
+      update(event.clientY);
+      if (frame === null && view.requestAnimationFrame && item.ownerDocument.documentElement.scrollHeight > view.innerHeight) frame = view.requestAnimationFrame(scroll);
+    });
+    const finish = (event, cancelled) => {
+      if (!drag || drag.pointer !== event.pointerId) return;
+      const current = drag;
+      drag = null;
+      if (frame !== null) { view.cancelAnimationFrame(frame); frame = null; }
+      if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+      if (this.list !== current.list) return;
+      if (cancelled) { this.render(); this.focusGrip(this.targets.indexOf(target)); return; }
+      const order = [...current.targets];
+      if (current.moved) {
+        order.splice(order.indexOf(target), 1);
+        order.splice(current.before ? order.indexOf(current.before) : order.length, 0, target);
+      }
+      this.targets = order;
+      this.render();
+      const position = this.targets.indexOf(target);
+      this.focusGrip(position);
+      $('upgrade-reorder-status').textContent = t('upgrade_moved', { name: target.name, position: position + 1, total: order.length });
+      $('buildings-picked').dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    handle.addEventListener('pointerup', event => finish(event, false));
+    handle.addEventListener('pointercancel', event => finish(event, true));
+    handle.addEventListener('lostpointercapture', event => finish(event, true));
   }
 
   toggle(row, picked) {
@@ -180,70 +388,67 @@ export class BuildingsPanel {
     this.render();
   }
 
-  setLevel(row, value) {
-    const level = Number.parseInt(value, 10);
-    const target = this.targets.find((candidate) => sameBuilding(candidate, row));
-    if (target) target.level = Number.isInteger(level) && level >= 1 && level <= MAX_LEVEL ? level : null;
-    this.renderPicked();
+  portrait(row, compact = false) {
+    const portrait = element('span', undefined, `upgrade-portrait${compact ? ' compact' : ''}`);
+    portrait.setAttribute('aria-hidden', 'true');
+    const name = String(row.name ?? '');
+    const source = upgradePortraitSource(this.list, row, compact, this.rows ?? []);
+    const initials = element('span', name.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase() || '?', 'upgrade-portrait-fallback');
+    const fallback = () => {
+      const image = element('img');
+      Object.assign(image, { src: upgradePortraitFallback(this.list, row), alt: '', width: compact ? 28 : 44,
+        height: compact ? 28 : 44, loading: 'lazy', decoding: 'async' });
+      image.dataset.generic = 'true';
+      image.addEventListener('error', () => image.replaceWith(initials), { once: true });
+      return image;
+    };
+    if (!source) { portrait.append(fallback()); return portrait; }
+    const image = element('img');
+    Object.assign(image, { src: source, alt: '', width: compact ? 28 : 44, height: compact ? 28 : 44, loading: 'lazy', decoding: 'async' });
+    image.addEventListener('error', () => image.replaceWith(fallback()), { once: true });
+    portrait.append(image);
+    return portrait;
   }
 
-  /** The tick and target level of a row; a running upgrade can be ticked too, to go on once it is done. */
-  pickCells(row, line, name) {
-    const target = this.targets.find((candidate) => sameBuilding(candidate, row));
-    const goal = line.insertCell();
-    const box = element('input', undefined, 'building-pick');
-    Object.assign(box, { type: 'checkbox', checked: Boolean(target), title: t('buildings_pick') });
-    box.setAttribute('aria-label', `${t('buildings_pick')}: ${row.name ?? '?'}`);
-    box.addEventListener('change', () => this.toggle(row, box.checked));
-    name.prepend(box);
-    if (!target) return;
-    name.append(element('em', `#${this.targets.indexOf(target) + 1}`, 'building-tag priority'));
-    const level = element('input', undefined, 'building-level');
-    Object.assign(level, { type: 'number', min: 1, max: MAX_LEVEL, placeholder: t('buildings_max'), value: target.level ?? '' });
-    level.setAttribute('aria-label', `${t('buildings_target')}: ${row.name ?? '?'}`);
-    level.addEventListener('change', () => this.setLevel(row, level.value));
-    goal.append(level);
-  }
-
-  group(category, rows) {
-    const section = element('section', undefined, 'building-group');
-    section.append(element('h4', `${t(`buildings_${category}`)} · ${rows.length}`));
-    const table = element('table', undefined, 'building-table');
-    const head = table.createTHead().insertRow();
-    head.append(element('th', this.text('buildings_name')));
-    for (const key of ['buildings_level', 'buildings_time', 'buildings_cost', 'buildings_target']) head.append(element('th', t(key)));
-    const body = table.createTBody();
-    for (const row of rows) {
-      const line = body.insertRow();
-      const name = line.insertCell();
-      name.append(element('span', String(row.name ?? '?')));
-      if (Number(row.count) > 1) name.append(element('small', ` ×${row.count}`));
-      if (['in_progress', 'suggested', 'equipped'].includes(row.section)) name.append(element('em', t(`buildings_${row.section}`), `building-tag ${row.section}`));
-      line.insertCell().textContent = Number.isInteger(row.next_level) ? `→ ${row.next_level}` : '–';
-      const time = line.insertCell();
-      // Hero equipment is upgraded at once; it has no timer to read.
-      time.textContent = typeof row.time === 'string' ? row.time
-        : this.list === 'gear' && row.section !== 'locked' ? t('buildings_instant') : '–';
-      if (Number.isInteger(row.seconds)) this.clocks.push([time, row.seconds]);
-      const cost = line.insertCell();
-      const coins = COINS[VILLAGE[this.list]];
-      // Hero equipment costs up to three ores, each on its own line; an amount not read shows as '?'.
-      const prices = row.costs && typeof row.costs === 'object'
-        ? ORES.filter((ore) => ore in row.costs).map((ore) => [row.costs[ore], `icons/resources/ore_${ore}.png`, t(`buildings_ore_${ore}`)])
-        : Number.isInteger(row.cost) ? [[row.cost, coins[row.currency], coins[row.currency] && t(`resource_${row.currency}`)]] : [];
-      for (const [amount, icon, label] of prices) {
-        const price = element('span', Number.isInteger(amount) ? amount.toLocaleString('en-US') : '?', 'building-price');
-        if (icon) {
-          const coin = element('img');
-          Object.assign(coin, { src: icon, alt: label, width: 16, height: 16 });
-          price.append(coin);
-        }
-        cost.append(price);
-      }
-      if (!prices.length) cost.textContent = '–';
-      this.pickCells(row, line, name);
+  catalogRow(row) {
+    const item = element('article', undefined, 'upgrade-row');
+    const info = element('div', undefined, 'upgrade-row-info');
+    const name = element('strong', String(row.name ?? '?'));
+    if (Number(row.count) > 1) name.append(element('small', ` ×${row.count}`));
+    const title = element('div', undefined, 'upgrade-row-title');
+    title.append(name);
+    if (['in_progress', 'suggested', 'equipped', 'locked'].includes(row.section)) title.append(element('span', t(`upgrade_status_${row.section}`), `upgrade-status ${row.section}`));
+    info.append(title);
+    const meta = element('div', undefined, 'upgrade-meta');
+    if (Number.isInteger(row.current_level)) meta.append(element('span', t('upgrade_current_level', { level: row.current_level })));
+    if (Number.isInteger(row.next_level) && (row.source !== 'game_export' || row.section === 'in_progress')) meta.append(element('span', t('upgrade_to_level', { level: row.next_level })));
+    const time = element('span', typeof row.time === 'string' ? row.time : this.list === 'gear' && row.section !== 'locked' ? t('buildings_instant') : '');
+    if (Number.isInteger(row.seconds)) this.clocks.push([time, row.seconds]);
+    if (time.textContent || Number.isInteger(row.seconds)) meta.append(time);
+    if (meta.childElementCount) info.append(meta);
+    const details = element('div', undefined, 'upgrade-row-details');
+    const coins = COINS[VILLAGE[this.list]];
+    const prices = row.costs && typeof row.costs === 'object'
+      ? ORES.filter(ore => ore in row.costs).map(ore => [row.costs[ore], `icons/resources/ore_${ore}.png`, t(`buildings_ore_${ore}`)])
+      : Number.isInteger(row.cost) ? [[row.cost, coins[row.currency], t(`resource_${row.currency}`)]] : [];
+    for (const [amount, icon, label] of prices) {
+      const price = element('span', Number.isInteger(amount) ? amount.toLocaleString('en-US') : '?', 'building-price');
+      if (icon) { const image = element('img'); Object.assign(image, { src: icon, alt: label, width: 18, height: 18 }); price.prepend(image); }
+      details.append(price);
     }
-    section.append(table);
-    return section;
+    const picked = this.targets.some(target => sameBuilding(target, row));
+    const button = element('button', t(picked ? 'upgrade_remove' : 'upgrade_add'), picked ? 'upgrade-add danger' : 'upgrade-add');
+    button.type = 'button';
+    if (row.selectable === false && !picked) {
+      button.disabled = true;
+      button.textContent = t(row.id === 'wall' ? 'upgrade_wall_separate' : 'upgrade_export_readonly');
+    }
+    button.setAttribute('aria-pressed', String(picked));
+    button.setAttribute('aria-label', `${t(picked ? 'upgrade_remove' : 'upgrade_add')}: ${row.name}`);
+    button.addEventListener('click', () => this.toggle(row, !picked));
+    const summary = element('div', undefined, 'upgrade-row-summary');
+    summary.append(this.portrait(row), info);
+    item.append(summary, details, button);
+    return item;
   }
 }

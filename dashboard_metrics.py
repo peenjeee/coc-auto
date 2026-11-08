@@ -92,7 +92,7 @@ class Statistics:
         wall = re.fullmatch(r'(?:Tembok di-upgrade dengan|Wall upgraded with) (gold|elixir)', text)
         storage = re.fullmatch(r'(?:Gudang|Storage) (home|builder): (\{.{1,600}\})', text)
         upgrade = re.fullmatch(r'(?:(?:Bangunan|Riset|Hewan|Peralatan) di-upgrade|(?:Building|Research|Pet|Equipment) '
-                               r'upgraded): (.{1,60}) (?:ke|to) level (\d{1,3})', text)
+                               r'upgraded): (.{1,60}?)(?: (?:ke|to) level (\d{1,3}|None))?', text)
         if attack:
             self.record(run, 'attack', 'Home Village attack' if attack[1] == 'home' else 'Builder Base attack', attacks=1)
             return 'attack'
@@ -100,7 +100,9 @@ class Statistics:
             count = int(bulk[1]) if bulk else 1
             if count > 100000: return None
             if upgrade:
-                self.record(run, 'upgrade', f'{upgrade[1]} upgraded to level {upgrade[2]}', upgrades=1)
+                detail = (f'{upgrade[1]} upgraded to level {upgrade[2]}'
+                          if upgrade[2] not in (None,'None') else f'{upgrade[1]} upgraded')
+                self.record(run, 'upgrade', detail, upgrades=1)
             else:
                 self.record(run, 'walls', f'{count:,} wall' + ('s' if count != 1 else '') + ' upgraded', walls=count)
             # Spending must not make the next farming session's baseline hide its gains.

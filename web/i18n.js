@@ -1,6 +1,25 @@
 // Dashboard text in Indonesian and English. Canonical device messages use messages.js.
 const TEXT = {
   id: {
+    upgrade_available: "Peningkatan tersedia",
+    upgrade_search: "Cari peningkatan…",
+    upgrade_all: "Semua",
+    upgrade_queue: "Antrean peningkatan",
+    upgrade_order: "Target kosong = Maks.",
+    upgrade_save: "Simpan antrean",
+    upgrade_saved: "Tersimpan",
+    upgrade_unsaved: "Perubahan belum disimpan",
+    upgrade_how: "Cara kerja peningkatan",
+    upgrade_goblin: "Asisten Goblin · Permata opsional",
+    upgrade_scan_empty: "Hentikan bot, lalu pindai daftar ini. Pemindaian tidak meningkatkan apa pun.",
+    upgrade_no_results: "Tidak ada peningkatan yang cocok.",
+    upgrade_queue_empty: "Belum ada peningkatan dipilih.",
+    upgrade_up: "Pindah ke atas",
+    upgrade_down: "Pindah ke bawah",
+    upgrade_remove: "Hapus",
+    upgrade_add: "Tambah",
+    upgrade_added: "Ditambahkan",
+
     key_prompt: 'Masukkan API key perangkat (muncul di terminal saat bot dijalankan)',
     connect: 'hubungkan',
     host: 'host',
@@ -155,6 +174,25 @@ const TEXT = {
     code_display_unchanged: 'Tidak ada setelan layar yang perlu dikembalikan.',
   },
   en: {
+    upgrade_available: "Available upgrades",
+    upgrade_search: "Search upgrades…",
+    upgrade_all: "All",
+    upgrade_queue: "Upgrade queue",
+    upgrade_order: "Blank target = Max.",
+    upgrade_save: "Save queue",
+    upgrade_saved: "Saved",
+    upgrade_unsaved: "Unsaved changes",
+    upgrade_how: "How upgrades work",
+    upgrade_goblin: "Goblin helpers · Optional gems",
+    upgrade_scan_empty: "Stop the bot, then scan this list. Scanning upgrades nothing.",
+    upgrade_no_results: "No upgrades match your search or filter.",
+    upgrade_queue_empty: "No upgrades selected.",
+    upgrade_up: "Move up",
+    upgrade_down: "Move down",
+    upgrade_remove: "Remove",
+    upgrade_add: "Add",
+    upgrade_added: "Added",
+
     key_prompt: 'Enter the device API key (shown in the terminal when the bot starts)',
     connect: 'connect',
     host: 'host',
@@ -614,7 +652,7 @@ Object.assign(TEXT.id, {
 
 Object.assign(TEXT.en, {
   task_buildings: 'upgrade buildings',
-  buildings_pick_hint: 'Tick the rows the "upgrade buildings" task should upgrade: the first ticked goes first. Set the level to stop at, or leave it empty for Max (as long as the building is listed). It pays only gold, elixir or dark elixir at the price the list shows, never gems (except for a Goblin you switch on below). A locked row is worked toward by upgrading the building it waits for. Short of the resource a pick costs, the bot attacks in that village first; with every builder busy for a long while it closes CoC until one is free.',
+  buildings_pick_hint: "Run the Upgrade buildings task to follow this queue. Saves apply at the next Start. Locked upgrades are worked toward through their prerequisites. If resources are short, the bot farms first; if all builders are busy for a long time, it closes CoC until one is free. Only enabled Goblin helpers can spend gems.",
   buildings_pick: 'upgrade', buildings_target: 'up to level', buildings_max: 'Max',
   buildings_keep: 'keep builders free', buildings_save: 'save selection',
   buildings_picked: 'Picked, in order: {list}', buildings_picked_none: 'Nothing picked yet; scan, then tick rows.',
@@ -625,7 +663,7 @@ Object.assign(TEXT.en, {
 });
 Object.assign(TEXT.id, {
   task_buildings: 'upgrade bangunan',
-  buildings_pick_hint: 'Centang baris yang di-upgrade tugas "upgrade bangunan": yang dicentang pertama dikerjakan dulu. Isi level berhentinya, atau kosongkan untuk Maks (selama bangunan masih ada di daftar). Hanya dibayar gold, elixir atau dark elixir seharga di daftar, tidak pernah gem (kecuali Goblin yang dinyalakan di bawah). Baris terkunci dikerjakan dengan meng-upgrade bangunan yang ditunggunya. Kalau resource pilihan kurang, bot menyerang di desa itu dulu; kalau semua tukang sibuk lama, CoC ditutup sampai ada yang bebas.',
+  buildings_pick_hint: "Jalankan tugas Upgrade bangunan untuk mengikuti antrean ini. Perubahan berlaku saat Start berikutnya. Peningkatan terkunci dikerjakan melalui prasyaratnya. Jika sumber daya kurang, bot farming dulu; jika semua tukang sibuk lama, CoC ditutup sampai ada yang bebas. Hanya asisten Goblin yang diaktifkan dapat memakai permata.",
   buildings_pick: 'upgrade', buildings_target: 'sampai level', buildings_max: 'Maks',
   buildings_keep: 'sisakan tukang bebas', buildings_save: 'simpan pilihan',
   buildings_picked: 'Dipilih, berurutan: {list}', buildings_picked_none: 'Belum ada yang dipilih; scan, lalu centang baris.',
@@ -636,17 +674,17 @@ Object.assign(TEXT.id, {
 });
 
 Object.assign(TEXT.en, {
-  buildings_tab_buildings: 'Buildings', buildings_tab_lab: 'Laboratory', buildings_tab_pets: 'Pets',
+  buildings_tab_buildings: 'Buildings', buildings_tab_lab: 'Lab', buildings_tab_pets: 'Pets',
   buildings_title_lab: 'Research to upgrade', buildings_title_pets: 'Pets to upgrade',
   buildings_hint_lab: 'The bot opens the builder list in the Home Village, switches to its Laboratory tab ("Army Upgrades"), scrolls it to the end, reads every row, switches back and closes it. Nothing is researched or bought. Stop the bot first; a scan takes about a minute.',
   buildings_hint_pets: 'The bot opens the builder list in the Home Village, switches to its pets tab ("Hero Pets"), reads every row, switches back and closes it. Pets still locked come under "locked". Nothing is upgraded or bought. Stop the bot first.',
   buildings_scan_lab: 'scan laboratory', buildings_scan_pets: 'scan pets',
   buildings_name_lab: 'research', buildings_name_pets: 'pet',
-  buildings_pick_hint_lab: 'Tick the research to do, a running one too to go on once it is done, first ticked first, each up to a level or Max, then save. The "upgrade buildings" task researches them whenever the Laboratory is free.',
-  buildings_pick_hint_pets: 'Tick the pets to upgrade, a running upgrade too to go on once it is done, first ticked first, each up to a level or Max, then save. The "upgrade buildings" task upgrades them whenever the pet house is free.',
+  buildings_pick_hint_lab: "The Upgrade buildings task follows this queue when the Laboratory is free. Saves apply at the next Start.",
+  buildings_pick_hint_pets: "The Upgrade buildings task follows this queue when the Pet House is free. Saves apply at the next Start.",
   buildings_troop: 'troops', buildings_dark_troop: 'dark troops', buildings_spell: 'spells', buildings_dark_spell: 'dark spells',
   buildings_siege: 'siege machines', buildings_pet: 'pets',
-  buildings_tab_gear: 'Hero equipment', buildings_tab_star: 'Star Laboratory',
+  buildings_tab_gear: 'Equipment', buildings_tab_star: 'Star Laboratory',
   buildings_title_gear: 'Hero equipment to upgrade', buildings_title_builder: 'Builder Base buildings to upgrade',
   buildings_title_star: 'Star Laboratory research to upgrade',
   buildings_hint_gear: 'The bot opens the builder list in the Home Village, switches to its hero equipment tab (the anvil), scrolls it to the end, reads every row with its ore costs, switches back and closes it. Locked equipment comes under "locked". Nothing is upgraded or bought. Stop the bot first.',
@@ -654,9 +692,9 @@ Object.assign(TEXT.en, {
   buildings_hint_star: 'The bot takes the boat to the Builder Base, opens its builder list, switches to its Star Laboratory tab, reads every row, switches back and closes it. Nothing is researched or bought. Stop the bot first.',
   buildings_scan_gear: 'scan hero equipment', buildings_scan_builder: 'scan Builder Base', buildings_scan_star: 'scan Star Laboratory',
   buildings_name_gear: 'equipment', buildings_name_builder: 'building', buildings_name_star: 'research',
-  buildings_pick_hint_gear: 'Tick the equipment to upgrade, first ticked first, each up to a level or Max, then save. The "upgrade buildings" task upgrades it whenever the ore on hand covers the cost.',
-  buildings_pick_hint_builder: 'Tick the Builder Base buildings to upgrade, a running upgrade too to go on once it is done, first ticked first, each up to a level or Max, then save. The "upgrade buildings" task upgrades them whenever a Builder Base builder is free.',
-  buildings_pick_hint_star: 'Tick the Star Laboratory research to do, a running one too to go on once it is done, first ticked first, each up to a level or Max, then save. The "upgrade buildings" task researches them whenever the Star Laboratory is free.',
+  buildings_pick_hint_gear: "The Upgrade buildings task follows this queue when you have enough ore. Saves apply at the next Start.",
+  buildings_pick_hint_builder: "The Upgrade buildings task follows this queue when a Builder Base builder is free. Saves apply at the next Start.",
+  buildings_pick_hint_star: "The Upgrade buildings task follows this queue when the Star Laboratory is free. Saves apply at the next Start.",
   buildings_equipment: 'equipment', buildings_equipped: 'equipped', buildings_unequipped: 'not equipped',
   buildings_ore_shiny: 'shiny ore', buildings_ore_glowy: 'glowy ore', buildings_ore_starry: 'starry ore',
   buildings_instant: 'instant',
@@ -668,11 +706,11 @@ Object.assign(TEXT.id, {
   buildings_hint_pets: 'Bot membuka daftar tukang di Desa Utama, pindah ke tab hewan ("Hewan Pahlawan"), membaca setiap baris, lalu kembali dan menutupnya. Hewan yang masih terkunci masuk grup "terkunci". Tidak ada yang di-upgrade atau dibeli. Hentikan bot dulu.',
   buildings_scan_lab: 'scan laboratorium', buildings_scan_pets: 'scan hewan',
   buildings_name_lab: 'riset', buildings_name_pets: 'hewan',
-  buildings_pick_hint_lab: 'Centang riset yang ingin dikerjakan, yang sedang diriset juga bisa supaya dilanjutkan setelah selesai, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Tugas "upgrade bangunan" merisetnya setiap kali Laboratorium kosong.',
-  buildings_pick_hint_pets: 'Centang hewan yang ingin di-upgrade, yang sedang di-upgrade juga bisa supaya dilanjutkan setelah selesai, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Tugas "upgrade bangunan" meng-upgrade-nya setiap kali rumah hewan kosong.',
+  buildings_pick_hint_lab: "Tugas Upgrade bangunan mengikuti antrean saat Laboratorium kosong. Perubahan berlaku saat Start berikutnya.",
+  buildings_pick_hint_pets: "Tugas Upgrade bangunan mengikuti antrean saat Rumah Hewan kosong. Perubahan berlaku saat Start berikutnya.",
   buildings_troop: 'pasukan', buildings_dark_troop: 'pasukan hitam', buildings_spell: 'mantra', buildings_dark_spell: 'mantra hitam',
   buildings_siege: 'mesin pengepungan', buildings_pet: 'hewan',
-  buildings_tab_gear: 'Peralatan pahlawan', buildings_tab_star: 'Lab Bintang',
+  buildings_tab_gear: 'Peralatan', buildings_tab_star: 'Lab Bintang',
   buildings_title_gear: 'Peralatan pahlawan yang bisa di-upgrade', buildings_title_builder: 'Bangunan Desa Malam yang bisa di-upgrade',
   buildings_title_star: 'Riset Lab Bintang yang bisa di-upgrade',
   buildings_hint_gear: 'Bot membuka daftar tukang di Desa Utama, pindah ke tab peralatan pahlawan (ikon landasan), menggulirnya sampai habis, membaca setiap baris beserta biaya bijihnya, lalu kembali dan menutupnya. Peralatan yang masih terkunci masuk grup "terkunci". Tidak ada yang di-upgrade atau dibeli. Hentikan bot dulu.',
@@ -680,9 +718,9 @@ Object.assign(TEXT.id, {
   buildings_hint_star: 'Bot naik perahu ke Desa Malam, membuka daftar tukangnya, pindah ke tab Lab Bintang, membaca setiap baris, lalu kembali dan menutupnya. Tidak ada yang diriset atau dibeli. Hentikan bot dulu.',
   buildings_scan_gear: 'scan peralatan pahlawan', buildings_scan_builder: 'scan Desa Malam', buildings_scan_star: 'scan Lab Bintang',
   buildings_name_gear: 'peralatan', buildings_name_builder: 'bangunan', buildings_name_star: 'riset',
-  buildings_pick_hint_gear: 'Centang peralatan yang ingin di-upgrade, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Tugas "upgrade bangunan" meng-upgrade-nya setiap kali bijih yang ada cukup.',
-  buildings_pick_hint_builder: 'Centang bangunan Desa Malam yang ingin di-upgrade, yang sedang di-upgrade juga bisa supaya dilanjutkan setelah selesai, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Tugas "upgrade bangunan" meng-upgrade-nya setiap kali ada tukang Desa Malam yang bebas.',
-  buildings_pick_hint_star: 'Centang riset Lab Bintang yang ingin dikerjakan, yang sedang diriset juga bisa supaya dilanjutkan setelah selesai, yang dicentang pertama dulu, masing-masing sampai levelnya atau Maks, lalu simpan. Tugas "upgrade bangunan" merisetnya setiap kali Lab Bintang kosong.',
+  buildings_pick_hint_gear: "Tugas Upgrade bangunan mengikuti antrean saat bijih cukup. Perubahan berlaku saat Start berikutnya.",
+  buildings_pick_hint_builder: "Tugas Upgrade bangunan mengikuti antrean saat tukang Desa Malam kosong. Perubahan berlaku saat Start berikutnya.",
+  buildings_pick_hint_star: "Tugas Upgrade bangunan mengikuti antrean saat Lab Bintang kosong. Perubahan berlaku saat Start berikutnya.",
   buildings_equipment: 'peralatan', buildings_equipped: 'dipasang', buildings_unequipped: 'dilepas',
   buildings_ore_shiny: 'bijih kilau', buildings_ore_glowy: 'bijih cahaya', buildings_ore_starry: 'bijih bintang',
   buildings_instant: 'langsung',
@@ -704,3 +742,27 @@ Object.assign(TEXT.id, {
   goblin_max_gems: 'maks gem per sewa', goblin_save: 'simpan pengaturan Goblin',
   code_goblin_saved: 'Pengaturan Goblin disimpan; berlaku saat Start berikutnya.',
 });
+
+Object.assign(TEXT.en, {upgrade_filter: "Filter upgrades"});
+Object.assign(TEXT.id, {upgrade_filter: "Filter peningkatan"});
+
+Object.assign(TEXT.en, {upgrade_reorder: 'Drag to reorder', upgrade_drag_help: 'Drag the handle to reorder. With the handle focused, use the up and down arrow keys, or Home and End.', upgrade_moved: '{name}: position {position} of {total}'});
+Object.assign(TEXT.id, {upgrade_reorder: 'Seret untuk mengurutkan', upgrade_drag_help: 'Seret pegangan untuk mengurutkan. Saat pegangan difokuskan, gunakan tombol panah atas dan bawah, atau Home dan End.', upgrade_moved: '{name}: posisi {position} dari {total}'});
+
+Object.assign(TEXT.en, {upgrade_categories: 'Upgrade categories', upgrade_builder_tab: 'Builder buildings', upgrade_star_tab: 'Star Lab', upgrade_level: 'Level', upgrade_save_timing: 'Applies when you stop and start the bot.', upgrade_rescan: 'Rescan', upgrade_scan: 'Scan', upgrade_results: '{count} upgrades', upgrade_no_results: 'No matching upgrades.', upgrade_dragging: 'Reordering…', upgrade_drop_here: 'Drop here', upgrades_title: 'Upgrades', upgrades_description: 'Plan your next upgrades.'});
+Object.assign(TEXT.id, {upgrade_categories: 'Kategori peningkatan', upgrade_builder_tab: 'Bangunan Desa Malam', upgrade_star_tab: 'Lab Bintang', upgrade_level: 'Level', upgrade_save_timing: 'Berlaku setelah bot dihentikan dan dijalankan lagi.', upgrade_rescan: 'Pindai ulang', upgrade_scan: 'Pindai', upgrade_results: '{count} peningkatan', upgrade_no_results: 'Tidak ada peningkatan yang cocok.', upgrade_dragging: 'Mengurutkan…', upgrade_drop_here: 'Letakkan di sini', upgrades_title: 'Peningkatan', upgrades_description: 'Rencanakan peningkatan berikutnya.'});
+
+Object.assign(TEXT.en, {upgrade_goblin_title: 'Goblin helpers', upgrade_goblin_optional: 'Optional · uses gems', upgrade_to_level: 'To level {level}', upgrade_status_suggested: 'Suggested', upgrade_status_in_progress: 'Upgrading', upgrade_status_locked: 'Locked', upgrade_status_equipped: 'Equipped'});
+Object.assign(TEXT.id, {upgrade_goblin_title: 'Asisten Goblin', upgrade_goblin_optional: 'Opsional · pakai permata', upgrade_to_level: 'Ke level {level}', upgrade_status_suggested: 'Disarankan', upgrade_status_in_progress: 'Sedang ditingkatkan', upgrade_status_locked: 'Terkunci', upgrade_status_equipped: 'Dipakai'});
+
+Object.assign(TEXT.en, {goblin_builder_title: 'Goblin Builder', goblin_builder_scope: 'Buildings & heroes', goblin_researcher_title: 'Goblin Researcher', goblin_researcher_scope: 'Laboratory & pets', goblin_limit: 'Max gems per offer', goblin_save_short: 'Save helpers', goblin_spend_note: 'May hire a Goblin or finish an upgrade within this limit. 0 = no gems.'});
+Object.assign(TEXT.id, {goblin_builder_title: 'Tukang Goblin', goblin_builder_scope: 'Bangunan & pahlawan', goblin_researcher_title: 'Peneliti Goblin', goblin_researcher_scope: 'Laboratorium & hewan', goblin_limit: 'Maks permata per tawaran', goblin_save_short: 'Simpan asisten', goblin_spend_note: 'Dapat menyewa Goblin atau menyelesaikan peningkatan dalam batas ini. 0 = tanpa permata.'});
+
+for (const [language, hint] of Object.entries({
+  en: 'Copies village data from the game’s Settings → More Settings → Data Export. Refreshes every tab with exact levels, counts and running timers. Stop the bot first. Prices are checked in-game when upgrading.',
+  id: 'Menyalin data desa dari Setelan → Setelan Lainnya → Ekspor Data. Semua tab diperbarui dengan level, jumlah, dan sisa waktu dari game. Hentikan bot dulu. Harga diperiksa saat meningkatkan.'
+})) {
+  for (const suffix of ['', '_lab', '_pets', '_gear', '_builder', '_star']) TEXT[language][`buildings_hint${suffix}`] = hint;
+}
+Object.assign(TEXT.en, {upgrade_scan:'Sync from game', upgrade_rescan:'Sync again', upgrade_current_level:'Level {level}', upgrade_export_readonly:'View only', upgrade_wall_separate:'Use wall upgrades', upgrade_results:'{count} items', buildings_title:'Village buildings', buildings_title_lab:'Troops & spells', buildings_title_pets:'Hero pets', buildings_title_gear:'Hero equipment', buildings_title_builder:'Builder buildings', buildings_title_star:'Builder troops'});
+Object.assign(TEXT.id, {upgrade_scan:'Sinkron dari game', upgrade_rescan:'Sinkron ulang', upgrade_current_level:'Level {level}', upgrade_export_readonly:'Lihat saja', upgrade_wall_separate:'Gunakan peningkatan tembok', upgrade_results:'{count} item', buildings_title:'Bangunan desa', buildings_title_lab:'Peleton & mantra', buildings_title_pets:'Hewan pahlawan', buildings_title_gear:'Peralatan pahlawan', buildings_title_builder:'Bangunan Desa Malam', buildings_title_star:'Peleton Desa Malam'});

@@ -37,7 +37,7 @@ export function setupSelects() {
     const value = document.createElement('span');
     button.append(value);
     const chevron = document.createElement('span');
-    chevron.className = 'select-chevron'; chevron.textContent = '⌄'; chevron.setAttribute('aria-hidden','true');
+    chevron.className = 'select-chevron'; chevron.setAttribute('aria-hidden','true');
     button.append(chevron);
     const list = document.createElement('span');
     list.id = `select-list-${index}`; list.className = 'select-list'; list.hidden = true;

@@ -2,16 +2,16 @@
 // bot on this PC directly; online it goes through the relay channel named after the key's hash, and
 // only trusts messages signed with the key, so nobody else on the channel can pose as the device.
 import { RELAY_URL, RELAY_KEY } from './config.js';
-import { applyLanguage, t } from './i18n.js';
+import { applyLanguage, t } from './i18n.js?v=3';
 import { translate } from './messages.js';
 import { RealtimeChannel } from './realtime.js';
-import { DeployEditor } from './deploy.js';
-import { SettingsPanel } from './settings.js?v=3';
-import { setupSelects, refreshSelects } from './select.js';
-import { StatsPanel, previewStatistics } from './stats.js?v=9';
-import { DiscordPanel } from './discord.js?v=5';
+import { DeployEditor } from './deploy.js?v=2';
+import { SettingsPanel } from './settings.js?v=4';
+import { setupSelects, refreshSelects } from './select.js?v=2';
+import { StatsPanel, previewStatistics } from './stats.js?v=12';
+import { DiscordPanel } from './discord.js?v=6';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=7';
+import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=18';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -191,6 +191,8 @@ function handleResult(result, quiet = false) {
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
+    if (result.code === 'buildings_saved') buildings.acknowledge(result.data);
+    if (result.code === 'goblin_saved') buildings.acknowledgeGoblin(result.data);
     buildings.select(result.data);
     if (result.code === 'settings_loaded' && !initialDisplayChecked) {
       initialDisplayChecked = true;

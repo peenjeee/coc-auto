@@ -33,8 +33,28 @@ const patterns = Object.entries(english).map(([source, target]) => {
   .sort((a, b) => b.specificity - a.specificity);
 
 /** Translate known templates, keeping severity, paths, flags and unknown external details intact. */
+export function duration(seconds) {
+  let remaining = Math.max(0,Math.floor(Number(seconds)));
+  const parts = [];
+  for (const [unit,size] of [['d',86400],['h',3600],['m',60],['s',1]]) {
+    const amount = Math.floor(remaining/size); remaining %= size;
+    if (amount) parts.push(`${amount}${unit}`);
+  }
+  return parts.join(' ') || '0s';
+}
+
+function readable(text) {
+  return text.replace(/\b(Menunggu|Waiting) (\d+) (?:detik|seconds):/g,(_,verb,seconds)=>`${verb} ${duration(seconds)}:`)
+    .replace(/CoC ditutup selama menunggu; dibuka lagi setelah (\d+) detik/g,(_,seconds)=>'CoC ditutup selama menunggu; dibuka kembali dalam '+duration(seconds))
+    .replace(/CoC closed during the wait; opened again after (\d+) seconds/g,(_,seconds)=>'CoC closed during the wait; reopening in '+duration(seconds))
+    .replace(/((?:Bangunan|Riset|Hewan|Peralatan) di-upgrade: .+?) ke level None$/, '$1')
+    .replace(/((?:Building|Research|Pet|Equipment) upgraded: .+?) to level None$/, '$1');
+}
+
 export function translate(text, language = document.documentElement.lang) {
-  if (language !== 'en' || typeof text !== 'string') return text;
+  if (typeof text !== 'string') return text;
+  text = readable(text);
+  if (language !== 'en') return text;
   if (Object.hasOwn(english, text)) return english[text];
   const prefix = text.match(prefixPattern);
   if (prefix) return prefix[0] + translate(text.slice(prefix[0].length), language);

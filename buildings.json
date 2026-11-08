@@ -20,7 +20,9 @@
     "multi_gear_tower": ["Multi-Gear Tower", "Menara Multi-Gir"],
     "builders_hut": ["Builder's Hut", "Pondok Tukang"],
     "crafting_station": ["Crafting Station", "Platform DIY"],
-    "wall": ["Wall", "Tembok"]
+    "wall": ["Wall", "Tembok"],
+    "revenge_tower": ["Revenge Tower", "Menara Pembalasan"],
+    "super_wizard_tower": ["Super Wizard Tower", "Menara Penyihir Super"]
   },
   "trap": {
     "bomb": ["Bomb", "Bom"],

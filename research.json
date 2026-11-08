@@ -17,7 +17,8 @@
     "dragon_rider": ["Dragon Rider", "Penunggang Naga"],
     "electro_titan": ["Electro Titan", "Titan Elektro"],
     "root_rider": ["Root Rider", "Penunggang Akar"],
-    "thrower": ["Thrower", "Pelempar"]
+    "thrower": ["Thrower", "Pelempar"],
+    "meteor_golem": ["Meteor Golem", "Golem Meteor"]
   },
   "dark_troop": {
     "minion": ["Minion", "Minion"],
@@ -64,7 +65,8 @@
     "log_launcher": ["Log Launcher", "Peluncur Sang Kayu"],
     "flame_flinger": ["Flame Flinger", "Katapel Api"],
     "battle_drill": ["Battle Drill", "Penggali Tempur"],
-    "troop_launcher": ["Troop Launcher", "Pelontar Peleton"]
+    "troop_launcher": ["Troop Launcher", "Pelontar Peleton"],
+    "sky_wagon": ["Sky Wagon", "Kereta Langit"]
   },
   "pet": {
     "lassi": ["L.A.S.S.I", "L.A.S.S.I"],
@@ -76,6 +78,8 @@
     "poison_lizard": ["Poison Lizard", "Kadal Beracun"],
     "phoenix": ["Phoenix", "Feniks"],
     "spirit_fox": ["Spirit Fox", "Rubah Roh"],
-    "angry_jelly": ["Angry Jelly", "Ubur Tempur"]
+    "angry_jelly": ["Angry Jelly", "Ubur Tempur"],
+    "sneezy": ["Sneezy", "Haciu"],
+    "greedy_raven": ["Greedy Raven", "Gagak Tamak"]
   }
 }

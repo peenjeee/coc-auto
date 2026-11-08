@@ -180,7 +180,7 @@ class VisitTests(unittest.TestCase):
             templates=lambda: {}, read_stable=lambda reader, limit: reader(np.zeros((720, 1280, 3), np.uint8)))
         placed = placed if placed is not None else [(row('Valkyrie', None), 40)]
 
-        def upgrade(runner, name, spec, frames, place, chosen_row, program, digits, rules, amounts):
+        def upgrade(runner, name, spec, frames, place, chosen_row, program, digits, rules, amounts, indonesian=False):
             calls.append(('upgrade', name, chosen_row['name'], place))
             return done
 
