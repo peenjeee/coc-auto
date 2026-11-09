@@ -329,7 +329,9 @@ equipment (`gear`), in the Builder Base its buildings (`builder`) and Star Labor
 targets in priority order, `{"id", "name", "level"}` with `level` `null` for Max. Each round looks at every list with
 targets in turn, Home Village buildings first. For each it reads the gold, elixir and dark elixir on
 hand from the resource bars (`capacity.home`) and the free builders from the village's "1/6" counter
-(`building_upgrade.free_builders`), opens the builder list on that list's tab and reads its actionable rows. It
+(`building_upgrade.free_builders`). A matching Goblin portrait excludes the paid Goblin slot from that count;
+Goblin use still needs its separate opt-in and gem checks. A confirmed full queue waits for its running timer,
+bounded at six hours; a refusal learned only from a dialog keeps a short recheck. It opens the builder list on that list's tab and reads its actionable rows. It
 takes the first target, in the order picked, with a row that is not upgrading now, whose next level does not pass the
 target level (any level for Max) and whose cost is covered by the resource on hand (for equipment: every ore cost
 read), as long as the list has room: more builders free than `keep_builders` for buildings (for example 1 to leave a

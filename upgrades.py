@@ -418,12 +418,13 @@ def busy_wait(runner: bot.Bot, queue: tuple) -> int:
     return max(0, math.ceil(until - time.monotonic()))
 
 
-def mark_busy(runner: bot.Bot, queue: tuple, seconds: int) -> None:
-    # Recheck within ten minutes even when an OCR timer is long or a builder is
-    # freed manually; do not retain a busy decision indefinitely.
+def mark_busy(runner: bot.Bot, queue: tuple, seconds: int, *, confirmed: bool = False) -> None:
+    # A dialog-only refusal gets a short recheck. Confirmed capacity readings
+    # can wait for the running timer, bounded by the normal six-hour limit.
     if not hasattr(runner, 'upgrade_busy_until'):
         runner.upgrade_busy_until = {}
-    runner.upgrade_busy_until[queue] = time.monotonic() + max(1, min(seconds, buildings.WAIT_MAX_SECONDS))
+    limit = CLOSED_WAIT_MAX_SECONDS if confirmed else buildings.WAIT_MAX_SECONDS
+    runner.upgrade_busy_until[queue] = time.monotonic() + max(1, min(seconds, limit))
 
 
 def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: str, templates: dict,
@@ -463,7 +464,7 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
                 short = (village, resource)
         allowed = not waiting and (choice is None or room(runner, listing, rules, builders, locked))
         if choice is not None and not allowed and not waiting:
-            mark_busy(runner, capacity_queue, seconds)
+            mark_busy(runner, capacity_queue, seconds, confirmed=True)
         if choice is not None and allowed:
             row, place = choice
             capacity_blocked = False

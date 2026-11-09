@@ -215,6 +215,21 @@ class VisitTests(unittest.TestCase):
             self.assertEqual(again, result)
             self.assertEqual(calls, [])  # No navigation, rescan or next hero attempt.
 
+    def test_confirmed_full_builders_wait_for_running_upgrade_without_attempting_a_hero(self):
+        running = {**row('Existing upgrade', None, section='in_progress'), 'time':'4h 47m'}
+        placed = [(running, 20), (row('Valkyrie', None), 40)]
+        with patch.object(upgrades.time, 'monotonic', return_value=100):
+            result, calls, refused, runner, _ = self.visit('buildings', picks(buildings=['Valkyrie']),
+                                                         builders=0, placed=placed)
+            expected = 4*3600 + 47*60 + buildings.WAIT_MARGIN_SECONDS
+            self.assertEqual(result, (False, True, expected, None))
+            self.assertFalse([call for call in calls if isinstance(call, tuple) and call[0] in ('unlock', 'upgrade')])
+            self.assertEqual(refused, set())
+            calls.clear()
+            self.assertEqual(upgrades.visit(runner, 'buildings', picks(buildings=['Valkyrie'])['buildings'],
+                                            refused, 'tesseract', {'digits':{}}), result)
+            self.assertEqual(calls, [])
+
     def test_busy_builders_do_not_block_independent_research_or_equipment(self):
         busy = {('home', 'builders'): 700}
         with patch.object(upgrades.time, 'monotonic', return_value=100):

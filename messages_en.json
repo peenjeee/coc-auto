@@ -798,5 +798,6 @@
  "Pet upgraded: %s to level %s": "Pet upgraded: %s to level %s",
  "Peralatan di-upgrade: %s": "Equipment upgraded: %s",
  "Equipment upgraded: %s": "Equipment upgraded: %s",
- "Equipment upgraded: %s to level %s": "Equipment upgraded: %s to level %s"
+ "Equipment upgraded: %s to level %s": "Equipment upgraded: %s to level %s",
+ "Template ikon Goblin Builder hilang": "Goblin Builder icon template missing"
 }
