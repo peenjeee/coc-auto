@@ -66,8 +66,13 @@ def catalog() -> tuple[dict, list]:
             source, target = source[prefix.end():], target[prefix.end():]
         literals, values = pieces(source)
         if values and any(literals):
+            target_literals, target_values = pieces(target)
             patterns.append((sum(map(len, literals)), re.compile('(.*?)'.join(map(re.escape, literals)), re.S),
-                             pieces(target)[0]))
+                             target_literals))
+            # Retained messages can have an English wrapper with untranslated dynamic values.
+            if target != source and target_values and any(target_literals):
+                patterns.append((sum(map(len, target_literals)),
+                                 re.compile('(.*?)'.join(map(re.escape, target_literals)), re.S), target_literals))
     patterns.sort(key=lambda entry: -entry[0])
     return english, patterns
 

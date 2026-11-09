@@ -84,3 +84,24 @@ test('dashboard keys, HTML references and interpolation parameters match', async
   const html = await fs.readFile(new URL('web/index.html', root), 'utf8');
   for (const [, key] of html.matchAll(/data-i18n(?:-confirm)?="([^"]+)"/g)) assert.ok(key in text.en, key);
 });
+
+
+test('English upgrade warnings translate catalog names and nested Indonesian reasons', async () => {
+  const reason = 'Builders or Laboratory busy; Goblin offer closed without paying gems';
+  const sourceReason = 'Tukang atau Lab sibuk; tawaran Goblin ditutup tanpa membayar gem';
+  const items = JSON.parse(await fs.readFile(new URL('village-export-catalog.json', root), 'utf8')).items;
+  const cases = [['Ratu Pemanah', 'Archer Queen'], ['Raja Barbar', 'Barbarian King'],
+    // Plain log names use the text catalog where game entities share an Indonesian name.
+    ...Object.values(items).map(item => [item.name_id, catalog[item.name_id] ?? item.name])];
+  for (const [source, expected] of cases) {
+    for (const nested of [reason, sourceReason]) {
+      assert.equal(translate(`WARNING: Upgrade of ${source} skipped: ${nested}`, 'en'),
+        `WARNING: Upgrade of ${expected} skipped: ${reason}`);
+    }
+  }
+  const line = `WARNING: Upgrade of Ratu Pemanah skipped: ${reason}`;
+  assert.equal(translate(translate(line, 'en'), 'en'), `WARNING: Upgrade of Archer Queen skipped: ${reason}`);
+  assert.equal(translate(line, 'id'), line);
+  assert.equal(translate('WARNING: Upgrade of Custom name skipped: external detail', 'en'),
+    'WARNING: Upgrade of Custom name skipped: external detail');
+});

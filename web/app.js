@@ -3,12 +3,12 @@
 // only trusts messages signed with the key, so nobody else on the channel can pose as the device.
 import { RELAY_URL, RELAY_KEY } from './config.js';
 import { applyLanguage, t } from './i18n.js?v=3';
-import { translate } from './messages.js';
+import { translate } from './messages.js?v=2';
 import { RealtimeChannel } from './realtime.js';
 import { DeployEditor } from './deploy.js?v=2';
-import { SettingsPanel } from './settings.js?v=4';
+import { SettingsPanel } from './settings.js?v=6';
 import { setupSelects, refreshSelects } from './select.js?v=2';
-import { StatsPanel, previewStatistics } from './stats.js?v=12';
+import { StatsPanel, previewStatistics } from './stats.js?v=14';
 import { DiscordPanel } from './discord.js?v=6';
 import { VisiblePoller } from './visible-poller.js?v=2';
 import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=19';

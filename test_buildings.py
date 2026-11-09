@@ -293,7 +293,7 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(buildings.scan(runner), [{'section': 'in_progress', 'time': '1h 23j', 'seconds': 169_200},
                                                       {'section': 'other', 'time': '2h'}])
         self.assertEqual(read.call_args.args[0], ['top', 'second', 'third'])
-        down = ('swipe', ((1110, 560), (1110, 300)), True)
+        down = ('swipe', ((1110, 560), (1110, 400)), True)
         self.assertEqual(calls, ['check_touch', ('open', 'home'), ('swipe', ((1110, 300), (1110, 560)), False),
                                  down, down, down, 'close'])
 
@@ -329,7 +329,7 @@ class ScanTests(unittest.TestCase):
         # The lab's own frame starts the list, its rows named from the research catalog.
         self.assertEqual(frames.call_args.args[2], 'tab')
         self.assertEqual((read.call_args.args[0], read.call_args.args[4]), (['top', 'second'], buildings.RESEARCH))
-        down = ('swipe', ((1110, 560), (1110, 300)), True)
+        down = ('swipe', ((1110, 560), (1110, 400)), True)
         self.assertEqual(calls, ['check_touch', ('open', 'home'), ('tap', [[1062, 690]]),
                                  ('swipe', ((1110, 300), (1110, 560)), False), down, down, ('tap', [[978, 690]]),
                                  'close'])

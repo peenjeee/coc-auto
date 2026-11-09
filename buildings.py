@@ -431,11 +431,19 @@ def placed_rows(frames: list, spec: dict, templates: dict, program: str,
     return rows
 
 
+def overlapping_swipe(spec: dict, reverse: bool = False) -> list:
+    """Keep enough overlap for list_shift despite the game's inertial scrolling."""
+    start, end = spec['scroll'][::-1] if reverse else spec['scroll']
+    distance = max(abs(end[0] - start[0]), abs(end[1] - start[1]))
+    fraction = min(1, 160 / distance) if distance else 1
+    return [list(start), [round(start[i] + (end[i] - start[i]) * fraction) for i in (0, 1)]]
+
+
 def list_frames(runner: bot.Bot, spec: dict, image: np.ndarray) -> list:
     """Frames of the open builder list from its top to its end."""
     frames = [runner.scroll_list(spec, spec['scroll'][::-1], image)]
     for _ in range(bot.WALL_SCROLL_LIMIT):
-        moved = runner.scroll_list(spec, spec['scroll'], frames[-1], once=True)
+        moved = runner.scroll_list(spec, overlapping_swipe(spec), frames[-1], once=True)
         if moved is None:
             break
         frames.append(moved)
@@ -772,7 +780,7 @@ def find_card(runner: bot.Bot, spec: dict, frames: list, place: int, row: dict, 
                 if (seen['id'], seen['name'], seen['count']) != (row['id'], row['name'], row['count']):
                     raise bot.WaitTimeout(f'Baris {row["name"]} berubah jadi {seen["name"]}; tidak ada input')
                 return y
-        moved = runner.scroll_list(spec, spec['scroll'][::-1], image, once=True)
+        moved = runner.scroll_list(spec, overlapping_swipe(spec, reverse=True), image, once=True)
         if moved is None:
             break
         offset -= list_shift(moved, image, region)
