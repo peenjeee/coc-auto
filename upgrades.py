@@ -11,6 +11,7 @@ runs long is spent with CoC closed."""
 from __future__ import annotations
 
 import logging
+import math
 import time
 
 import cv2
@@ -411,6 +412,20 @@ def unlock(runner: bot.Bot, listing: str, spec: dict, frames: list, place: int, 
     return follow_locked(runner, listing, spec, amounts, goblin_gems(rules, True), row['name'])
 
 
+def busy_wait(runner: bot.Bot, queue: tuple) -> int:
+    """A bounded capacity refusal shared by tasks using the same builders/slot."""
+    until = getattr(runner, 'upgrade_busy_until', {}).get(queue, 0)
+    return max(0, math.ceil(until - time.monotonic()))
+
+
+def mark_busy(runner: bot.Bot, queue: tuple, seconds: int) -> None:
+    # Recheck within ten minutes even when an OCR timer is long or a builder is
+    # freed manually; do not retain a busy decision indefinitely.
+    if not hasattr(runner, 'upgrade_busy_until'):
+        runner.upgrade_busy_until = {}
+    runner.upgrade_busy_until[queue] = time.monotonic() + max(1, min(seconds, buildings.WAIT_MAX_SECONDS))
+
+
 def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: str, templates: dict,
           rules: dict = RULES_OFF) -> tuple:
     """One look at a list: (whether a row was upgraded, whether a target still has something left, seconds until the
@@ -418,6 +433,10 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
     a builder or slot free for it, else None). The list is opened on its tab, read whole, at most one row tapped, and
     closed from the builders tab again."""
     village, tab, path = buildings.LISTS[listing]
+    queue = (village, 'builders') if listing in ('buildings', 'builder') else (listing, 'slot')
+    waiting = busy_wait(runner, queue)
+    if waiting:
+        return False, True, waiting, None
     spec = runner.config['walls'][village]
     runner.navigate(village)
     runner.find_gem_row(spec)
@@ -433,23 +452,32 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
         placed = (gear.placed_rows(frames, spec, templates, program) if listing == 'gear'
                   else buildings.placed_rows(frames, spec, templates, program, path))
         choice, pending = buildings.pick(placed, chosen['targets'], amounts, refused)
+        seconds = buildings.pause_seconds([item for item, _ in placed], indonesian)
         locked = choice is not None and choice[0]['section'] == 'locked'
         builds = builds or locked
+        capacity_queue = (village, 'builders') if builds or listing == 'builder' else queue
+        waiting = busy_wait(runner, capacity_queue)
         if choice is None and pending:
             resource = buildings.shortfall(placed, chosen['targets'], amounts, refused)
-            if resource in amounts and room(runner, listing, rules, builders):
+            if not waiting and resource in amounts and room(runner, listing, rules, builders):
                 short = (village, resource)
-        if choice is not None and room(runner, listing, rules, builders, locked):
+        allowed = not waiting and (choice is None or room(runner, listing, rules, builders, locked))
+        if choice is not None and not allowed and not waiting:
+            mark_busy(runner, capacity_queue, seconds)
+        if choice is not None and allowed:
             row, place = choice
+            capacity_blocked = False
             try:
                 done = (unlock(runner, listing, spec, frames, place, row, program, rules, amounts) if locked else
                         upgrade(runner, listing, spec, frames, place, row, program, templates['digits'], rules,
                                 amounts,indonesian))
             except bot.NoFreeBuilder as exc:
                 LOG.warning('Upgrade %s dilewati: %s', row['name'], exc)
+                mark_busy(runner, capacity_queue, seconds)
+                capacity_blocked = True
             if done:
                 runner.progress += 1
-            else:
+            elif not capacity_blocked:
                 refused.add(buildings.row_key(row))
     finally:
         if tab != first:
@@ -463,7 +491,8 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
             if after >= builders:
                 LOG.warning('Tukang bebas tidak berkurang setelah upgrade %s (%s -> %s); cek game', row['name'],
                             builders, after)
-    return done, pending, buildings.pause_seconds([item for item, _ in placed], indonesian), short
+    waiting = busy_wait(runner, capacity_queue)
+    return done, pending, min(seconds, waiting) if waiting else seconds, short
 
 
 def report_upgrade(runner, listing, row, indonesian=False):
@@ -529,6 +558,7 @@ def run(runner: bot.Bot, chosen: dict, searches: int = 0) -> int:
     rules = {'keep_builders': chosen['buildings']['keep_builders'],
              'goblin': buildings.goblin(runner.config.get('goblin', buildings.GOBLIN_OFF))}
     refused, upgraded = set(), 0
+    runner.upgrade_busy_until = {}
     while lists:
         tried, before, waits, left, shorts = len(refused), upgraded, [], [], []
         for listing in lists:

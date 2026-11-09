@@ -170,7 +170,8 @@ class BackToListTests(unittest.TestCase):
 class VisitTests(unittest.TestCase):
     """One list opened on its tab, read, at most one row upgraded and the list closed from the builders tab."""
 
-    def visit(self, listing, chosen, builders=2, slots=(1, 1), placed=None, done=True, rules=upgrades.RULES_OFF):
+    def visit(self, listing, chosen, builders=2, slots=(1, 1), placed=None, done=True, rules=upgrades.RULES_OFF,
+              busy=None):
         calls, refused = [], set()
         runner = SimpleNamespace(
             config={'walls': CONFIG['walls']}, poll=0, progress=0, navigate=lambda village: calls.append(village),
@@ -178,10 +179,13 @@ class VisitTests(unittest.TestCase):
             open_build_list=lambda village, spec: 'opened', list_indonesian=lambda image: False,
             close_menus=lambda: calls.append('close'), check_gems=lambda spec: calls.append('gems'),
             templates=lambda: {}, read_stable=lambda reader, limit: reader(np.zeros((720, 1280, 3), np.uint8)))
+        runner.upgrade_busy_until = busy if busy is not None else {}
         placed = placed if placed is not None else [(row('Valkyrie', None), 40)]
 
         def upgrade(runner, name, spec, frames, place, chosen_row, program, digits, rules, amounts, indonesian=False):
             calls.append(('upgrade', name, chosen_row['name'], place))
+            if isinstance(done, Exception):
+                raise done
             return done
 
         def unlock(runner, name, spec, frames, place, chosen_row, program, rules, amounts):
@@ -198,6 +202,100 @@ class VisitTests(unittest.TestCase):
             result = upgrades.visit(runner, listing, chosen[listing], refused, 'tesseract', {'digits': {}}, rules)
         logged = [call.args[0] % call.args[1:] for call in log.info.call_args_list]
         return result, calls, refused, runner, logged
+
+    def test_busy_builder_refusal_blocks_the_shared_queue_without_refusing_each_target(self):
+        chosen = picks(buildings=['Valkyrie', 'Archer Queen'])
+        with patch.object(upgrades.time, 'monotonic', return_value=100):
+            result, calls, refused, runner, _ = self.visit(
+                'buildings', chosen, done=bot.NoFreeBuilder('busy'))
+            self.assertEqual(result, (False, True, buildings.WAIT_MAX_SECONDS, None))
+            self.assertEqual(refused, set())  # Does not trigger another per-target round.
+            calls.clear()
+            again = upgrades.visit(runner, 'buildings', chosen['buildings'], refused, 'tesseract', {'digits': {}})
+            self.assertEqual(again, result)
+            self.assertEqual(calls, [])  # No navigation, rescan or next hero attempt.
+
+    def test_busy_builders_do_not_block_independent_research_or_equipment(self):
+        busy = {('home', 'builders'): 700}
+        with patch.object(upgrades.time, 'monotonic', return_value=100):
+            for listing in ('lab', 'pets', 'gear'):
+                result, calls, _, _, _ = self.visit(listing, picks(**{listing: ['Valkyrie']}), busy=busy)
+                self.assertTrue(result[0], listing)
+                self.assertIn(('upgrade', listing, 'Valkyrie', 40), calls)
+
+    def test_busy_builders_also_block_building_prerequisites_for_independent_lists(self):
+        locked = {**row('Valkyrie', None, None, None, None, 'locked'), 'time': None}
+        with patch.object(upgrades.time, 'monotonic', return_value=100):
+            result, calls, _, _, _ = self.visit('pets', picks(pets=['Valkyrie']),
+                placed=[(locked, 590)], busy={('home', 'builders'): 700})
+        self.assertTrue(result[1])
+        self.assertFalse([call for call in calls if call[0] in ('unlock', 'upgrade')])
+
+    def test_busy_lab_does_not_block_home_builders(self):
+        with patch.object(upgrades.time, 'monotonic', return_value=100):
+            _, _, refused, runner, _ = self.visit('lab', picks(lab=['Valkyrie']), done=bot.NoFreeBuilder('busy'))
+            self.assertEqual(refused, set())
+            self.assertIn(('lab', 'slot'), runner.upgrade_busy_until)
+            result, calls, _, _, _ = self.visit('buildings', picks(buildings=['Valkyrie']),
+                                               busy=runner.upgrade_busy_until)
+            self.assertTrue(result[0])
+
+    def test_expired_busy_decisions_recheck_builders_and_normal_success_resumes(self):
+        with patch.object(upgrades.time, 'monotonic', return_value=701):
+            result, calls, _, _, _ = self.visit('buildings', picks(buildings=['Valkyrie']),
+                                               busy={('home', 'builders'): 700})
+        self.assertTrue(result[0])
+        self.assertIn(('upgrade', 'buildings', 'Valkyrie', 40), calls)
+
+    def test_busy_decisions_are_bounded_even_with_long_running_timers(self):
+        with patch.object(upgrades.time, 'monotonic', return_value=100):
+            runner = SimpleNamespace()
+            upgrades.mark_busy(runner, ('home', 'builders'), 6 * 3600)
+            self.assertEqual(upgrades.busy_wait(runner, ('home', 'builders')), buildings.WAIT_MAX_SECONDS)
+
+    def test_full_loop_waits_after_one_busy_hero_while_research_proceeds_then_resumes(self):
+        clock, actions = [100], []
+        completed = set()
+        attempts = {'buildings': 0}
+        runner = SimpleNamespace(config={'walls': CONFIG['walls'], 'tesseract': 'tesseract'}, root=ROOT,
+            poll=1, live=False, stop_at=None, progress=0, check_limits=lambda: None,
+            refresh_if_low_memory=lambda: None, navigate=lambda village: None,
+            find_gem_row=lambda spec: None, start_gem_watch=lambda spec: None,
+            open_build_list=lambda village, spec: 'opened', list_indonesian=lambda image: False,
+            close_menus=lambda: None, check_gems=lambda spec: None, templates=lambda: {},
+            read_stable=lambda reader, limit: reader(np.zeros((720, 1280, 3), np.uint8)))
+
+        def placed(frames, spec, templates, program, path):
+            listing = 'lab' if path == buildings.RESEARCH else 'buildings'
+            return [] if listing in completed else [(row('Valkyrie', None), 40)]
+
+        def attempt(runner, listing, *args):
+            if listing == 'buildings':
+                attempts[listing] += 1
+                if attempts[listing] == 1:
+                    actions.append('builders busy')
+                    raise bot.NoFreeBuilder('busy')
+            actions.append(listing + ' upgraded')
+            completed.add(listing)
+            return True
+
+        def wait(runner, seconds, reason):
+            actions.append('wait')
+            clock[0] += seconds
+
+        with patch.object(bot, 'executable', return_value='tesseract'), \
+                patch.object(buildings, 'load_templates', return_value={'digits': {}}), \
+                patch.object(buildings, 'village', return_value=(2, AMOUNTS)), \
+                patch.object(buildings, 'show_tab', return_value='tab'), \
+                patch.object(buildings, 'list_frames', return_value=['frame']), \
+                patch.object(buildings, 'placed_rows', side_effect=placed), \
+                patch.object(bot, 'read_fraction', return_value=(1, 1)), \
+                patch.object(upgrades, 'upgrade', side_effect=attempt), \
+                patch.object(upgrades, 'pause', side_effect=wait), \
+                patch.object(upgrades.time, 'monotonic', side_effect=lambda: clock[0]):
+            self.assertEqual(upgrades.run(runner, picks(buildings=['Valkyrie', 'Archer Queen'], lab=['Valkyrie'])), 2)
+        self.assertEqual(actions, ['builders busy', 'lab upgraded', 'wait', 'buildings upgraded'])
+        self.assertEqual(attempts['buildings'], 2)  # One refusal, one success after the wait.
 
     def test_a_lab_target_is_upgraded_on_its_tab_and_counted(self):
         result, calls, _, runner, logs = self.visit('lab', picks(lab=['Valkyrie']))

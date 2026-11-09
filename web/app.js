@@ -3,12 +3,12 @@
 // only trusts messages signed with the key, so nobody else on the channel can pose as the device.
 import { RELAY_URL, RELAY_KEY } from './config.js';
 import { applyLanguage, t } from './i18n.js?v=3';
-import { translate } from './messages.js?v=2';
+import { translate } from './messages.js?v=3';
 import { RealtimeChannel } from './realtime.js';
 import { DeployEditor } from './deploy.js?v=2';
-import { SettingsPanel } from './settings.js?v=6';
+import { SettingsPanel } from './settings.js?v=7';
 import { setupSelects, refreshSelects } from './select.js?v=2';
-import { StatsPanel, previewStatistics } from './stats.js?v=14';
+import { StatsPanel, previewStatistics } from './stats.js?v=15';
 import { DiscordPanel } from './discord.js?v=6';
 import { VisiblePoller } from './visible-poller.js?v=2';
 import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=19';
@@ -276,11 +276,11 @@ class RelayLink {
       showState(data);
     } else if (event === 'log') {
       setOnline(true);
-      addLines(Array.isArray(data.lines) ? data.lines : []);
+      addLines(Array.isArray(data.source_lines) ? data.source_lines : Array.isArray(data.lines) ? data.lines : []);
     } else if (event === 'history') {
       setOnline(true);
       clearLines();
-      addLines(Array.isArray(data.lines) ? data.lines : []);
+      addLines(Array.isArray(data.source_lines) ? data.source_lines : Array.isArray(data.lines) ? data.lines : []);
       showState(data.state);
     } else if (event === 'snapshot') {
       editor.image(data.screen, data.image);
