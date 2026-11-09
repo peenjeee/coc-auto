@@ -1,3 +1,4 @@
+import {SPRITE_TILE, SPRITE_SHEETS, UPGRADE_SPRITES} from './upgrade-sprites.js?v=2';
 import { UPGRADE_ICONS, UPGRADE_LEVEL_ICONS, UPGRADE_ALIASES } from './upgrade-icons.js?v=3';
 
 // A scan reports the destination level, not necessarily the current level. Never infer one from
@@ -25,4 +26,14 @@ export function upgradePortraitFallback(list, row = {}) {
     lab: 'icons/upgrades/lab.webp', star: 'icons/upgrades/star.webp',
     pets: 'icons/upgrades/pets.png', gear: 'icons/upgrades/equipment.webp',
   }[list] ?? 'icons/upgrades/buildings.webp';
+}
+
+
+/** Logical artwork keys still identify the exact entity/level; only their storage changes. */
+export function upgradePortraitSprite(key, list) {
+  const frame = UPGRADE_SPRITES[list]?.[key];
+  if (!frame) return null;
+  const [x, y] = frame;
+  const [file, width, height] = SPRITE_SHEETS[list];
+  return {src: `icons/sprites/${file}`, x, y, width, height, size: SPRITE_TILE};
 }

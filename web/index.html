@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#45a8ee">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=buildings-15"><script type="module" src="app.js?v=buildings-24"></script>
+<link rel="stylesheet" href="style.css?v=buildings-16"><script type="module" src="app.js?v=buildings-25"></script>
 </head><body>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <header class="site-header"><div class="header-inner">
@@ -130,6 +130,16 @@
       <section id="view-stats" class="page-panel" role="tabpanel" aria-labelledby="tab-stats" hidden></section>
 <section id="view-buildings" class="panel settings page-panel" role="tabpanel" aria-labelledby="tab-buildings" hidden>
         <h2 id="buildings-title" class="upgrade-sr-only"></h2>
+        <div class="upgrade-view-switch" role="tablist" data-i18n-aria="ongoing_views" aria-label="Upgrade views">
+          <button id="upgrade-plan-tab" type="button" role="tab" aria-controls="upgrade-planner" aria-selected="true" data-upgrade-view="plan"><span data-i18n="ongoing_plan"></span></button>
+          <button id="upgrade-ongoing-tab" type="button" role="tab" aria-controls="ongoing-upgrades" aria-selected="false" data-upgrade-view="ongoing"><span data-i18n="ongoing_tab"></span><span id="ongoing-badge" class="upgrade-counter">0</span></button>
+        </div>
+        <section id="ongoing-upgrades" role="tabpanel" aria-labelledby="upgrade-ongoing-tab" hidden>
+          <div class="ongoing-header"><div><h2 class="upgrade-sr-only" data-i18n="ongoing_title"></h2><p id="ongoing-summary" class="hint"></p></div><button id="ongoing-sync" type="button" data-i18n="upgrade_rescan"></button></div>
+          <div id="ongoing-grid" class="ongoing-grid" role="list"></div>
+          <p id="ongoing-estimate-note" class="upgrade-sr-only" data-i18n="ongoing_estimate_note" hidden></p>
+        </section>
+        <section id="upgrade-planner" role="tabpanel" aria-labelledby="upgrade-plan-tab">
         <div class="tabs upgrade-navigation" role="tablist" aria-label="Upgrade categories">
           <button id="upgrade-tab-buildings" type="button" role="tab" aria-controls="upgrade-workspace" data-list="buildings"><img src="icons/upgrades/buildings.webp" alt="" width="32" height="32"><span data-i18n="buildings_tab_buildings"></span></button>
           <button id="upgrade-tab-lab" type="button" role="tab" aria-controls="upgrade-workspace" data-list="lab"><img src="icons/upgrades/lab.webp" alt="" width="32" height="32"><span data-i18n="buildings_tab_lab"></span></button>
@@ -172,6 +182,7 @@
           </section>
         </div>
         </div>
+        </section>
 
       </section>
 <section id="view-deploy" class="panel deploy-editor page-panel" role="tabpanel" aria-labelledby="tab-deploy" hidden>

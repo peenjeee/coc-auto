@@ -593,6 +593,16 @@ The last scan is kept on the PC, in the same `.coc-auto/stats.sqlite3` as the st
 and shown again when the dashboard is reopened, with its date and time; running upgrades count down from that scan,
 and **Sync again** copies a fresh export. A stale clipboard or invalid export preserves previous scans.
 The original JSON is kept locally in `.coc-auto/village-export.json`.
+**Ongoing** shows running upgrades from all six saved lists, ordered by expected finish time. Compact cards show
+the entity, level change, remaining time and a progress bar. The last-sync time stays visible; countdowns update
+locally without additional ADB screenshots. Use **Sync again** to refresh the game's timers. A countdown reaching
+zero says **Ready to check** until another sync confirms completion. Standard catalog durations support estimated
+progress, marked `~`; discounts, boosts and helpers can change the actual duration. Unknown durations have no
+invented percentage. Expected finish times are available by hovering the remaining time and in its accessible label.
+
+Artwork uses six bundled sprite sheets instead of individual entity images; see
+[artwork regeneration and size tradeoffs](web/icons/entities/README.md).
+
 Confirmed upgrades are recorded locally in `.coc-auto/upgrade-history.sqlite3`. When the action screen has no
 readable level, reporting uses the last export and confirmed receipts where they identify one unambiguous level.
 Mixed-level groups stay unspecified. This history affects logs only; purchase checks continue to use the game screen.
@@ -970,6 +980,8 @@ test_visible_poller.mjs live view polling only while the page is in view (node -
 test_chart_layout.mjs  stats chart layout (node --test)
 test_upgrade_icons.mjs local artwork coverage and level selection (node --test)
 test_upgrade_drafts.mjs late save replies and village sync preserve queue and Goblin edits (node --test)
+test_upgrade_progress.mjs countdowns, estimates, expired and unknown timers (node --test)
+test_upgrade_sprites.py repeatable sprite generation and alpha preservation
 test_village_export.py export validation, navigation and catalog identities
 test_upgrade_history.py confirmed receipts, sync checkpoints and safe level reporting
 fixtures/              real screen crops and Play Store screens the tests read

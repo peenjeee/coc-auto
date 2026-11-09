@@ -766,3 +766,24 @@ for (const [language, hint] of Object.entries({
 }
 Object.assign(TEXT.en, {upgrade_scan:'Sync from game', upgrade_rescan:'Sync again', upgrade_current_level:'Level {level}', upgrade_export_readonly:'View only', upgrade_wall_separate:'Use wall upgrades', upgrade_results:'{count} items', buildings_title:'Village buildings', buildings_title_lab:'Troops & spells', buildings_title_pets:'Hero pets', buildings_title_gear:'Hero equipment', buildings_title_builder:'Builder buildings', buildings_title_star:'Builder troops'});
 Object.assign(TEXT.id, {upgrade_scan:'Sinkron dari game', upgrade_rescan:'Sinkron ulang', upgrade_current_level:'Level {level}', upgrade_export_readonly:'Lihat saja', upgrade_wall_separate:'Gunakan peningkatan tembok', upgrade_results:'{count} item', buildings_title:'Bangunan desa', buildings_title_lab:'Peleton & mantra', buildings_title_pets:'Hewan pahlawan', buildings_title_gear:'Peralatan pahlawan', buildings_title_builder:'Bangunan Desa Malam', buildings_title_star:'Peleton Desa Malam'});
+
+
+Object.assign(TEXT.en, {
+  ongoing_views:'Upgrade views', ongoing_plan:'Plan upgrades', ongoing_tab:'Ongoing', ongoing_title:'Upgrading now',
+  ongoing_active:'{count} active', ongoing_last_sync:'Last synced {time}', ongoing_level:'Level {from} → {to}', ongoing_target:'To level {level}',
+  ongoing_left:'{time} left', ongoing_finishes:'Finishes {time}', ongoing_ready:'Ready to check', ongoing_ready_note:'Sync to confirm completion',
+  ongoing_estimated:'~{percent}%', ongoing_percent:'{percent}%', ongoing_progress_unknown:'Total duration unavailable',
+  ongoing_estimate_note:'Estimated progress uses standard upgrade times. Discounts, boosts and helpers can change it.',
+  ongoing_empty:'No ongoing upgrades in the last sync.', ongoing_unsynced:'Sync from game to see ongoing upgrades.',
+});
+Object.assign(TEXT.id, {
+  ongoing_views:'Tampilan peningkatan', ongoing_plan:'Rencana peningkatan', ongoing_tab:'Berlangsung', ongoing_title:'Sedang ditingkatkan',
+  ongoing_active:'{count} aktif', ongoing_last_sync:'Sinkron terakhir {time}', ongoing_level:'Level {from} → {to}', ongoing_target:'Ke level {level}',
+  ongoing_left:'Sisa {time}', ongoing_finishes:'Selesai {time}', ongoing_ready:'Siap diperiksa', ongoing_ready_note:'Sinkron untuk memastikan selesai',
+  ongoing_estimated:'~{percent}%', ongoing_percent:'{percent}%', ongoing_progress_unknown:'Durasi total tidak tersedia',
+  ongoing_estimate_note:'Perkiraan progres memakai waktu peningkatan standar. Diskon, boost, dan asisten dapat mengubahnya.',
+  ongoing_empty:'Tidak ada peningkatan berlangsung pada sinkron terakhir.', ongoing_unsynced:'Sinkron dari game untuk melihat peningkatan berlangsung.',
+});
+
+Object.assign(TEXT.en,{ongoing_home_short:'Home',ongoing_builder_short:'Builder'});
+Object.assign(TEXT.id,{ongoing_home_short:'Desa Asal',ongoing_builder_short:'Desa Malam'});

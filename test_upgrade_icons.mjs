@@ -2,17 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {UPGRADE_ICONS, UPGRADE_LEVEL_ICONS, UPGRADE_ALIASES} from './web/upgrade-icons.js';
+import {SPRITE_TILE, SPRITE_SHEETS, UPGRADE_SPRITES} from './web/upgrade-sprites.js';
 const web = new URL('./web/',import.meta.url);
 
-test('every mapped upgrade portrait ships as a valid local WebP with recorded provenance',()=>{
+test('all six sheets contain their mapped portraits with bounds and provenance',()=>{
   const sources=JSON.parse(fs.readFileSync(new URL('icons/entities/sources.json',web),'utf8'));
-  const paths=new Set([...Object.values(UPGRADE_ICONS).flatMap(Object.values),...Object.values(UPGRADE_LEVEL_ICONS).flatMap(list=>Object.values(list).flatMap(Object.values))]);
-  for(const path of paths){
-    assert.ok(path.startsWith('icons/entities/'));
-    const file=fs.readFileSync(new URL(path,web));
-    assert.equal(file.subarray(0,4).toString(),'RIFF',path);
-    assert.equal(file.subarray(8,12).toString(),'WEBP',path);
-    assert.ok(sources.assets[path.replace('icons/entities/','')],path);
+  assert.equal(Object.keys(SPRITE_SHEETS).length,6);
+  for(const list of Object.keys(UPGRADE_ICONS)) {
+    const paths=new Set([...Object.values(UPGRADE_ICONS[list]),...Object.values(UPGRADE_LEVEL_ICONS[list]).flatMap(Object.values)]);
+    const [sheet,width,height]=SPRITE_SHEETS[list];
+    const file=fs.readFileSync(new URL('icons/sprites/'+sheet,web));
+    assert.equal(file.subarray(0,4).toString(),'RIFF');
+    assert.equal(file.subarray(8,12).toString(),'WEBP');
+    for(const path of paths){
+      const frame=UPGRADE_SPRITES[list][path];
+      assert.ok(frame,`${list}/${path}`);
+      const [x,y]=frame;
+      assert.ok(x>=0&&y>=0&&x+SPRITE_TILE<=width&&y+SPRITE_TILE<=height,path);
+      assert.ok(sources.assets[path.replace('icons/entities/','')],path);
+      assert.equal(upgradePortraitSprite(path,list).src,'icons/sprites/'+sheet);
+    }
   }
 });
 
@@ -28,12 +37,12 @@ test('all upgrade lists have portraits, with distinct Home and Builder Base artw
   assert.equal(UPGRADE_ALIASES.buildings.rajabarbar,'barbarian_king');
 });
 
-import {upgradePortraitSource, upgradePortraitFallback} from './web/upgrade-portrait.js';
+import {upgradePortraitSource, upgradePortraitFallback, upgradePortraitSprite} from './web/upgrade-portrait.js';
 test('export names resolve refreshed artwork and the legacy Raging Barbarian ID',()=>{
  for(const [list,id] of [['lab','meteor_golem'],['lab','sky_wagon'],['pets','sneezy'],['gear','rocket_spear'],['gear','frozen_arrow'],['builder','b_o_b_control'],['star','raging_barbarian']]){
    const path=upgradePortraitSource(list,{id});
    assert.ok(path,`${list}/${id}`);
-   assert.ok(fs.existsSync(new URL(path,web)),path);
+   assert.ok(fs.existsSync(new URL(upgradePortraitSprite(path,list).src,web)),path);
  }
  assert.match(upgradePortraitSource('star',{id:'raging_barbarian'}),/raged_barbarian/);
  assert.match(upgradePortraitSource('star',{name:'Raged Barbarian'}),/raged_barbarian/);
@@ -68,4 +77,20 @@ test('building artwork follows the displayed destination level and queue goal',(
  assert.equal(upgradePortraitSource('buildings',{id:row.id,name:row.name,level:null},true,[]),UPGRADE_ICONS.buildings.archer_tower);
  assert.equal(upgradePortraitSource('buildings',{id:'eagle_artillery',name:'Eagle Artillery',next_level:null}),UPGRADE_ICONS.buildings.eagle_artillery);
  assert.ok(upgradePortraitSource('buildings',{id:'barbarian_king',name:'Barbarian King',next_level:11}).endsWith('icon.webp'));
+});
+
+
+test('sprite frames never overlap and all pinned sources remain covered', () => {
+ const provenance=JSON.parse(fs.readFileSync(new URL('icons/entities/sources.json',web),'utf8'));
+ const keys=new Set(Object.values(UPGRADE_SPRITES).flatMap(Object.keys));
+ assert.deepEqual([...keys].sort(),Object.keys(provenance.assets).map(name=>'icons/entities/'+name).sort());
+ for(const entries of Object.values(UPGRADE_SPRITES)){
+  const frames=[];
+  for(const [key,[x,y]] of Object.entries(entries)){
+   for(const frame of frames)assert.ok(x+SPRITE_TILE<=frame.x||frame.x+SPRITE_TILE<=x||y+SPRITE_TILE<=frame.y||frame.y+SPRITE_TILE<=y,key);
+   frames.push({x,y});
+  }
+ }
+ assert.equal(upgradePortraitSprite('missing','buildings'),null);
+ assert.equal(upgradePortraitSprite('missing','unknown'),null);
 });

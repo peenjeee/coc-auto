@@ -55,10 +55,10 @@ STATIC_FILES = {'/icons/stats/attacks.png': 'icons/stats/attacks.png',
                 '/icons/icon-192.png': 'icons/icon-192.png', '/icons/icon-512.png': 'icons/icon-512.png',
                 '/icons/icon-maskable-512.png': 'icons/icon-maskable-512.png',
                 '/icons/apple-touch-icon.png': 'icons/apple-touch-icon.png',
-                '/upgrade-icons.js': 'upgrade-icons.js', '/upgrade-portrait.js': 'upgrade-portrait.js',
+                '/upgrade-icons.js': 'upgrade-icons.js', '/upgrade-times.js': 'upgrade-times.js', '/upgrade-progress.js': 'upgrade-progress.js', '/upgrade-sprites.js': 'upgrade-sprites.js', '/upgrade-portrait.js': 'upgrade-portrait.js',
                 '/upgrade-availability.js': 'upgrade-availability.js', '/upgrade-max-levels.js': 'upgrade-max-levels.js',
                 **{'/' + path.relative_to(WEB_DIR).as_posix(): path.relative_to(WEB_DIR).as_posix()
-                   for folder in ('icons/entities', 'icons/upgrades')
+                   for folder in ('icons/entities', 'icons/upgrades', 'icons/sprites')
                    for path in (WEB_DIR / folder).rglob('*')
                    if path.is_file() and path.suffix in ('.webp', '.png', '.svg', '.json')}}
 CONTENT_TYPES = {'.webp': 'image/webp', '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',

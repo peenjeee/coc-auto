@@ -1002,3 +1002,32 @@ summary::-webkit-details-marker { display: none; }
 @media(max-width:440px){#view-buildings .goblin-config{padding:4px 12px 14px}#view-buildings .goblin-limit{flex-wrap:wrap;gap:8px}#view-buildings .goblin-limit input{font-size:16px}}
 @media(pointer:coarse){#view-buildings .goblin-option{min-height:44px}#view-buildings #goblin-save{min-height:44px}}
 @media(prefers-reduced-motion:reduce){.select-chevron::before,#view-buildings .upgrade-disclosure-chevron::before,#view-buildings .goblin-option input[role=switch]::before{transition:none}}
+
+/* Shared sprite artwork: crop a shared page without changing portrait dimensions. */
+#view-buildings .upgrade-sprite{position:relative;display:block;width:100%;height:100%;overflow:hidden;filter:drop-shadow(0 2px 1px #2b1d0e24)}
+#view-buildings .upgrade-sprite img{position:absolute;max-width:none;object-fit:fill;filter:none}
+
+/* Planner and current upgrade activity share the existing Clash palette. */
+#view-buildings .upgrade-view-switch{display:flex;gap:6px;border-bottom:1px solid var(--line,#d7c9aa);padding-bottom:16px;margin-bottom:24px}
+#view-buildings .upgrade-view-switch button{display:flex;align-items:center;gap:8px;border:1px solid transparent;background:transparent;box-shadow:none;padding:10px 16px;border-radius:9px;color:var(--ink-soft,#6b5a42)}
+#view-buildings .upgrade-view-switch button[aria-selected=true]{background:#ecdfbd;border-color:#c9b78d;color:#382b1b}
+#view-buildings .upgrade-view-switch .upgrade-counter{background:#776144;color:#fff8e7;min-width:24px;height:24px;padding:2px 7px;font-size:12px}
+.ongoing-header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}.ongoing-header h2{font-size:24px;margin:0 0 6px}.ongoing-header p{margin:0}
+.ongoing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.ongoing-card{min-width:0;background:#fffaf0;border:1px solid #d8c9a7;border-radius:13px;padding:20px;box-shadow:0 2px 0 #aa8f5a18}.ongoing-card-top{display:flex;align-items:center;gap:12px;margin-bottom:22px}.ongoing-card-copy{min-width:0}.ongoing-location{display:block;color:#796747;font-size:11px;margin-bottom:5px}.ongoing-card h3{font-size:16px;line-height:1.3;margin:0 0 5px;overflow-wrap:anywhere}.ongoing-level{color:#716046;font-size:12px}.ongoing-timing{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:9px}.ongoing-timing strong{font-size:17px;color:#3d3424}.ongoing-percent{font-size:12px;color:#77664a;font-variant-numeric:tabular-nums}.ongoing-progress{display:block;width:100%;height:9px;border:0;border-radius:8px;overflow:hidden;background:#e8dfca;color:#759840;appearance:none}.ongoing-progress::-webkit-progress-bar{background:#e8dfca;border-radius:8px}.ongoing-progress::-webkit-progress-value{background:linear-gradient(90deg,#779c43,#a5bd64);border-radius:8px}.ongoing-progress::-moz-progress-bar{background:#88aa4c;border-radius:8px}.ongoing-progress:indeterminate{background:repeating-linear-gradient(110deg,#d5c59e 0,#d5c59e 8px,#e8dfca 8px,#e8dfca 16px)}.ongoing-progress:indeterminate::-webkit-progress-bar{background:repeating-linear-gradient(110deg,#d5c59e 0,#d5c59e 8px,#e8dfca 8px,#e8dfca 16px)}.ongoing-finish{display:block;color:#887451;font-size:11px;line-height:1.6;margin-top:10px}.ongoing-card.is-ready{border-color:#a3b575}.ongoing-card.is-ready .ongoing-timing strong{color:#57782a}.ongoing-estimate-note{margin:18px 0 0;font-size:11px}.ongoing-empty{grid-column:1/-1;text-align:center;padding:44px 20px;border:1px dashed #cdbb94;border-radius:12px;color:#776548}
+@media(max-width:1100px){.ongoing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.ongoing-grid{grid-template-columns:1fr}.ongoing-card{padding:17px}.ongoing-header{gap:12px}.ongoing-header h2{font-size:22px}#view-buildings .upgrade-view-switch button{padding:9px 12px}}
+
+/* Compact ongoing upgrades. */
+#view-buildings .upgrade-view-switch{padding-bottom:12px;margin-bottom:16px}
+.ongoing-header{align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:10px}
+.ongoing-name-line{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;min-width:0}
+#view-buildings .ongoing-name-line h3{font-family:system-ui;font-size:14px;font-weight:650;line-height:1.25;margin:0}
+.ongoing-name-line .ongoing-level{font-size:11px;color:#8b7956;white-space:nowrap}
+.ongoing-card-copy .ongoing-location{margin:5px 0 0;font-size:11px}
+.ongoing-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.ongoing-card{padding:16px;border-radius:10px;box-shadow:none}
+.ongoing-card-top{gap:10px;margin-bottom:17px}
+#view-buildings .ongoing-card .upgrade-portrait{width:32px;height:32px;flex-basis:32px}
+.ongoing-timing{margin-bottom:7px}.ongoing-timing strong{font-family:system-ui;font-size:13px;font-weight:650}
+.ongoing-percent{font-size:11px}.ongoing-progress{height:5px}.ongoing-finish{display:none}
+@media(max-width:1050px){.ongoing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.ongoing-grid{grid-template-columns:1fr}.ongoing-card-copy .ongoing-location{font-size:10px}}

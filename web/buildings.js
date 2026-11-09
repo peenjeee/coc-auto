@@ -1,7 +1,8 @@
+import {ongoingUpgrades, upgradeProgress} from './upgrade-progress.js?v=1';
 // Village sync: the game's JSON export supplies levels, counts and running timers for all six lists.
 // Each list has an ordered queue and optional target levels. Syncing starts no upgrades.
-import { t } from './i18n.js?v=3';
-import { upgradePortraitSource, upgradePortraitFallback } from './upgrade-portrait.js?v=4';
+import { t } from './i18n.js?v=4';
+import { upgradePortraitSource, upgradePortraitFallback, upgradePortraitSprite } from './upgrade-portrait.js?v=6';
 import { isFullyUpgraded } from './upgrade-availability.js?v=1';
 
 // Each list's categories, in the order shown; a row the device could not name comes under other.
@@ -60,6 +61,18 @@ export class BuildingsPanel {
     this.baselines = {};
     this.keep = 0;
     this.search = '';
+    this.upgradeView = 'plan';
+    for (const button of document.querySelectorAll('[data-upgrade-view]')) {
+      button.addEventListener('click', () => { this.upgradeView = button.dataset.upgradeView; this.render(); });
+      button.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = document.querySelector(`[data-upgrade-view="${event.key === 'Home' ? 'plan' : event.key === 'End' ? 'ongoing' : button.dataset.upgradeView === 'plan' ? 'ongoing' : 'plan'}"]`);
+        next.click(); next.focus();
+      });
+    }
+    $('ongoing-sync').addEventListener('click', () => send('scan_buildings', {list:'buildings'},
+      {wait:SCAN_WAIT_MS, label:t('upgrade_rescan')}));
     $('upgrade-search').addEventListener('input', (event) => { this.search = event.target.value; this.renderCatalog(); });
     $('buildings-keep').addEventListener('input', () => { this.keep = Number($('buildings-keep').value); this.renderStatus(); });
     for (const id of ['goblin-builder', 'goblin-researcher', 'goblin-max']) $(id).addEventListener('input', () => { this.goblinDirty = true; });
@@ -114,13 +127,17 @@ export class BuildingsPanel {
     // Running upgrades count down from the scan itself, so a scan kept on the device and reopened later shows the
     // time left now; the next scan reads the game's own timers again.
     kept.scannedAt = Number.isFinite(data?.scanned_at) ? data.scanned_at * 1000 : Date.now();
-    this.ticker ??= setInterval(() => this.tick(), 30000);
+    this.ticker ??= setInterval(() => { if (!document.hidden) this.tick(); }, 1000);
     this.render();
   }
 
   tick() {
     const passed = (Date.now() - this.scannedAt) / 1000;
     for (const [cell, total] of this.clocks ?? []) cell.textContent = left(Math.max(0, total - passed));
+    if (this.upgradeView === 'ongoing') {
+      for (const refresh of this.ongoingClocks ?? []) refresh();
+      this.renderOngoingSummary(ongoingUpgrades(this.lists));
+    }
   }
 
   /** @param {Record<string, {targets?: unknown, keep_builders?: unknown} | undefined> | undefined} saved the
@@ -153,6 +170,15 @@ export class BuildingsPanel {
   }
 
   render() {
+    $('upgrade-planner').hidden = this.upgradeView === 'ongoing';
+    $('ongoing-upgrades').hidden = this.upgradeView !== 'ongoing';
+    for (const button of document.querySelectorAll('[data-upgrade-view]')) {
+      const selected = button.dataset.upgradeView === this.upgradeView;
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    }
+    document.querySelector('.upgrade-view-switch').setAttribute('aria-label', t('ongoing_views'));
+    this.renderOngoing();
     const village = VILLAGE[this.list];
     for (const tab of document.querySelectorAll('[data-list]')) {
       const selected = tab.dataset.list === this.list;
@@ -390,26 +416,120 @@ export class BuildingsPanel {
     this.render();
   }
 
-  portrait(row, compact = false) {
+  portrait(row, compact = false, listing = this.list) {
     const portrait = element('span', undefined, `upgrade-portrait${compact ? ' compact' : ''}`);
     portrait.setAttribute('aria-hidden', 'true');
     const name = String(row.name ?? '');
-    const source = upgradePortraitSource(this.list, row, compact, this.rows ?? []);
+    const source = upgradePortraitSource(listing, row, compact, this.lists[listing]?.rows ?? []);
     const initials = element('span', name.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase() || '?', 'upgrade-portrait-fallback');
     const fallback = () => {
       const image = element('img');
-      Object.assign(image, { src: upgradePortraitFallback(this.list, row), alt: '', width: compact ? 28 : 44,
+      Object.assign(image, { src: upgradePortraitFallback(listing, row), alt: '', width: compact ? 28 : 44,
         height: compact ? 28 : 44, loading: 'lazy', decoding: 'async' });
       image.dataset.generic = 'true';
       image.addEventListener('error', () => image.replaceWith(initials), { once: true });
       return image;
     };
-    if (!source) { portrait.append(fallback()); return portrait; }
+    const sprite = upgradePortraitSprite(source, listing);
+    if (!sprite) { portrait.append(fallback()); return portrait; }
+    const frame = element('span', undefined, 'upgrade-sprite');
     const image = element('img');
-    Object.assign(image, { src: source, alt: '', width: compact ? 28 : 44, height: compact ? 28 : 44, loading: 'lazy', decoding: 'async' });
-    image.addEventListener('error', () => image.replaceWith(fallback()), { once: true });
-    portrait.append(image);
+    Object.assign(image, { src: sprite.src, alt: '', width: sprite.width, height: sprite.height, loading: 'lazy', decoding: 'async' });
+    Object.assign(image.style, {
+      width: `${sprite.width / sprite.size * 100}%`, height: `${sprite.height / sprite.size * 100}%`,
+      left: `${-sprite.x / sprite.size * 100}%`, top: `${-sprite.y / sprite.size * 100}%`,
+    });
+    image.addEventListener('error', () => frame.replaceWith(fallback()), { once: true });
+    frame.append(image);
+    portrait.append(frame);
     return portrait;
+  }
+
+  renderOngoingSummary(upgrades) {
+    const active = upgrades.filter(upgrade => !upgrade.ready).reduce((count, upgrade) => count + (upgrade.row.count || 1), 0);
+    $('ongoing-badge').textContent = String(active);
+    const synced = Object.values(this.lists).filter(list => list.rows !== null).map(list => list.scannedAt);
+    const locale = document.documentElement.lang === 'id' ? 'id-ID' : 'en-US';
+    $('ongoing-summary').textContent = synced.length ? t('ongoing_last_sync', {
+      time:new Date(Math.max(...synced)).toLocaleString(locale,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}) : '';
+  }
+
+  renderOngoing() {
+    const grid = $('ongoing-grid');
+    grid.replaceChildren();
+    this.ongoingClocks = [];
+    const upgrades = ongoingUpgrades(this.lists);
+    this.renderOngoingSummary(upgrades);
+    $('ongoing-sync').textContent = t(upgrades.length ? 'upgrade_rescan' : 'upgrade_scan');
+    $('ongoing-estimate-note').hidden = !upgrades.some(upgrade => upgrade.estimated);
+    if (!upgrades.length) {
+      const known = Object.values(this.lists).some(list => list.rows !== null);
+      grid.append(element('p', t(known ? 'ongoing_empty' : 'ongoing_unsynced'), 'ongoing-empty'));
+      return;
+    }
+    const language = document.documentElement.lang;
+    const locale = language === 'id' ? 'id-ID' : 'en-US';
+    const labels = {buildings:'buildings_tab_buildings',lab:'buildings_tab_lab',pets:'buildings_tab_pets',
+      gear:'buildings_tab_gear',builder:'buildings_tab_buildings',star:'upgrade_star_tab'};
+    for (const upgrade of upgrades) {
+      const {row,list} = upgrade;
+      const card = element('article', undefined, 'ongoing-card');
+      card.setAttribute('role','listitem');
+      const top = element('div', undefined, 'ongoing-card-top');
+      const copy = element('div', undefined, 'ongoing-card-copy');
+      const title = upgrade.names?.[language] ?? String(row.name ?? '?');
+      const nameLine = element('div', undefined, 'ongoing-name-line');
+      nameLine.append(element('h3', title + (row.count > 1 ? ` ×${row.count}` : '')));
+      const level = Number.isInteger(row.current_level) && upgrade.target !== null
+        ? `${row.current_level} → ${upgrade.target}` : upgrade.target !== null ? `→ ${upgrade.target}` : '';
+      if (level) {
+        const badge = element('span', level, 'ongoing-level');
+        badge.setAttribute('aria-label', upgrade.target !== null && Number.isInteger(row.current_level)
+          ? t('ongoing_level',{from:row.current_level,to:upgrade.target}) : t('ongoing_target',{level:upgrade.target}));
+        nameLine.append(badge);
+      }
+      copy.append(nameLine);
+      copy.append(element('small', `${t(VILLAGE[list] === 'home' ? 'ongoing_home_short' : 'ongoing_builder_short')} · ${t(labels[list])}`, 'ongoing-location'));
+      top.append(this.portrait(row, false, list), copy);
+      const timing = element('div', undefined, 'ongoing-timing');
+      const remaining = element('strong');
+      const percent = element('span', undefined, 'ongoing-percent');
+      timing.append(remaining, percent);
+      const bar = element('progress', undefined, 'ongoing-progress');
+      bar.max = 100;
+      bar.setAttribute('aria-label', title);
+      const finish = element('time', undefined, 'ongoing-finish');
+      finish.dateTime = new Date(upgrade.finish).toISOString();
+      const refresh = () => {
+        const status = upgradeProgress(row, list, this.lists[list].scannedAt);
+        const countdown = left(status.remaining);
+        remaining.textContent = status.ready ? t('ongoing_ready') : t('ongoing_left', {time:countdown});
+        card.classList.toggle('is-ready', status.ready);
+        if (status.ready) {
+          bar.value = 100; percent.textContent = ''; bar.removeAttribute('aria-valuetext');
+        } else if (status.percent === null) {
+          bar.removeAttribute('value'); percent.textContent = '';
+          bar.setAttribute('aria-valuetext', t('ongoing_progress_unknown'));
+        } else {
+          bar.value = status.percent;
+          percent.textContent = t(status.estimated ? 'ongoing_estimated' : 'ongoing_percent', {percent:Math.floor(status.percent)});
+          bar.setAttribute('aria-valuetext', percent.textContent);
+        }
+        const explanation = status.estimated ? t('ongoing_estimate_note') : status.percent === null ? t('ongoing_progress_unknown') : '';
+        percent.title = explanation;
+        bar.title = explanation;
+        if (status.estimated) bar.setAttribute('aria-describedby','ongoing-estimate-note');
+        finish.textContent = status.ready ? t('ongoing_ready_note') : t('ongoing_finishes', {
+          time:new Date(status.finish).toLocaleString(locale,{weekday:'short',hour:'2-digit',minute:'2-digit'})});
+        remaining.title = finish.textContent;
+        remaining.setAttribute('aria-label', (status.ready ? t('ongoing_ready') : t('ongoing_left',{time:countdown})) + '. ' + finish.textContent);
+        if (!status.ready && status.percent === null) finish.textContent += ` · ${t('ongoing_progress_unknown')}`;
+      };
+      refresh();
+      this.ongoingClocks.push(refresh);
+      card.append(top,timing,bar,finish);
+      grid.append(card);
+    }
   }
 
   catalogRow(row) {
