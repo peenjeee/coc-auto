@@ -980,3 +980,13 @@ calibration-legacy/    templates for config.legacy.json
 config.example.json    minimal config skeleton
 docs/                  demo GIF and video, dashboard walkthrough (GIF, MP4) and screenshots
 ```
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE). You may use, fork, change and share this bot for any noncommercial purpose,
+such as personal use or a hobby. Selling it, or using it in anything you are paid for, is not allowed. Anyone you
+share a copy with must also get the [LICENSE](LICENSE) file, including its `Required Notice:` line.
+
+The license covers this project's code only. The game screenshots, crops and videos in `calibration/`,
+`calibration-legacy/`, `fixtures/`, `docs/` and `web/maps/` show Supercell's game and belong to Supercell. This project
+is not affiliated with, endorsed or sponsored by Supercell.
