@@ -1,5 +1,6 @@
-import {t as tr} from './i18n.js';
-import {refreshSelects} from './select.js';
+import {t as tr} from './i18n.js?v=4';
+import {translate} from './messages.js?v=4';
+import {refreshSelects} from './select.js?v=2';
 import { VisiblePoller } from './visible-poller.js?v=2';
 
 const $ = id => document.getElementById(id);
@@ -55,7 +56,7 @@ export class StatsPanel {
     this.chartResize.observe($('activity-chart'));
   }
   localize(){for(const e of $('view-stats').querySelectorAll('[data-i18n]'))e.textContent=tr(e.dataset.i18n);this.render();}
-  translateDetail(value){const keys={"Wall upgrades": "dashboard_wall_upgrades", "Building upgrades": "dashboard_building_upgrades","Farming": "dashboard_farming", "Attacks": "dashboard_attacks", "running": "dashboard_running", "completed": "dashboard_completed", "stopped": "dashboard_stopped", "failed": "dashboard_failed", "interrupted": "dashboard_interrupted", "Home Village attack": "dashboard_home_village_attack", "Builder Base attack": "dashboard_builder_base_attack", "Storage increased": "dashboard_storage_increased", "Home Village storage increased": "dashboard_home_village_storage_increased", "Builder Base storage increased": "dashboard_builder_base_storage_increased", "Recovery attempt": "dashboard_recovery_attempt", "Worker error": "dashboard_worker_error"};const walls=/^(\d+) walls? upgraded$/.exec(value),building=/^(.+) upgraded to level (\d+)$/.exec(value);return walls?tr('dashboard_count_walls_upgraded',{count:fmt(walls[1])}):building?tr('dashboard_building_upgraded',{name:building[1],level:building[2]}):keys[value]?tr(keys[value]):value;}
+  translateDetail(value){const keys={"Wall upgrades": "dashboard_wall_upgrades", "Building upgrades": "dashboard_building_upgrades","Farming": "dashboard_farming", "Attacks": "dashboard_attacks", "running": "dashboard_running", "completed": "dashboard_completed", "stopped": "dashboard_stopped", "failed": "dashboard_failed", "interrupted": "dashboard_interrupted", "Home Village attack": "dashboard_home_village_attack", "Builder Base attack": "dashboard_builder_base_attack", "Storage increased": "dashboard_storage_increased", "Home Village storage increased": "dashboard_home_village_storage_increased", "Builder Base storage increased": "dashboard_builder_base_storage_increased", "Recovery attempt": "dashboard_recovery_attempt", "Worker error": "dashboard_worker_error"};const walls=/^(\d+) walls? upgraded$/.exec(value),building=/^(.+) upgraded to level (\d+)$/.exec(value),unknown=/^(.+) upgraded$/.exec(value);return walls?tr('dashboard_count_walls_upgraded',{count:fmt(walls[1])}):building?tr('dashboard_building_upgraded',{name:translate(building[1]),level:building[2]}):unknown?translate('Bangunan di-upgrade: '+unknown[1]):keys[value]?tr(keys[value]):value;}
   refresh(){return this.request(this.period);}
   sync(){this.poller.sync();}
   load(data){if(data?.period!==this.period)return;this.data=data;this.render();}

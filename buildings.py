@@ -431,11 +431,19 @@ def placed_rows(frames: list, spec: dict, templates: dict, program: str,
     return rows
 
 
+def overlapping_swipe(spec: dict, reverse: bool = False) -> list:
+    """Keep enough overlap for list_shift despite the game's inertial scrolling."""
+    start, end = spec['scroll'][::-1] if reverse else spec['scroll']
+    distance = max(abs(end[0] - start[0]), abs(end[1] - start[1]))
+    fraction = min(1, 160 / distance) if distance else 1
+    return [list(start), [round(start[i] + (end[i] - start[i]) * fraction) for i in (0, 1)]]
+
+
 def list_frames(runner: bot.Bot, spec: dict, image: np.ndarray) -> list:
     """Frames of the open builder list from its top to its end."""
     frames = [runner.scroll_list(spec, spec['scroll'][::-1], image)]
     for _ in range(bot.WALL_SCROLL_LIMIT):
-        moved = runner.scroll_list(spec, spec['scroll'], frames[-1], once=True)
+        moved = runner.scroll_list(spec, overlapping_swipe(spec), frames[-1], once=True)
         if moved is None:
             break
         frames.append(moved)
@@ -736,6 +744,31 @@ def builder_refusal(image: np.ndarray, templates: dict, row: dict) -> str | None
     return None
 
 
+@lru_cache(maxsize=1)
+def goblin_builder_badge() -> np.ndarray:
+    image = cv2.imread(str(Path(__file__).with_name('calibration') / 'goblin-builder-hud.png'))
+    if image is None:
+        raise bot.BotError('Template ikon Goblin Builder hilang')
+    return image
+
+
+def regular_builders(image: np.ndarray, free: int, total: int, region: list) -> int:
+    """The green Goblin portrait indicates an available paid slot in the HUD count.
+
+    Exclude it from regular builders; room() separately applies the Goblin opt-in.
+    The badge is beside the numeric counter, independent of game language/zoom.
+    """
+    if free == 0 or total < 6:
+        return free
+    x, y, w, _ = region
+    area = image[max(0, y - 40):y + 3, max(0, x):x + w]
+    template = goblin_builder_badge()
+    if area.shape[0] < template.shape[0] or area.shape[1] < template.shape[1]:
+        return free
+    score = cv2.minMaxLoc(cv2.matchTemplate(area, template, cv2.TM_SQDIFF_NORMED))[0]
+    return max(0, free - 1) if score <= 0.035 else free
+
+
 def village(runner: bot.Bot, name: str = 'home') -> tuple[int, dict]:
     """Free builders and the resources on hand once two frames agree, read on the village itself (an open builder
     list would push the resource bars aside): the Home Village's builders, gold, elixir and dark elixir; the Builder
@@ -748,6 +781,8 @@ def village(runner: bot.Bot, name: str = 'home') -> tuple[int, dict]:
         free, total = bot.read_fraction(bot.crop(image, region), templates) if name == 'home' else (0, 0)
         if free > total:
             raise bot.BotError('Jumlah tukang bebas meragukan')
+        if name == 'home':
+            free = regular_builders(image, free, total, region)
         return free, tuple(bot.read_number(bot.crop(image, bars[key]['bar']), templates, bot.FRACTION_MIN_SCORE)
                            for key in keys)
     runner.wait({name}, set(), OPEN_SECONDS)
@@ -772,7 +807,7 @@ def find_card(runner: bot.Bot, spec: dict, frames: list, place: int, row: dict, 
                 if (seen['id'], seen['name'], seen['count']) != (row['id'], row['name'], row['count']):
                     raise bot.WaitTimeout(f'Baris {row["name"]} berubah jadi {seen["name"]}; tidak ada input')
                 return y
-        moved = runner.scroll_list(spec, spec['scroll'][::-1], image, once=True)
+        moved = runner.scroll_list(spec, overlapping_swipe(spec, reverse=True), image, once=True)
         if moved is None:
             break
         offset -= list_shift(moved, image, region)

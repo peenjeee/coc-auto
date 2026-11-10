@@ -9,6 +9,19 @@ globalThis.fetch = async (url) => ({ ok: true, json: async () => JSON.parse(awai
 const { translate } = await import('./web/messages.js');
 const catalog = JSON.parse(await fs.readFile(new URL('messages_en.json', root), 'utf8'));
 
+test('upgrade names and compact waits render correctly in retained device logs',()=>{
+  assert.equal(translate('INFO: Bangunan di-upgrade: Jawara Royale ke level 48'),
+    'INFO: Building upgraded: Royal Champion to level 48');
+  assert.equal(translate('INFO: Building upgraded: Jawara Royale to level None'),
+    'INFO: Building upgraded: Royal Champion');
+  assert.equal(translate('INFO: Menunggu 12125 detik: belum ada pilihan yang bisa di-upgrade sekarang'),
+    'INFO: Waiting 3h 22m 5s: nothing picked can be upgraded right now');
+  assert.equal(translate('INFO: CoC ditutup selama menunggu; dibuka lagi setelah 12125 detik'),
+    'INFO: CoC closed during the wait; reopening in 3h 22m 5s');
+  assert.equal(translate('INFO: Bangunan di-upgrade: Jawara Royale ke level 48','id'),
+    'INFO: Bangunan di-upgrade: Jawara Royale ke level 48');
+});
+
 test('browser and terminal ship the same catalog', async () => {
   assert.deepEqual(JSON.parse(await fs.readFile(new URL('web/messages_en.json', root), 'utf8')), catalog);
 });
@@ -70,4 +83,25 @@ test('dashboard keys, HTML references and interpolation parameters match', async
   }
   const html = await fs.readFile(new URL('web/index.html', root), 'utf8');
   for (const [, key] of html.matchAll(/data-i18n(?:-confirm)?="([^"]+)"/g)) assert.ok(key in text.en, key);
+});
+
+
+test('English upgrade warnings translate catalog names and nested Indonesian reasons', async () => {
+  const reason = 'Builders or Laboratory busy; Goblin offer closed without paying gems';
+  const sourceReason = 'Tukang atau Lab sibuk; tawaran Goblin ditutup tanpa membayar gem';
+  const items = JSON.parse(await fs.readFile(new URL('village-export-catalog.json', root), 'utf8')).items;
+  const cases = [['Ratu Pemanah', 'Archer Queen'], ['Raja Barbar', 'Barbarian King'],
+    // Plain log names use the text catalog where game entities share an Indonesian name.
+    ...Object.values(items).map(item => [item.name_id, catalog[item.name_id] ?? item.name])];
+  for (const [source, expected] of cases) {
+    for (const nested of [reason, sourceReason]) {
+      assert.equal(translate(`WARNING: Upgrade of ${source} skipped: ${nested}`, 'en'),
+        `WARNING: Upgrade of ${expected} skipped: ${reason}`);
+    }
+  }
+  const line = `WARNING: Upgrade of Ratu Pemanah skipped: ${reason}`;
+  assert.equal(translate(translate(line, 'en'), 'en'), `WARNING: Upgrade of Archer Queen skipped: ${reason}`);
+  assert.equal(translate(line, 'id'), line);
+  assert.equal(translate('WARNING: Upgrade of Custom name skipped: external detail', 'en'),
+    'WARNING: Upgrade of Custom name skipped: external detail');
 });

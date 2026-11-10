@@ -16,6 +16,7 @@ from websockets.asyncio.client import connect
 from websockets.exceptions import WebSocketException
 
 import remote
+import messages
 
 HEARTBEAT_SECONDS = 20  # Realtime drops a socket that sends nothing for 25 s.
 STATE_EVERY_SECONDS = 15  # The dashboard counts the device offline when this goes quiet.
@@ -187,6 +188,11 @@ class Relay:
                                       'join_ref': join_ref}))
 
     async def broadcast(self, socket, name: str, data: dict) -> None:
+        if name in ('log', 'history') and isinstance(data.get('lines'), list):
+            # Old hosted dashboards may lack newer templates. Give them rendered
+            # text, retaining signed originals for clients that can relocalize it.
+            data = {**data, 'source_lines': data['lines'],
+                    'lines': [messages.translate(line) for line in data['lines']]}
         sealed = remote.sealed(self.supervisor.key, data)
         await self.push(socket, self.topic, 'broadcast', {'type': 'broadcast', 'event': name, 'payload': sealed},
                         self.next_ref(), self.join_ref)

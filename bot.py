@@ -3696,8 +3696,10 @@ class Bot:
         return recoveries, progress
 
     def settle_after_memory(self) -> None:
-        self.settle()
-        self.refresh_if_low_memory()
+        # A starved emulator may never reach a recognizable screen. Release its
+        # memory before waiting for one; recover() already settles after a restart.
+        if not self.refresh_if_low_memory():
+            self.settle()
 
     def release_touch(self) -> None:
         """Lift every finger, the zoom node's too: a stop or stall that cuts a hold or pinch short leaves fingers down,

@@ -124,6 +124,27 @@ class MessagesTests(unittest.TestCase):
                     missing[text] = f'{path.name}:{node.lineno}'
         self.assertEqual(missing, {})
 
+    def test_english_wrappers_translate_catalog_names_and_nested_reasons(self):
+        messages.use('en')
+        reason = 'Builders or Laboratory busy; Goblin offer closed without paying gems'
+        source_reason = 'Tukang atau Lab sibuk; tawaran Goblin ditutup tanpa membayar gem'
+        items = json.loads((ROOT / 'village-export-catalog.json').read_text(encoding='utf-8'))['items']
+        cases = [('Ratu Pemanah', 'Archer Queen'), ('Raja Barbar', 'Barbarian King')]
+        # A plain-text name cannot distinguish entities sharing the same Indonesian name.
+        cases += [(item['name_id'], self.english.get(item['name_id'], item['name'])) for item in items.values()]
+        for source, expected in cases:
+            for nested in (reason, source_reason):
+                line = f'WARNING: Upgrade of {source} skipped: {nested}'
+                with self.subTest(name=source, reason=nested):
+                    result = messages.translate(line)
+                    self.assertEqual(result, f'WARNING: Upgrade of {expected} skipped: {reason}')
+                    self.assertEqual(messages.translate(result), result)
+        line = 'WARNING: Upgrade of Custom name skipped: external detail'
+        self.assertEqual(messages.translate(line), line)
+        messages.use('id')
+        line = f'WARNING: Upgrade of Ratu Pemanah skipped: {reason}'
+        self.assertEqual(messages.translate(line), line)
+
     def test_worker_output_stays_canonical_under_either_preference(self):
         with patch.dict(os.environ, {'COC_CANONICAL_LOG': '1'}):
             for language in messages.LANGUAGES:

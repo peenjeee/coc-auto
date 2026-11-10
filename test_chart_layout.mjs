@@ -1,7 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {StatsPanel} from './web/stats.js';
+import fs from 'node:fs/promises';
+globalThis.fetch=async url=>({ok:true,json:async()=>JSON.parse(await fs.readFile(url,'utf8'))});
+const {StatsPanel}=await import('./web/stats.js');
 globalThis.document={documentElement:{lang:'en'}};
+
+test('upgrade activity names follow the dashboard language, with or without a level',()=>{
+  assert.equal(StatsPanel.prototype.translateDetail('Jawara Royale upgraded to level 48'),
+    'Royal Champion to level 48');
+  assert.equal(StatsPanel.prototype.translateDetail('Jawara Royale upgraded'),
+    'Building upgraded: Royal Champion');
+});
 
 test('grouped bars leave room for both series at either plot edge',()=>{
   for(const clientWidth of [280,375,500,760])for(const count of [1,12,21,168]){

@@ -106,6 +106,34 @@ class RelayTests(unittest.TestCase):
         lines = [line for payload in self.server.sent('log') for line in payload['lines']]
         self.assertEqual(lines[-3:], ['INFO: line 0', 'INFO: line 1', 'INFO: line 2'])
 
+    def test_online_logs_and_history_are_localized_for_old_clients_and_keep_signed_sources(self):
+        self.addCleanup(messages.use, 'id')
+        messages.use('en')
+        sources = [
+            'WARNING: Upgrade of Ratu Pemanah skipped: Builders or Laboratory busy; Goblin offer closed without paying gems',
+            'WARNING: Upgrade of Raja Barbar skipped: Builders or Laboratory busy; Goblin offer closed without paying gems',
+            'INFO: Menunggu 9m 57s: belum ada pilihan yang bisa di-upgrade sekarang',
+        ]
+        expected = [messages.translate(line) for line in sources]
+        self.assertIn('Archer Queen', expected[0])
+        self.assertIn('Barbarian King', expected[1])
+        self.assertEqual(expected[2], 'INFO: Waiting 9m 57s: nothing picked can be upgraded right now')
+        for line in sources:
+            self.supervisor.log(line)
+        self.assertTrue(until(lambda: any(expected[-1] in p['lines'] for p in self.server.sent('log'))))
+        live = self.server.sent('log')
+        for source, target in zip(sources, expected):
+            self.assertTrue(any(source in p['source_lines'] and target in p['lines'] for p in live))
+        self.server.broadcast(self.topic, 'hello', {})
+        self.assertTrue(until(lambda: self.server.sent('history')))
+        history = self.server.sent('history')[-1]
+        self.assertEqual(history['lines'][-3:], expected)
+        self.assertEqual(history['source_lines'][-3:], sources)
+        self.assertEqual(self.supervisor.history()[-3:], sources)
+        messages.use('id')
+        self.supervisor.log(sources[-1])
+        self.assertTrue(until(lambda: any(sources[-1] in p['lines'] for p in self.server.sent('log'))))
+
     def test_a_signed_command_is_carried_out_and_acknowledged(self):
         body, sig = signed('open_coc', nonce='relay-1')
         self.server.broadcast(self.topic, 'cmd', {'body': body, 'sig': sig})
@@ -123,10 +151,12 @@ class RelayTests(unittest.TestCase):
         ack = self.server.sent('ack')[0]
         self.assertEqual(ack['message'], 'Command rejected: Option cycles must be a number 1..100')
         self.assertEqual(ack['source_message'], 'Perintah ditolak: Pilihan cycles harus angka 1..100')
-        expected = 'REMOTE: ' + ack['source_message']
+        expected = 'REMOTE: ' + ack['message']
         self.assertTrue(until(lambda: any(expected in payload['lines'] for payload in self.server.sent('log'))))
         lines = [line for payload in self.server.sent('log') for line in payload['lines']]
-        self.assertIn('REMOTE: ' + ack['source_message'], lines)
+        self.assertIn('REMOTE: ' + ack['message'], lines)
+        sources = [line for payload in self.server.sent('log') for line in payload['source_lines']]
+        self.assertIn('REMOTE: ' + ack['source_message'], sources)
 
     def test_a_command_with_a_wrong_signature_gets_no_answer(self):
         body, sig = signed('kill_ld', nonce='relay-2', key='coc_someone_else_entirely_0000000000')

@@ -329,7 +329,9 @@ equipment (`gear`), in the Builder Base its buildings (`builder`) and Star Labor
 targets in priority order, `{"id", "name", "level"}` with `level` `null` for Max. Each round looks at every list with
 targets in turn, Home Village buildings first. For each it reads the gold, elixir and dark elixir on
 hand from the resource bars (`capacity.home`) and the free builders from the village's "1/6" counter
-(`building_upgrade.free_builders`), opens the builder list on that list's tab and reads every row like the scan. It
+(`building_upgrade.free_builders`). A matching Goblin portrait excludes the paid Goblin slot from that count;
+Goblin use still needs its separate opt-in and gem checks. A confirmed full queue waits for its running timer,
+bounded at six hours; a refusal learned only from a dialog keeps a short recheck. It opens the builder list on that list's tab and reads its actionable rows. It
 takes the first target, in the order picked, with a row that is not upgrading now, whose next level does not pass the
 target level (any level for Max) and whose cost is covered by the resource on hand (for equipment: every ore cost
 read), as long as the list has room: more builders free than `keep_builders` for buildings (for example 1 to leave a
@@ -575,45 +577,50 @@ Your own resolution and DPI are kept in `~/.coc-auto/display.json` and are put b
 with **Ctrl+C**, when a `--no-remote` run ends, or with "restore my screen". LDPlayer is restarted for a restore only
 if it is running.
 
-**Upgrade** (its own page, after Stats): "Scan buildings" reads the game's own builder list ("Buildings & Heroes" /
-"Bangunan dan Pahlawan"), which shows only the buildings, traps and heroes the village has that its Town Hall still lets you
-upgrade, so it fits any Town Hall. The bot needs the Home Village on screen (a list left open is closed first; popups
-such as the inactivity reload are handled as in a run), opens the list, swipes it from its top to its end and closes
-it again. It never taps a row, an upgrade button or a confirm, so nothing is upgraded or bought. Each row comes back
-with its name, count ("Archer Tower x 4"), the level the upgrade reaches (the badge on the icon), time, cost and its
-resource (told by the coin), and its section: upgrading now, suggested or the rest. Names are matched in English and
-Indonesian against `buildings.json` (id and category: defenses, army, resources, traps, heroes, other); a name it
-does not know is kept as read, under other. Building names are read with Tesseract, the digits with the bot's own
-templates (`calibration/digits`, the timer letters in `calibration/units`, the badge's small digits in
-`calibration/badge`). The scan is refused while the bot is running, takes about a minute and works from the local and
-the online dashboard. Rows still locked (shown last with a padlock, in any game language) come back too, named from
-the catalog with section `locked` and no level, time or cost, and are shown under their own "Terkunci"/"Locked" group
-in every list; they can be ticked like any row.
+**Upgrade** (its own page, after Stats): **Sync from game** opens the profile, Settings, More Settings and
+**Data Export**, locates the export row and presses **Copy**. LDPlayer synchronizes the JSON to the Windows
+clipboard. The bot validates that a new export was copied and returns to the village. A single sync refreshes all
+six tabs with the game's exact current levels, grouped counts and running-upgrade timers; these values use no OCR.
+The screen must be 1280x720, the game must use English or Indonesian, and LDPlayer clipboard synchronization must
+be enabled. Stop farming first; sync is refused while a task runs. The sync returns to the village after copying the export.
+Game IDs are mapped using the pinned `village-export-catalog.json`; `scripts/sync_export_catalog.py` refreshes it.
+Different levels of the same building stay separate. Completed groups at their pinned global maximum level are hidden from
+the available list. Lower-level copies, running upgrades, unknown IDs and levels newer than the catalog stay visible.
+Filtering also applies to saved scans; it does not remove raw inventory or existing queue selections. Unknown IDs and modular items without a building level are
+shown read-only, rather than assigned a guessed level. Walls use the separate wall-upgrade task.
+The export does not supply upgrade prices or the game's suggested/locked-row ordering. Sync does not invent those
+values. The upgrade worker still finds actual upgrade rows and checks current prices, resource icons, dialogs and
+gems visually before any purchase. This safety checking continues to use its existing OCR and templates.
 The last scan is kept on the PC, in the same `.coc-auto/stats.sqlite3` as the stats (next to the config, not in git),
 and shown again when the dashboard is reopened, with its date and time; running upgrades count down from that scan,
-and **Scan again** reads the list afresh and replaces it.
-After a scan, tick the rows the **upgrade buildings** task (`--buildings`) should upgrade: the first ticked goes first
-(its number shows beside the name), and each ticked row takes the level to stop at, or stays empty for Max. A running
-upgrade can be ticked too: it is waited for and then upgraded on until its level or the list's end (maxed for the Town
-Hall). **Keep builders free** leaves that many builders for something else, walls for example. Below it, in the Home
-Village lists, **Use the Goblin Builder (uses gems)**, **Use the Goblin Researcher (Laboratory & pets)** and **max
-gems per hire** (0–1000, 0 never; both off by default) are saved with their own button as `goblin` in
-`config.local.json` (see [Upgrading buildings](#upgrading-buildings)); the device refuses anything else.
-**Save selection** sends the pick to the device, which checks it (known building ids, walls excluded; levels 1–200;
-0–10 builders) and saves it to `config.local.json` as `buildings`; the saved pick comes back with the settings when
-the dashboard connects, and is listed in order above the scan. It applies at the next Start. The run setup's
-**upgrade buildings** task takes only the time limit and recoveries.
-The page picks a village, then one of the tabs at the bottom of that village's list: in the Home Village
-**Buildings**, **Laboratory** ("Army Upgrades" / "Peningkatan Pasukan"), **Pets** ("Hero Pets" / "Hewan Pahlawan") and
-**Hero equipment** (the anvil, "Peralatan Pahlawan"); in the Builder Base **Buildings** and **Star Laboratory**. Each
-has its own scan button, its own last scan (kept in `.coc-auto/stats.sqlite3` like the buildings one, under its
-village) and its own pick. A Builder Base scan takes the boat there first. Any other tab's scan opens the list, taps
-that tab, reads it from its top to its end the same way, taps the builders tab again and closes the list; locked rows
-come under "Terkunci"/"Locked" here too. A tab sits where a row's upgrade dialog has its confirm button, so a tab is tapped only while the list's
-own close button shows undimmed: a dialog over the list is closed with its X first, anything else stops the scan with
-no tap. Names are matched against each list's own catalog (`buildings.json`, `research.json` for research and pets,
-`gear.json`, `builder.json`, `star.json`), so "Raksasa" (Giant) is not taken for "Bom Raksasa" (Giant Bomb). Hero
-equipment rows show each ore cost (shiny, glowy, starry) on its own line; an amount that does not read shows "?".
+and **Sync again** copies a fresh export. A stale clipboard or invalid export preserves previous scans.
+The original JSON is kept locally in `.coc-auto/village-export.json`.
+**Ongoing** shows running upgrades from all six saved lists, ordered by expected finish time. Compact cards show
+the entity, level change, remaining time and a progress bar. The last-sync time stays visible; countdowns update
+locally without additional ADB screenshots. Use **Sync again** to refresh the game's timers. A countdown reaching
+zero says **Ready to check** until another sync confirms completion. Standard catalog durations support estimated
+progress, marked `~`; discounts, boosts and helpers can change the actual duration. Unknown durations have no
+invented percentage. Expected finish times are available by hovering the remaining time and in its accessible label.
+
+Artwork uses six bundled sprite sheets instead of individual entity images; see
+[artwork regeneration and size tradeoffs](web/icons/entities/README.md).
+
+Confirmed upgrades are recorded locally in `.coc-auto/upgrade-history.sqlite3`. When the action screen has no
+readable level, reporting uses the last export and confirmed receipts where they identify one unambiguous level.
+Mixed-level groups stay unspecified. This history affects logs only; purchase checks continue to use the game screen.
+
+Use the tabs and search to find an upgrade, then choose **Add** to put it in the queue.
+Choose **Remove** to take it out. Drag the queue handle to change priority; keyboard users can focus the handle,
+and use Up, Down, Home or End to change its position. Each target can stop at **Max** or a chosen
+**Level**. Queue edits stay in the browser until **Save queue** is pressed and are preserved when switching tabs.
+The number of builders to keep free applies to Home Village buildings.
+
+**Goblin helpers** has separate Builder and Researcher switches and a per-upgrade gem limit. These settings have
+their own save button. The helper may spend gems only when enabled and within the saved limit.
+
+The six tabs cover Home Village Buildings, Laboratory, Pets and Equipment, plus Builder Base Buildings and Star
+Laboratory. Each has its own queue and saved rows. Syncing any tab refreshes every tab from the same export.
+Names are resolved by numeric game ID, so similarly named buildings and troops are not confused.
 Picks other than the Home Village buildings keep no builders free and are saved to `config.local.json` under the
 list's name (`lab`, `pets`, `gear`, `builder`, `star`). The **upgrade buildings** task works through every list's
 picks (see [Upgrading buildings](#upgrading-buildings)).
@@ -843,7 +850,7 @@ How to change it:
 | `ldconsole`, `ld_index` | LDPlayer console and instance index, used to start a stopped emulator. |
 | `touch_device` | Raw touch input device, e.g. `/dev/input/event4`. |
 | `language` | Terminal, CLI help and calibration instruction language: `id` (default) or `en`. The dashboard's ID/EN switch saves it in `config.local.json`; supervised logs switch immediately without restarting the task. Each dashboard renders recent history in its own selected language. Game recognition is unchanged. |
-| `tesseract` | Tesseract executable; reads building names for the building scan, and loot only when `digits` is not set. |
+| `tesseract` | Tesseract executable; reads upgrade-action rows, and loot only when `digits` is not set. Village sync uses game JSON. |
 | `minimum` | Loot filter for Home Village opponents (`0` disables a resource). |
 | `remote` | Web dashboard: the online relay's address and token (`relay_url`, `relay_key`), local `port` (8765), and the `dashboard` address printed in the terminal. |
 | `screens.<name>.anchors` | Two or more UI crops that must all match to identify a screen; optional `margin` for small UI shifts. |
@@ -944,6 +951,9 @@ game_update.py         Play Store Update button and installed game version, for 
 device_control.py      CoC and LDPlayer controls and the screen switch for the dashboard
 buildings.py           building scan (names, counts, level badges, times, costs, sections), the pick and its checks
 upgrades.py            --buildings: the picks of the Home Village lists upgraded in turn
+village_export.py      automatic village JSON copy, validation and six-list conversion
+upgrade_history.py     confirmed upgrade receipts and reporting-only level history
+village-export-catalog.json pinned numeric game IDs and localized names
 buildings.json         building names in English and Indonesian, with their id and category
 research.json          Laboratory research and pet names in English and Indonesian, with their id and category
 gear.py                hero equipment tab: names, level badges and ore costs, and the Blacksmith dialog check
@@ -970,6 +980,12 @@ test_dashboard_features.py stats from the log, Discord settings and sender, stat
 test_web.mjs           dashboard text in both languages (node --test)
 test_visible_poller.mjs live view polling only while the page is in view (node --test)
 test_chart_layout.mjs  stats chart layout (node --test)
+test_upgrade_icons.mjs local artwork coverage and level selection (node --test)
+test_upgrade_drafts.mjs late save replies and village sync preserve queue and Goblin edits (node --test)
+test_upgrade_progress.mjs countdowns, estimates, expired and unknown timers (node --test)
+test_upgrade_sprites.py repeatable sprite generation and alpha preservation
+test_village_export.py export validation, navigation and catalog identities
+test_upgrade_history.py confirmed receipts, sync checkpoints and safe level reporting
 fixtures/              real screen crops and Play Store screens the tests read
 requirements.txt       Python dependencies (OpenCV, NumPy, websockets)
 config.json            calibration for the current game UI

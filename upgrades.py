@@ -11,6 +11,7 @@ runs long is spent with CoC closed."""
 from __future__ import annotations
 
 import logging
+import math
 import time
 
 import cv2
@@ -20,6 +21,7 @@ import bot
 import buildings
 import gear
 import messages
+import upgrade_history
 
 LOG = logging.getLogger(__name__)
 # Free slots on the open list's tab bar ([x, y, w, h] at 1280x720), free/total. The Home builders' counter there does
@@ -361,7 +363,7 @@ def marked_row(image: np.ndarray, spec: dict) -> int | None:
 
 
 def upgrade(runner: bot.Bot, listing: str, spec: dict, frames: list, place: int, row: dict, program: str,
-            digits: dict, rules: dict = RULES_OFF, amounts: dict | None = None) -> bool:
+            digits: dict, rules: dict = RULES_OFF, amounts: dict | None = None, indonesian: bool = False) -> bool:
     """Tap the row with the list in front (the game opens its upgrade dialog) and confirm only when the dialog asks
     the row's own price; False when the dialog was closed unconfirmed. A building's dialog that points at another
     building first (a red note with Go, or the Town Hall's "Upgrade Locked") has that one upgraded instead, never its
@@ -396,7 +398,7 @@ def upgrade(runner: bot.Bot, listing: str, spec: dict, frames: list, place: int,
     done = settle(runner, dialog, check, 0 if listing in UNPAID_GEMS else goblin_gems(rules, builds), row['name'],
                   button)
     if done:
-        LOG.info(DONE[listing], row['name'], row['next_level'])
+        report_upgrade(runner,listing,row,indonesian)
     return done
 
 
@@ -410,6 +412,21 @@ def unlock(runner: bot.Bot, listing: str, spec: dict, frames: list, place: int, 
     return follow_locked(runner, listing, spec, amounts, goblin_gems(rules, True), row['name'])
 
 
+def busy_wait(runner: bot.Bot, queue: tuple) -> int:
+    """A bounded capacity refusal shared by tasks using the same builders/slot."""
+    until = getattr(runner, 'upgrade_busy_until', {}).get(queue, 0)
+    return max(0, math.ceil(until - time.monotonic()))
+
+
+def mark_busy(runner: bot.Bot, queue: tuple, seconds: int, *, confirmed: bool = False) -> None:
+    # A dialog-only refusal gets a short recheck. Confirmed capacity readings
+    # can wait for the running timer, bounded by the normal six-hour limit.
+    if not hasattr(runner, 'upgrade_busy_until'):
+        runner.upgrade_busy_until = {}
+    limit = CLOSED_WAIT_MAX_SECONDS if confirmed else buildings.WAIT_MAX_SECONDS
+    runner.upgrade_busy_until[queue] = time.monotonic() + max(1, min(seconds, limit))
+
+
 def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: str, templates: dict,
           rules: dict = RULES_OFF) -> tuple:
     """One look at a list: (whether a row was upgraded, whether a target still has something left, seconds until the
@@ -417,6 +434,10 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
     a builder or slot free for it, else None). The list is opened on its tab, read whole, at most one row tapped, and
     closed from the builders tab again."""
     village, tab, path = buildings.LISTS[listing]
+    queue = (village, 'builders') if listing in ('buildings', 'builder') else (listing, 'slot')
+    waiting = busy_wait(runner, queue)
+    if waiting:
+        return False, True, waiting, None
     spec = runner.config['walls'][village]
     runner.navigate(village)
     runner.find_gem_row(spec)
@@ -432,23 +453,32 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
         placed = (gear.placed_rows(frames, spec, templates, program) if listing == 'gear'
                   else buildings.placed_rows(frames, spec, templates, program, path))
         choice, pending = buildings.pick(placed, chosen['targets'], amounts, refused)
+        seconds = buildings.pause_seconds([item for item, _ in placed], indonesian)
         locked = choice is not None and choice[0]['section'] == 'locked'
         builds = builds or locked
+        capacity_queue = (village, 'builders') if builds or listing == 'builder' else queue
+        waiting = busy_wait(runner, capacity_queue)
         if choice is None and pending:
             resource = buildings.shortfall(placed, chosen['targets'], amounts, refused)
-            if resource in amounts and room(runner, listing, rules, builders):
+            if not waiting and resource in amounts and room(runner, listing, rules, builders):
                 short = (village, resource)
-        if choice is not None and room(runner, listing, rules, builders, locked):
+        allowed = not waiting and (choice is None or room(runner, listing, rules, builders, locked))
+        if choice is not None and not allowed and not waiting:
+            mark_busy(runner, capacity_queue, seconds, confirmed=True)
+        if choice is not None and allowed:
             row, place = choice
+            capacity_blocked = False
             try:
                 done = (unlock(runner, listing, spec, frames, place, row, program, rules, amounts) if locked else
                         upgrade(runner, listing, spec, frames, place, row, program, templates['digits'], rules,
-                                amounts))
+                                amounts,indonesian))
             except bot.NoFreeBuilder as exc:
                 LOG.warning('Upgrade %s dilewati: %s', row['name'], exc)
+                mark_busy(runner, capacity_queue, seconds)
+                capacity_blocked = True
             if done:
                 runner.progress += 1
-            else:
+            elif not capacity_blocked:
                 refused.add(buildings.row_key(row))
     finally:
         if tab != first:
@@ -462,7 +492,33 @@ def visit(runner: bot.Bot, listing: str, chosen: dict, refused: set, program: st
             if after >= builders:
                 LOG.warning('Tukang bebas tidak berkurang setelah upgrade %s (%s -> %s); cek game', row['name'],
                             builders, after)
-    return done, pending, buildings.pause_seconds([item for item, _ in placed], indonesian), short
+    waiting = busy_wait(runner, capacity_queue)
+    return done, pending, min(seconds, waiting) if waiting else seconds, short
+
+
+def report_upgrade(runner, listing, row, indonesian=False):
+    target = row.get('next_level')
+    root = getattr(runner,'root',None)
+    if root is not None:
+        try:
+            target = upgrade_history.record(root,listing,row,buildings.seconds(row.get('time'),indonesian),
+                                            allow_inference=not getattr(runner,'level_history_uncertain',False))
+        except Exception:
+            # A reporting failure must not retry a purchase that already succeeded.
+            runner.level_history_uncertain=True
+            try:
+                upgrade_history.invalidate(root)
+            except OSError:
+                pass
+            LOG.warning('Riwayat level upgrade tidak tersimpan; level hanya dari layar')
+    try:
+        name = upgrade_history.canonical_name(listing,row)
+    except (OSError,ValueError,KeyError):
+        name = row['name']
+    if type(target) is int and 1 <= target <= 200:
+        LOG.info(DONE[listing],name,target)
+    else:
+        LOG.info(DONE[listing].split(' ke level')[0],name)
 
 
 def pause(runner: bot.Bot, seconds_left: int, reason: str) -> None:
@@ -475,9 +531,9 @@ def pause(runner: bot.Bot, seconds_left: int, reason: str) -> None:
     closed = runner.live and seconds_left >= CLOSED_WAIT_MIN_SECONDS
     if not closed:
         seconds_left = min(seconds_left, buildings.WAIT_MAX_SECONDS)
-    LOG.info('Menunggu %s detik: %s', seconds_left, reason)
+    LOG.info('Menunggu %s: %s', messages.duration(seconds_left), reason)
     if closed:
-        LOG.info('CoC ditutup selama menunggu; dibuka lagi setelah %s detik', seconds_left)
+        LOG.info('CoC ditutup selama menunggu; dibuka kembali dalam %s', messages.duration(seconds_left))
         runner.device.stop_game()
     time.sleep(seconds_left if runner.poll else 0)
     if closed:
@@ -503,6 +559,7 @@ def run(runner: bot.Bot, chosen: dict, searches: int = 0) -> int:
     rules = {'keep_builders': chosen['buildings']['keep_builders'],
              'goblin': buildings.goblin(runner.config.get('goblin', buildings.GOBLIN_OFF))}
     refused, upgraded = set(), 0
+    runner.upgrade_busy_until = {}
     while lists:
         tried, before, waits, left, shorts = len(refused), upgraded, [], [], []
         for listing in lists:

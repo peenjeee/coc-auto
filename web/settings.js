@@ -1,7 +1,7 @@
 // Device settings: the loot minimums the Home Village search skips opponents by, and where LDPlayer is on the
 // device. Auto-detect only fills the form with what the device found; nothing changes until save is pressed.
-import { t } from './i18n.js';
-import { translate } from './messages.js';
+import { t } from './i18n.js?v=4';
+import { translate } from './messages.js?v=4';
 
 const MINIMUM = ['gold', 'elixir', 'dark'];
 const SETUP = ['adb', 'ldconsole', 'serial', 'ld_index', 'touch_device'];

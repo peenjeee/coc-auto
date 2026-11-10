@@ -1,0 +1,15 @@
+{
+  "artwork": "Clash of Clans game art by Supercell",
+  "source": "https://github.com/ClashKingInc/ClashKingAssets",
+  "revision": "fdac291ae7fbc2901221ff945834be534d0344ae",
+  "assets": {
+    "buildings.webp": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/fdac291ae7fbc2901221ff945834be534d0344ae/assets/buildings/home-village/town_hall/level_1.webp",
+    "lab.webp": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/fdac291ae7fbc2901221ff945834be534d0344ae/assets/buildings/home-village/laboratory/level_1.webp",
+    "pets.png": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/fdac291ae7fbc2901221ff945834be534d0344ae/assets/bot/icons/pet_paw.png",
+    "equipment.webp": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/fdac291ae7fbc2901221ff945834be534d0344ae/assets/bot/icons/equipment_anvil.webp",
+    "builder.webp": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/fdac291ae7fbc2901221ff945834be534d0344ae/assets/buildings/builder-base/builder_hall/level_1.webp",
+    "star.webp": "https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/fdac291ae7fbc2901221ff945834be534d0344ae/assets/buildings/builder-base/star_laboratory/level_1.webp",
+    "goblin_helper.png": "https://sc-clashofclans.zendesk.com/hc/article_attachments/49530538892315"
+  },
+  "goblin_helper_source": "https://sc-clashofclans.zendesk.com/hc/en-us/articles/49529091450779-Work-for-Hire-Event"
+}

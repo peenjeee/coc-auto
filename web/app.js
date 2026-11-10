@@ -2,16 +2,16 @@
 // bot on this PC directly; online it goes through the relay channel named after the key's hash, and
 // only trusts messages signed with the key, so nobody else on the channel can pose as the device.
 import { RELAY_URL, RELAY_KEY } from './config.js';
-import { applyLanguage, t } from './i18n.js';
-import { translate } from './messages.js';
+import { applyLanguage, t } from './i18n.js?v=4';
+import { translate } from './messages.js?v=4';
 import { RealtimeChannel } from './realtime.js';
-import { DeployEditor } from './deploy.js';
-import { SettingsPanel } from './settings.js?v=3';
-import { setupSelects, refreshSelects } from './select.js';
-import { StatsPanel, previewStatistics } from './stats.js?v=9';
-import { DiscordPanel } from './discord.js?v=5';
+import { DeployEditor } from './deploy.js?v=3';
+import { SettingsPanel } from './settings.js?v=9';
+import { setupSelects, refreshSelects } from './select.js?v=2';
+import { StatsPanel, previewStatistics } from './stats.js?v=17';
+import { DiscordPanel } from './discord.js?v=7';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=7';
+import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=20';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -191,6 +191,8 @@ function handleResult(result, quiet = false) {
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
+    if (result.code === 'buildings_saved') buildings.acknowledge(result.data);
+    if (result.code === 'goblin_saved') buildings.acknowledgeGoblin(result.data);
     buildings.select(result.data);
     if (result.code === 'settings_loaded' && !initialDisplayChecked) {
       initialDisplayChecked = true;
@@ -274,11 +276,11 @@ class RelayLink {
       showState(data);
     } else if (event === 'log') {
       setOnline(true);
-      addLines(Array.isArray(data.lines) ? data.lines : []);
+      addLines(Array.isArray(data.source_lines) ? data.source_lines : Array.isArray(data.lines) ? data.lines : []);
     } else if (event === 'history') {
       setOnline(true);
       clearLines();
-      addLines(Array.isArray(data.lines) ? data.lines : []);
+      addLines(Array.isArray(data.source_lines) ? data.source_lines : Array.isArray(data.lines) ? data.lines : []);
       showState(data.state);
     } else if (event === 'snapshot') {
       editor.image(data.screen, data.image);
@@ -626,7 +628,8 @@ function init() {
 const DEMO_DEPLOY = {"resolution": [1280, 720], "screens": {"home_scout": {"kind": "spells", "deploy": [125, 346], "points": [[380, 346], [290, 271], [290, 421], [500, 346], [410, 271], [410, 421], [620, 346], [530, 271], [530, 421], [740, 346], [650, 271], [650, 421]], "bar": [0, 598, 1280, 106]}, "home_ring": {"kind": "ring", "deploy": [125, 346], "points": [[141, 299], [243, 232], [356, 156], [470, 82], [810, 82], [924, 156], [1037, 232], [1139, 299], [1139, 391], [1037, 458], [924, 534], [243, 458], [141, 391]], "bar": [0, 598, 1280, 106]}, "home_spell_spread": {"kind": "spell_spread", "deploy": [125, 346], "points": [[640, 330], [490, 321], [521, 301], [555, 278], [589, 256], [691, 256], [725, 278], [759, 301], [795, 321], [795, 348], [759, 368], [725, 391], [640, 399], [521, 368], [490, 348]], "bar": [0, 598, 1280, 106]}, "home_quake": {"kind": "quake", "deploy": [125, 346], "points": [[640, 150], [960, 330], [640, 520], [320, 330]], "bar": [0, 598, 1280, 106]}, "builder_scout": {"kind": "points", "deploy": [150, 370], "points": [[345, 120], [850, 140], [1027, 264], [1000, 500], [380, 513], [238, 340]], "bar": [0, 588, 1280, 120]}, "builder_stage2": {"kind": "points", "deploy": [73, 299], "points": [[396, 92], [830, 51], [926, 134], [921, 457], [263, 359], [254, 205], [982, 308], [413, 489]], "bar": [0, 588, 1280, 120]}}};
 
 const DEMO_BUILDINGS = [
-  {id:'eagle_artillery',name:'Eagle Artillery',category:'defense',count:1,next_level:null,time:'17h 57m',seconds:64620,cost:null,currency:null,section:'in_progress'},
+  {id:'archer_queen',name:'Archer Queen',category:'hero',count:1,current_level:77,next_level:78,seconds:129600,duration_seconds:345600,section:'in_progress'},
+  {id:'eagle_artillery',name:'Eagle Artillery',category:'defense',count:1,current_level:5,next_level:6,time:'17h 57m',seconds:64620,cost:null,currency:null,section:'in_progress'},
   {id:'barbarian_king',name:'Barbarian King',category:'hero',count:1,next_level:11,time:'11h',cost:5250,currency:'dark',section:'suggested'},
   {id:'hero_hall',name:'Hero Hall',category:'army',count:1,next_level:10,time:'4d',cost:6500000,currency:'elixir',section:'suggested'},
   {id:'archer_tower',name:'Archer Tower',category:'defense',count:3,next_level:8,time:'2h',cost:100000,currency:'gold',section:'other'},
@@ -634,6 +637,7 @@ const DEMO_BUILDINGS = [
   {id:'spring_trap',name:'Spring Trap',category:'trap',count:9,next_level:2,time:'30m 0s',cost:65000,currency:'gold',section:'other'},
 ];
 const DEMO_LAB = [
+  {id:'root_rider',name:'Root Rider',category:'troop',count:1,current_level:2,next_level:3,seconds:93600,duration_seconds:259200,section:'in_progress'},
   {id:'valkyrie',name:'Valkyrie',category:'dark_troop',count:1,next_level:6,time:'1d',cost:15750,currency:'dark',section:'suggested'},
   {id:'balloon',name:'Balloon',category:'troop',count:1,next_level:10,time:'3d 12h',cost:5000000,currency:'elixir',section:'suggested'},
   {id:'giant',name:'Giant',category:'troop',count:1,next_level:5,time:'6h',cost:400000,currency:'elixir',section:'other'},
@@ -642,7 +646,7 @@ const DEMO_LAB = [
   {id:'wall_wrecker',name:'Wall Wrecker',category:'siege',count:1,next_level:2,time:'1d',cost:1250000,currency:'elixir',section:'other'},
 ];
 const DEMO_PETS = [
-  {id:'lassi',name:'L.A.S.S.I',category:'pet',count:1,next_level:null,time:'13h 57m',seconds:50220,cost:null,currency:null,section:'in_progress'},
+  {id:'lassi',name:'L.A.S.S.I',category:'pet',count:1,current_level:10,next_level:11,time:'13h 57m',seconds:50220,cost:null,currency:null,section:'in_progress'},
 ];
 const DEMO_GEAR = [
   {id:'giant_gauntlet',name:'Giant Gauntlet',category:'equipment',count:1,next_level:21,costs:{shiny:3000,glowy:600,starry:100},section:'equipped'},
@@ -650,12 +654,12 @@ const DEMO_GEAR = [
   {id:'barbarian_puppet',name:'Barbarian Puppet',category:'equipment',count:1,next_level:6,costs:{shiny:840,glowy:null},section:'unequipped'},
 ];
 const DEMO_BUILDER = [
-  {id:'battle_machine',name:'Battle Machine',category:'hero',count:1,next_level:null,time:'6d 27m',seconds:519000,cost:null,currency:null,section:'in_progress'},
+  {id:'battle_machine',name:'Battle Machine',category:'hero',count:1,current_level:30,next_level:31,time:'2d 4h',seconds:187200,duration_seconds:518400,cost:null,currency:null,section:'in_progress'},
   {id:'battle_copter',name:'Battle Copter',category:'hero',count:1,next_level:19,time:'5d',cost:2900000,currency:'elixir',section:'suggested'},
   {id:'mega_tesla',name:'Mega Tesla',category:'defense',count:1,next_level:2,time:'3d',cost:3100000,currency:'gold',section:'other'},
 ];
 const DEMO_STAR = [
-  {id:'night_witch',name:'Night Witch',category:'troop',count:1,next_level:null,time:'1d 23h',seconds:169000,cost:null,currency:null,section:'in_progress'},
+  {id:'night_witch',name:'Night Witch',category:'troop',count:1,current_level:16,next_level:17,time:'1d 23h',seconds:169000,cost:null,currency:null,section:'in_progress'},
   {id:'cannon_cart',name:'Cannon Cart',category:'troop',count:1,next_level:11,time:'2d',cost:1400000,currency:'elixir',section:'suggested'},
 ];
 const DEMO_SCANS = {buildings:DEMO_BUILDINGS, lab:DEMO_LAB, pets:DEMO_PETS, gear:DEMO_GEAR, builder:DEMO_BUILDER, star:DEMO_STAR};

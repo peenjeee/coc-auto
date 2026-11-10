@@ -54,7 +54,13 @@ STATIC_FILES = {'/icons/stats/attacks.png': 'icons/stats/attacks.png',
                 '/manifest.webmanifest': 'manifest.webmanifest', '/sw.js': 'sw.js',
                 '/icons/icon-192.png': 'icons/icon-192.png', '/icons/icon-512.png': 'icons/icon-512.png',
                 '/icons/icon-maskable-512.png': 'icons/icon-maskable-512.png',
-                '/icons/apple-touch-icon.png': 'icons/apple-touch-icon.png'}
+                '/icons/apple-touch-icon.png': 'icons/apple-touch-icon.png',
+                '/upgrade-icons.js': 'upgrade-icons.js', '/upgrade-times.js': 'upgrade-times.js', '/upgrade-progress.js': 'upgrade-progress.js', '/upgrade-sprites.js': 'upgrade-sprites.js', '/upgrade-portrait.js': 'upgrade-portrait.js',
+                '/upgrade-availability.js': 'upgrade-availability.js', '/upgrade-max-levels.js': 'upgrade-max-levels.js',
+                **{'/' + path.relative_to(WEB_DIR).as_posix(): path.relative_to(WEB_DIR).as_posix()
+                   for folder in ('icons/entities', 'icons/upgrades', 'icons/sprites')
+                   for path in (WEB_DIR / folder).rglob('*')
+                   if path.is_file() and path.suffix in ('.webp', '.png', '.svg', '.json')}}
 CONTENT_TYPES = {'.webp': 'image/webp', '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
                  '.json': 'application/json; charset=utf-8',
                  '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
@@ -676,10 +682,18 @@ class Supervisor:
             return self.configure(action, options)
         if action == 'scan_buildings':
             listing = choice(options, 'list', SCAN_LISTS, 'buildings')
-            # The scan taps the game (open, swipe, close the builder list); a running bot would fight it.
+            # Export navigation taps the game; a running bot would fight it.
             if self.running():
                 raise CommandRefused('hentikan bot dulu; scan bangunan mengetuk layar game')
             scan = {'list': listing, 'scanned_at': time.time(), 'rows': self.device.scan_buildings(listing)}
+            snapshot = getattr(self.device, 'last_village_scan', None)
+            if isinstance(snapshot, dict) and isinstance(snapshot.get('lists'), dict):
+                scans = [{'list': name, 'scanned_at': snapshot['scanned_at'], 'rows': rows}
+                         for name, rows in snapshot['lists'].items() if name in SCAN_LISTS]
+                for saved in scans:
+                    self.keep_scan(saved)
+                scan = next(saved for saved in scans if saved['list'] == listing)
+                scan = {**scan, 'lists': scans, 'source': 'game_export'}
             self.keep_scan(scan)
             return 'buildings_scanned', SCAN_DONE[listing].format(len(scan['rows'])), scan
         if action == 'get_buildings':

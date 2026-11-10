@@ -35,7 +35,8 @@
     "elixir_collector": ["Elixir Collector", "Pengumpul Eliksir"],
     "gold_storage": ["Gold Storage", "Penyimpanan Emas"],
     "elixir_storage": ["Elixir Storage", "Penyimpanan Eliksir"],
-    "gem_mine": ["Gem Mine", "Tambang Permata"]
+    "gem_mine": ["Gem Mine", "Tambang Permata"],
+    "b_o_b_control": ["B.O.B Control", "Pusat Kendali B.O.B"]
   },
   "hero": {
     "battle_machine": ["Battle Machine", "Mesin Pertempuran"],
