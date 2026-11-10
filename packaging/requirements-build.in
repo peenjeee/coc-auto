@@ -1,0 +1,7 @@
+# Deliberate updates only; regenerate requirements-build.txt with uv pip compile.
+setuptools==80.9.0
+pyinstaller==6.16.0
+zstandard==0.23.0
+opencv-python==4.12.0.88
+numpy==2.2.6
+websockets==15.0.1

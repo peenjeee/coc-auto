@@ -1,0 +1,18 @@
+CoC Auto for Windows
+
+1. Extract the entire ZIP (right-click it, then Extract All).
+2. Open LDPlayer and Clash of Clans.
+3. Double-click CoC Auto.exe. Your browser opens the dashboard.
+
+Keep the launcher window open while using the app. Close it to quit.
+In Device settings, follow the setup checklist, then check your village.
+Python, Git, and Tesseract do not need to be installed.
+
+Already have an installation? Close CoC Auto, double-click
+"Import existing setup.cmd", and select the OLD installation folder.
+The importer backs up existing destination files and keeps the old folder untouched.
+
+To update: close CoC Auto and extract the newer release into a new folder.
+Your saved settings live in %LOCALAPPDATA%\CoC Auto.
+
+Help: https://github.com/peenjeee/coc-auto/blob/main/docs/user/troubleshooting.md
