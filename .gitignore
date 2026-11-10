@@ -9,11 +9,7 @@ captures/
 .pi/
 *.png
 *.log
-!calibration/**/*.png
-!calibration-legacy/**/*.png
 !docs/*.png
-!fixtures/*.png
-!fixtures/opponent-readiness/*.png
 !web/icons/*.png
 config.json.bak
 config.json.tmp
@@ -28,3 +24,15 @@ config.local.json.tmp
 !web/icons/stats/*.png
 
 !web/icons/upgrades/*.png
+
+# Generated packages and build caches
+build/
+dist/
+*.egg-info/
+!src/coc_auto/resources/calibration/**/*.png
+!src/coc_auto/resources/calibration-legacy/**/*.png
+!tests/fixtures/**/*.png
+
+*.local.json
+*.local.json.bak
+*.local.json.tmp

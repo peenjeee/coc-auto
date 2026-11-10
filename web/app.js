@@ -2,11 +2,11 @@
 // bot on this PC directly; online it goes through the relay channel named after the key's hash, and
 // only trusts messages signed with the key, so nobody else on the channel can pose as the device.
 import { RELAY_URL, RELAY_KEY } from './config.js';
-import { applyLanguage, t } from './i18n.js?v=4';
-import { translate } from './messages.js?v=4';
+import { applyLanguage, t } from './i18n.js?v=5';
+import { translate } from './messages.js?v=5';
 import { RealtimeChannel } from './realtime.js';
 import { DeployEditor } from './deploy.js?v=3';
-import { SettingsPanel } from './settings.js?v=9';
+import { SettingsPanel } from './settings.js?v=10';
 import { setupSelects, refreshSelects } from './select.js?v=2';
 import { StatsPanel, previewStatistics } from './stats.js?v=17';
 import { DiscordPanel } from './discord.js?v=7';
@@ -188,6 +188,7 @@ function handleResult(result, quiet = false) {
   else if (['discord_loaded','discord_saved','discord_tested'].includes(result.code)) { discord.load(result.data, result.code); refreshSelects(); }
   else if (result.code === 'deploy_loaded') editor.load(result.data);
   else if (['buildings_scanned', 'buildings_loaded'].includes(result.code)) buildings.load(result.data);
+  else if (result.code === 'setup_checked') settings.checkedSetup(result.data);
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
@@ -464,6 +465,7 @@ function restoreOptions() {
 
 function setBusy(busy) {
   for (const button of document.querySelectorAll('#options button, #deploy-load, #deploy-save, .settings button')) button.disabled = busy;
+  settings?.busy(busy);
   refreshSelects();
   if (!LOCAL) for (const b of document.querySelectorAll('#discord-form button')) b.disabled=true;
   if (discord?.saved) { $('discord-test').disabled=!LOCAL||!discord.saved.configured||discord.dirty; $('discord-remove').disabled=!LOCAL||!discord.saved.configured; }
@@ -575,6 +577,7 @@ function init() {
   setupSelects();
   editor = new DeployEditor((screen, deploy, points) => send('set_deploy', { screen, deploy, points }));
   settings = new SettingsPanel(send);
+  $('setup-continue').addEventListener('click', () => switchView('overview'));
   buildings = new BuildingsPanel(send);
   changeLanguage();
   restoreOptions();
@@ -616,7 +619,10 @@ function init() {
   });
   $('clear').addEventListener('click', clearLines);
   if (DEMO) { openDemo(); return; }
-  const saved = stored.get(STORE_KEY);
+  const fragment = new URLSearchParams(location.hash.slice(1));
+  const localKey = LOCAL ? fragment.get('key') : null;
+  if (localKey) history.replaceState(null, '', location.pathname + location.search);
+  const saved = localKey || stored.get(STORE_KEY);
   if (saved) {
     $('key').value = saved;
     connect(saved);
@@ -846,6 +852,7 @@ class DemoLink {
     else if (action === 'set_language') code='language_saved';
     else if (action === 'set_buildings') {this.picks[args.list]=args.buildings;code='buildings_saved';}
     else if (action === 'set_goblin') {this.picks.goblin=args.goblin;code='goblin_saved';}
+    else if (action === 'check_setup') {code='setup_checked';data={ready:true,screen:'home',display:this.display()};}
     else if (action === 'detect_setup') {code='setup_detected';data={folders:['Demo LDPlayer installation'],instances:[{index:0,name:'Demo device',running:true}],resolution:[1280,720],problems:[]};}
     else if (action === 'open_coc') code='coc_opened';
     else if (action === 'close_coc') {this.state.state='idle';code='coc_closed';}
@@ -886,6 +893,7 @@ async function openDemo() {
   handleResult(await link.send(JSON.stringify({action:'get_discord',args:{}})),true);
   for (const list of BUILDING_LISTS) handleResult(await link.send(JSON.stringify({action:'get_buildings',args:{list}})),true);
   discord.stats(previewStatistics());
-  if (new URLSearchParams(location.search).get('tab') === 'stats') switchView('stats');
+  const previewView = new URLSearchParams(location.search).get('tab');
+  if (['overview', 'stats', 'buildings', 'deploy', 'settings'].includes(previewView)) switchView(previewView);
 }
 init();

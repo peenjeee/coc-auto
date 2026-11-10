@@ -1,4 +1,4 @@
-import {t as tr} from './i18n.js?v=4';
+import {t as tr} from './i18n.js?v=5';
 const $=id=>document.getElementById(id);
 export class DiscordPanel {
   constructor(send,{local=true,preview=false}={}){
