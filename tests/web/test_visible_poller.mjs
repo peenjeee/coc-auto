@@ -59,7 +59,7 @@ test('slow captures never overlap and finishing while hidden schedules nothing',
 
 test('default browser timers are called without the poller as their receiver', async () => {
   let callback, cleared, visible = true;
-  const source = fs.readFileSync(new URL('../../web/visible-poller.js', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../../web/visible-poller.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   const BrowserPoller = vm.runInNewContext(source.replace('export class', 'class') + '\nVisiblePoller;', {
     setTimeout: function (fn, delay) {
       assert.equal(this, undefined, 'a Window timer must not be invoked as a poller method');

@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const source = await fs.readFile(new URL('../../web/settings.js', import.meta.url), 'utf8');
+// Windows checkouts use CRLF; the line-based import stripping below expects LF.
+const source = (await fs.readFile(new URL('../../web/settings.js', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 function fixture() {
   const nodes = new Map();
   const make = id => ({id, value:'', textContent:'', disabled:false, children:[], listeners:{},

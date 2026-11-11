@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
 
-const source = await fs.readFile(new URL('../../web/app.js', import.meta.url), 'utf8');
+// Windows checkouts use CRLF; the indexOf anchors below expect LF.
+const source = (await fs.readFile(new URL('../../web/app.js', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const opened = source.slice(source.indexOf('async function opened('), source.indexOf('\nfunction lineClass('));
 const link = source.slice(source.indexOf('class RelayLink {'), source.indexOf('\n/** @returns {Record<string, unknown>}'));
 const encoder = new TextEncoder();

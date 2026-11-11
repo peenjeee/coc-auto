@@ -1,5 +1,6 @@
 """Regression coverage for packaged/source paths, migration, and launcher lifecycle."""
 
+from contextlib import closing
 import hashlib
 import json
 import os
@@ -179,7 +180,8 @@ class InstallationTests(unittest.TestCase):
         self.assertEqual(
             json.loads((backup / "config.local.json").read_text()), {"language": "id"}
         )
-        with sqlite3.connect(settings / "stats.sqlite3") as copied:
+        # The with-block commits but does not close; close explicitly so Windows can delete the folder.
+        with closing(sqlite3.connect(settings / "stats.sqlite3")) as copied:
             self.assertEqual(
                 copied.execute("SELECT value FROM sample").fetchone()[0], 42
             )
@@ -219,7 +221,7 @@ class InstallationTests(unittest.TestCase):
         settings = paths.user_home()
         migration.import_setup(old, settings, settings)
         shutil.rmtree(old)
-        imported = json.loads((settings / "config.local.json").read_text())
+        imported = json.loads((settings / "config.local.json").read_text(encoding="utf-8"))
         template = imported["screens"]["custom"]["anchors"][0]["file"]
         self.assertEqual(
             bot.asset_path(paths.RESOURCE_ROOT, template).read_bytes(), b"custom"

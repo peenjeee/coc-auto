@@ -29,12 +29,13 @@ class InstanceLock:
         self.acquired = False
 
     def acquire(self) -> bool:
-        self.file.seek(0)
-        if self.file.read(1) == b"":
-            self.file.write(b"0")
-            self.file.flush()
-        self.file.seek(0)
         try:
+            # Windows refuses reads of a byte another handle has locked, so the probe must be guarded too.
+            self.file.seek(0)
+            if self.file.read(1) == b"":
+                self.file.write(b"0")
+                self.file.flush()
+            self.file.seek(0)
             if os.name == "nt":
                 import msvcrt
 
