@@ -39,8 +39,12 @@ a.datas += [(f'coc_auto/resources/{file.relative_to(stage).as_posix()}', str(fil
 ocr = root / 'build/ocr'
 a.datas += [(f'ocr/{file.relative_to(ocr).as_posix()}', str(file), 'DATA')
             for file in ocr.rglob('*') if file.is_file()]
-# OpenCV's FFmpeg video backend (~28 MB); the bot never opens video.
-a.binaries = [entry for entry in a.binaries if not Path(entry[0]).name.startswith('opencv_videoio_ffmpeg')]
+# Never loaded: OpenCV's FFmpeg video backend (~28 MB; the bot never opens video), and app-local Universal CRT
+# copies from the build machine's Python (Windows 10 and later always use their own).
+def unused(name):
+    name = Path(name).name.lower()
+    return name.startswith(('opencv_videoio_ffmpeg', 'api-ms-win-')) or name == 'ucrtbase.dll'
+a.binaries = [entry for entry in a.binaries if not unused(entry[0])]
 
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='CoC Auto', debug=False,
