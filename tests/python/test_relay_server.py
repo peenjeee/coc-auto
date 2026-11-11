@@ -172,9 +172,11 @@ class RelayClientTests(unittest.TestCase):
                 await join(dashboard, self.topic, '9')
                 # A state change on the device is broadcast to the channel members.
                 self.supervisor.publish('state', self.supervisor.state())
-                name, sealed = await next_broadcast(dashboard)
+                while True:  # other broadcasts (e.g. from joining) can arrive first; wait for this state
+                    name, sealed = await next_broadcast(dashboard)
+                    if name == 'state':
+                        break
                 heard['state'] = self.unsealed(sealed)
-                assert name == 'state'
                 await dashboard.send(frame(self.topic, 'broadcast',
                                            {'type': 'broadcast', 'event': 'hello', 'payload': {}}, '10', '9'))
                 while True:  # the device answers a hello with its history and state
