@@ -1,4 +1,4 @@
-import {ongoingUpgrades, upgradeProgress} from './upgrade-progress.js?v=1';
+import {ongoingUpgrades, upgradeProgress} from './upgrade-progress.js?v=3';
 // Village sync: the game's JSON export supplies levels, counts and running timers for all six lists.
 // Each list has an ordered queue and optional target levels. Syncing starts no upgrades.
 import { t } from './i18n.js?v=5';
@@ -123,10 +123,19 @@ export class BuildingsPanel {
     }
     // A device from before the lab and pet lists answers for the buildings only.
     const kept = this.lists[LISTS.includes(data?.list) ? data.list : 'buildings'];
-    kept.rows = Array.isArray(data?.rows) ? data.rows.filter((row) => row && typeof row === 'object') : null;
+    const incoming = Array.isArray(data?.rows) ? data.rows.filter((row) => row && typeof row === 'object') : null;
+    const scannedAt = Number.isFinite(data?.scanned_at) ? data.scanned_at * 1000 : Date.now();
+    const watermark = Number.isInteger(data?.receipt_watermark) ? data.receipt_watermark : 0;
+    if (kept.rows !== null && (scannedAt < kept.scannedAt ||
+      (scannedAt === kept.scannedAt && watermark < (kept.receiptWatermark ?? 0)) ||
+      (incoming === null && !Number.isFinite(data?.scanned_at)))) return;
+    // Polling unchanged data must not interrupt queue edits or dragging.
+    if (kept.rows !== null && kept.scannedAt === scannedAt && JSON.stringify(kept.rows) === JSON.stringify(incoming)) return;
+    kept.rows = incoming;
+    kept.receiptWatermark = watermark;
     // Running upgrades count down from the scan itself, so a scan kept on the device and reopened later shows the
     // time left now; the next scan reads the game's own timers again.
-    kept.scannedAt = Number.isFinite(data?.scanned_at) ? data.scanned_at * 1000 : Date.now();
+    kept.scannedAt = scannedAt;
     this.ticker ??= setInterval(() => { if (!document.hidden) this.tick(); }, 1000);
     this.render();
   }
@@ -499,11 +508,11 @@ export class BuildingsPanel {
       bar.max = 100;
       bar.setAttribute('aria-label', title);
       const finish = element('time', undefined, 'ongoing-finish');
-      finish.dateTime = new Date(upgrade.finish).toISOString();
+      if (upgrade.finish !== null) finish.dateTime = new Date(upgrade.finish).toISOString();
       const refresh = () => {
         const status = upgradeProgress(row, list, this.lists[list].scannedAt);
         const countdown = left(status.remaining);
-        remaining.textContent = status.ready ? t('ongoing_ready') : t('ongoing_left', {time:countdown});
+        remaining.textContent = status.remaining === null ? t('ongoing_progress_unknown') : status.ready ? t('ongoing_ready') : t('ongoing_left', {time:countdown});
         card.classList.toggle('is-ready', status.ready);
         if (status.ready) {
           bar.value = 100; percent.textContent = ''; bar.removeAttribute('aria-valuetext');
@@ -519,10 +528,10 @@ export class BuildingsPanel {
         percent.title = explanation;
         bar.title = explanation;
         if (status.estimated) bar.setAttribute('aria-describedby','ongoing-estimate-note');
-        finish.textContent = status.ready ? t('ongoing_ready_note') : t('ongoing_finishes', {
+        finish.textContent = status.finish === null ? t('ongoing_ready_note') : status.ready ? t('ongoing_ready_note') : t('ongoing_finishes', {
           time:new Date(status.finish).toLocaleString(locale,{weekday:'short',hour:'2-digit',minute:'2-digit'})});
         remaining.title = finish.textContent;
-        remaining.setAttribute('aria-label', (status.ready ? t('ongoing_ready') : t('ongoing_left',{time:countdown})) + '. ' + finish.textContent);
+        remaining.setAttribute('aria-label', (status.remaining === null ? t('ongoing_progress_unknown') : status.ready ? t('ongoing_ready') : t('ongoing_left',{time:countdown})) + '. ' + finish.textContent);
         if (!status.ready && status.percent === null) finish.textContent += ` · ${t('ongoing_progress_unknown')}`;
       };
       refresh();

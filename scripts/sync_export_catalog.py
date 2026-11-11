@@ -32,10 +32,15 @@ def write_upgrade_times(data, identities):
             if not identity or not identity['id']:
                 continue
             seconds = {}
+            maximum = max((level.get('level',0) for level in item.get('levels',[])), default=0)
             for level in item.get('levels', []):
                 duration = level.get('build_time', level.get('upgrade_time'))
                 if type(level.get('level')) is int and type(duration) in (int, float) and duration > 0:
-                    seconds[level['level']] = duration
+                    # build_time belongs to the destination building level;
+                    # upgrade_time is the cost/time to LEAVE the current level.
+                    target = level['level'] if 'build_time' in level else level['level'] + 1
+                    if target <= maximum:
+                        seconds[target] = duration
             times[identity['list'] + '/' + identity['id']] = {
                 'en': identity['name'], 'id': identity.get('name_id', identity['name']), 'seconds': seconds}
     (ROOT/'web/upgrade-times.js').write_text(

@@ -2,6 +2,27 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BuildingsPanel } from '../../web/buildings.js';
 
+test('polling preserves drafts and ignores older receipts or replies arriving after a newer sync', () => {
+  const panel = Object.create(BuildingsPanel.prototype);
+  const draft = [{id:'minion_prince',level:40}];
+  panel.lists = {buildings:{rows:null,scannedAt:0,targets:draft}};
+  panel.ticker = true;
+  let renders = 0;
+  panel.render = () => { renders++; };
+  const data = {list:'buildings',scanned_at:1000,receipt_watermark:5,
+    rows:[{id:'minion_prince',current_level:37,next_level:38,receipt_id:5}]};
+  panel.load(data);
+  panel.load(structuredClone(data));
+  assert.equal(renders,1);
+  panel.load({...data,receipt_watermark:0,rows:[{id:'minion_prince',current_level:36}]});
+  assert.equal(renders,1);
+  panel.load({...data,scanned_at:2000,receipt_watermark:0,rows:[{id:'minion_prince',current_level:38}]});
+  panel.load(data);
+  assert.equal(renders,2);
+  assert.equal(panel.lists.buildings.rows[0].current_level,38);
+  assert.equal(panel.lists.buildings.targets,draft);
+});
+
 test('a delayed Goblin save acknowledgement preserves inputs edited after sending', () => {
   const fields = {
     'goblin-builder': { checked: true },

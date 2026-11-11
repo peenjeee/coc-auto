@@ -731,7 +731,12 @@ class Supervisor:
             return 'buildings_scanned', SCAN_DONE[listing].format(len(scan['rows'])), scan
         if action == 'get_buildings':
             listing = choice(options, 'list', SCAN_LISTS, 'buildings')
-            return 'buildings_loaded', '', {'list': listing, **self.statistics.last_scan(SCAN_LISTS[listing], listing)}
+            scan = self.statistics.last_scan(SCAN_LISTS[listing], listing)
+            config_path = getattr(self.settings, 'config_path', None)
+            if config_path:
+                from . import upgrade_history
+                scan = upgrade_history.project_scan(config_root(Path(config_path)), listing, scan)
+            return 'buildings_loaded', '', {'list': listing, **scan}
         # Closing the game or the emulator under a running bot would only start its recovery.
         self.stop()
         if action == 'close_coc':

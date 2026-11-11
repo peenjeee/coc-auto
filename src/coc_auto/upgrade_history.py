@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 import sqlite3
 import time
+import copy
+import math
 
 STORE = Path('.coc-auto/upgrade-history.sqlite3')
 EXPORT = Path('.coc-auto/village-export.json')
@@ -20,6 +22,77 @@ CHECKPOINT = Path('.coc-auto/village-export-checkpoint.json')
 INVALID = Path('.coc-auto/upgrade-history-invalid.json')
 SECTIONS = {'buildings':('buildings','traps','heroes'), 'lab':('units','siege_machines','spells'),
             'pets':('pets',), 'gear':('equipment',), 'builder':('buildings2','traps2','heroes2'), 'star':('units2',)}
+
+
+def project_scan(root, listing, scan):
+    """Overlay later confirmed receipts without changing the authoritative saved export.
+
+    Each receipt advances one instance, not a whole grouped building row. Other
+    timers retain the original scan clock. This is presentation data only.
+    """
+    if not isinstance(scan.get('rows'), list) or not isinstance(scan.get('scanned_at'), (int,float)):
+        return scan
+    if not (runtime_dir(root=root)/STORE.name).exists() or not (runtime_dir(root=root)/EXPORT.name).exists():
+        return scan
+    try:
+        raw = (runtime_dir(root=root)/EXPORT.name).read_bytes()
+        exported = json.loads(raw)
+        account = exported['tag']
+        watermark = scan.get('receipt_watermark', 0)
+        # Export timestamps have one-second precision. A same-second receipt may
+        # already be represented by Sync, including one instance in a group.
+        if exported.get('timestamp') == scan['scanned_at']:
+            try:
+                checkpoint = json.loads((runtime_dir(root=root)/CHECKPOINT.name).read_text(encoding='utf-8'))
+                if checkpoint.get('sha256') == hashlib.sha256(raw).hexdigest():
+                    watermark = max(watermark, checkpoint['history_id'])
+            except (OSError, ValueError, KeyError):
+                pass
+        db = sqlite3.connect(f'{(runtime_dir(root=root)/STORE.name).resolve().as_uri()}?mode=ro', uri=True)
+        db.row_factory = sqlite3.Row
+        try:
+            receipts = [dict(row) for row in db.execute(
+                'SELECT * FROM upgrades WHERE account=? AND listing=? AND ts>? AND id>? ORDER BY ts,id',
+                (account, listing, scan['scanned_at'], watermark))]
+        finally:
+            db.close()
+    except (OSError, ValueError, KeyError, sqlite3.Error):
+        return scan
+    result = copy.deepcopy(scan)
+    rows = result['rows']
+    for receipt in receipts:
+        target = receipt['target_level']
+        if type(target) is not int:
+            continue
+        matches = [row for row in rows if row.get('id') == receipt['item']]
+        candidates = [row for row in matches if
+            (row.get('next_level') if row.get('section') == 'in_progress' else row.get('current_level'))
+            == receipt['from_level']]
+        if not candidates and sum(row.get('count',1) for row in matches) == 1:
+            existing = matches[0]
+            level = existing.get('next_level') if existing.get('section') == 'in_progress' else existing.get('current_level')
+            if level is None or level < target:
+                candidates = [existing]
+        if not candidates:
+            continue  # Do not guess which grouped level/instance was upgraded.
+        original = min(candidates, key=lambda row:
+            row.get('seconds',0) if row.get('section') == 'in_progress' else -1)
+        row = dict(original)
+        if original.get('count',1) > 1:
+            original['count'] -= 1
+            rows.append(row)
+        else:
+            rows[rows.index(original)] = row
+        duration = receipt['seconds']
+        row.update(count=1, current_level=receipt['from_level'], next_level=target,
+                   section='in_progress', receipt_id=receipt['id'], started_at=receipt['ts'],
+                   duration_seconds=duration, time='', cost=None, currency=None)
+        # Old clients still count seconds from scanned_at; new clients use started_at.
+        row['seconds'] = math.ceil(receipt['ts'] + duration - scan['scanned_at']) if duration is not None else None
+        if listing == 'gear':  # Equipment upgrades are immediate, not a running timer.
+            row.update(section='other', current_level=target, next_level=target+1, seconds=None)
+        result['receipt_watermark'] = max(result.get('receipt_watermark',0), receipt['id'])
+    return result
 
 
 @lru_cache(maxsize=1)

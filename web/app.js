@@ -11,7 +11,7 @@ import { setupSelects, refreshSelects } from './select.js?v=2';
 import { StatsPanel, previewStatistics } from './stats.js?v=17';
 import { DiscordPanel } from './discord.js?v=7';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=20';
+import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=22';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -156,6 +156,7 @@ function setOnline(isOnline, reason) {
     }
   }
   screenPoller.sync();
+  upgradePoller.sync();
   stats?.sync();
 }
 
@@ -686,6 +687,7 @@ function switchView(view) {
   $('page-title').textContent = t(`${key}_title`);
   $('page-description').textContent = t(`${key}_description`);
   screenPoller.sync();
+  upgradePoller.sync();
   stats?.sync();
   if (view === 'settings' && online && link) send('get_discord', {}, {quiet:true});
   if (view === 'buildings' && online && link && !buildings.rows) send('get_buildings', {list: buildings.list}, {quiet:true});
@@ -717,6 +719,12 @@ let screenPageActive = true;
 // One frame a second, local and online alike (the online relay is our own server, without a message quota).
 // The switch stops only the automatic frames; Refresh still takes one on demand.
 const screenPoller = new VisiblePoller({visible: () => $('screen-live').checked && shouldCaptureScreen(), request: refreshScreen, interval: 1000});
+// Read cached inventory plus confirmed receipts; this never navigates or scans the game.
+const upgradePoller = new VisiblePoller({
+  visible: () => online && !!link && activeView === 'buildings' && !document.hidden && screenPageActive,
+  request: () => Promise.all(BUILDING_LISTS.map(list => send('get_buildings', {list}, {quiet:true}))),
+  interval: 15000,
+});
 function shouldCaptureScreen() {
   return !DEMO && online && link !== null && !document.hidden && screenPageActive &&
     activeView === 'overview' && !$('dashboard').hidden && screenInViewport;
@@ -817,9 +825,9 @@ function setupWorkspace() {
     if (!$('screen-live').checked) $('screen-status').textContent = t('screen_source');
     screenPoller.sync();
   });
-  document.addEventListener('visibilitychange', () => screenPoller.sync());
-  window.addEventListener('pagehide', () => { screenPageActive = false; screenPoller.sync(); });
-  window.addEventListener('pageshow', () => { screenPageActive = true; screenPoller.sync(); });
+  document.addEventListener('visibilitychange', () => { screenPoller.sync(); upgradePoller.sync(); });
+  window.addEventListener('pagehide', () => { screenPageActive = false; screenPoller.sync(); upgradePoller.sync(); });
+  window.addEventListener('pageshow', () => { screenPageActive = true; screenPoller.sync(); upgradePoller.sync(); });
   const observer = new IntersectionObserver(([entry]) => {
     screenInViewport = entry.isIntersecting;
     screenPoller.sync();
