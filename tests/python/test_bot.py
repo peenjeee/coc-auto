@@ -17,6 +17,37 @@ import numpy as np
 
 from coc_auto import bot
 
+# A fixed 5x7 bitmap font. cv2.putText rasterises differently in each OpenCV build, which shifts glyph
+# shapes and breaks digit-template matching; these pixels are the same everywhere.
+_FONT_ROWS = {
+    '0': ('01110', '10001', '10011', '10101', '11001', '10001', '01110'),
+    '1': ('00100', '01100', '00100', '00100', '00100', '00100', '01110'),
+    '2': ('01110', '10001', '00001', '00010', '00100', '01000', '11111'),
+    '3': ('11111', '00010', '00100', '00010', '00001', '10001', '01110'),
+    '4': ('00010', '00110', '01010', '10010', '11111', '00010', '00010'),
+    '5': ('11111', '10000', '11110', '00001', '00001', '10001', '01110'),
+    '6': ('00110', '01000', '10000', '11110', '10001', '10001', '01110'),
+    '7': ('11111', '00001', '00010', '00100', '01000', '01000', '01000'),
+    '8': ('01110', '10001', '10001', '01110', '10001', '10001', '01110'),
+    '9': ('01110', '10001', '10001', '01111', '00001', '00010', '01100'),
+    'a': ('00000', '00000', '01110', '00001', '01111', '10001', '01111'),
+    'h': ('10000', '10000', '10110', '11001', '10001', '10001', '10001'),
+    'l': ('01100', '00100', '00100', '00100', '00100', '00100', '01110'),
+    '/': ('00001', '00001', '00010', '00100', '01000', '10000', '10000'),
+}
+_BLANK_ROWS = ('00000',) * 7
+
+
+def draw_text(image, text, x, y, scale):
+    """White text in the bitmap font, top-left at (x, y); each cell is scale pixels square."""
+    for index, char in enumerate(text):
+        left = x + index * 6 * scale
+        for row, bits in enumerate(_FONT_ROWS.get(char, _BLANK_ROWS)):
+            for col, bit in enumerate(bits):
+                if bit == '1':
+                    top, edge = y + row * scale, left + col * scale
+                    image[top:top + scale, edge:edge + scale] = 255
+
 
 def profile(root):
     rng = np.random.default_rng(7)
@@ -1512,10 +1543,8 @@ class BotTests(unittest.TestCase):
 
     @staticmethod
     def rendered(text):
-        # Size the canvas from the font's real width; OpenCV builds differ, and a fixed width clips the last digit.
-        (text_width, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-        image = np.zeros((30, max(14 * len(text) + 10, text_width + 16), 3), dtype=np.uint8)
-        cv2.putText(image, text, (4, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        image = np.zeros((30, 6 * 3 * len(text) + 12, 3), dtype=np.uint8)
+        draw_text(image, text, 4, 4, 3)
         return image
 
     def digit_templates(self, digits='0123456789'):
@@ -1525,14 +1554,14 @@ class BotTests(unittest.TestCase):
         self.assertEqual(bot.read_number(self.rendered('504 548'), self.digit_templates()), 504548)
 
     def test_hud_number_ignores_smaller_text_showing_through_on_its_left(self):
-        image = np.zeros((30, 120, 3), dtype=np.uint8)
-        cv2.putText(image, 'ahl', (2, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        cv2.putText(image, '1 073', (36, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        image = np.zeros((30, 140, 3), dtype=np.uint8)
+        draw_text(image, 'ahl', 2, 6, 2)
+        draw_text(image, '1 073', 36, 4, 3)
         templates = self.digit_templates()
         self.assertEqual(bot.read_trailing_number(image, templates), 1073)
         self.assertEqual(bot.read_trailing_number(self.rendered('504 548'), templates), 504548)
-        speck = np.zeros((30, 120, 3), dtype=np.uint8)
-        cv2.putText(speck, '1  073', (20, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        speck = np.zeros((30, 140, 3), dtype=np.uint8)
+        draw_text(speck, '1 073', 20, 4, 3)
         speck[12:22, 38:42] = 255
         self.assertEqual(bot.read_trailing_number(speck, templates), 1073)
         with self.assertRaises(bot.BotError):
