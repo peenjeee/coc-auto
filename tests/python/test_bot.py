@@ -1677,9 +1677,11 @@ class BotTests(unittest.TestCase):
         folder.mkdir()
         for digit, glyph in self.digit_templates().items():
             cv2.imwrite(str(folder / f'{digit}.png'), (glyph * 255).astype(np.uint8))
-        image = np.zeros((90, 160, 3), dtype=np.uint8)
-        image[20:50, 2:110] = self.rendered('123 456')[:, :108]
-        loot = {'gold': [2, 20, 108, 30], 'elixir': [2, 20, 108, 30], 'dark': [2, 20, 108, 30]}
+        text = self.rendered('123 456')
+        width = text.shape[1]
+        image = np.zeros((90, width + 4, 3), dtype=np.uint8)
+        image[20:50, 2:2 + width] = text
+        loot = {'gold': [2, 20, width, 30], 'elixir': [2, 20, width, 30], 'dark': [2, 20, width, 30]}
         config = {**self.config, 'tesseract': '', 'digits': 'digits'}
         bot.validate_config(config, self.root, 'both')
         runner = bot.Bot(config, self.root, Device(self.frames))
@@ -1689,12 +1691,14 @@ class BotTests(unittest.TestCase):
 
     def test_learn_digits_builds_templates_from_labelled_screens(self):
         from coc_auto import calibrate
-        frame = np.zeros((90, 160, 3), dtype=np.uint8)
-        frame[0:30, 0:150] = self.rendered('1234567890')[:, :150]
-        loot = {'gold': [0, 0, 150, 30], 'elixir': [0, 0, 150, 30]}
+        text = self.rendered('1234567890')
+        width = text.shape[1]
+        frame = np.zeros((90, width, 3), dtype=np.uint8)
+        frame[0:30, 0:width] = text
+        loot = {'gold': [0, 0, width, 30], 'elixir': [0, 0, width, 30]}
         calibrate.learn_digits([(frame, '1234567890', '1234567890')], loot, self.root / 'digits')
         templates = bot.load_digit_templates(self.root, 'digits')
-        self.assertEqual(bot.read_number(frame[0:30, 0:150], templates), 1234567890)
+        self.assertEqual(bot.read_number(frame[0:30, 0:width], templates), 1234567890)
         with self.assertRaises(bot.BotError):
             calibrate.learn_digits([(frame, '12', '12')], loot, self.root / 'other')
 
