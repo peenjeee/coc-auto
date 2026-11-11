@@ -75,18 +75,60 @@ def existing_dashboard(state: Path) -> str | None:
 
 
 def choose_existing_setup() -> Path | None:
-    import tkinter as tk
-    from tkinter import filedialog
+    title = messages.translate("Impor pengaturan CoC Auto lama")
+    if os.name != "nt":
+        import tkinter as tk
+        from tkinter import filedialog
 
-    window = tk.Tk()
-    window.withdraw()
+        window = tk.Tk()
+        window.withdraw()
+        try:
+            chosen = filedialog.askdirectory(title=title)
+            return Path(chosen) if chosen else None
+        finally:
+            window.destroy()
+    # Windows' own folder picker, so the release needs no GUI toolkit.
+    import ctypes
+    from ctypes import wintypes
+
+    class BrowseInfo(ctypes.Structure):
+        _fields_ = [
+            ("owner", wintypes.HWND),
+            ("root", ctypes.c_void_p),
+            ("display_name", wintypes.LPWSTR),
+            ("title", wintypes.LPCWSTR),
+            ("flags", wintypes.UINT),
+            ("callback", ctypes.c_void_p),
+            ("param", wintypes.LPARAM),
+            ("image", ctypes.c_int),
+        ]
+
+    shell32, ole32 = ctypes.windll.shell32, ctypes.windll.ole32
+    shell32.SHBrowseForFolderW.argtypes = [ctypes.POINTER(BrowseInfo)]
+    shell32.SHBrowseForFolderW.restype = ctypes.c_void_p
+    shell32.SHGetPathFromIDListEx.argtypes = [
+        ctypes.c_void_p, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD
+    ]
+    ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+    name = ctypes.create_unicode_buffer(260)
+    info = BrowseInfo(
+        display_name=ctypes.cast(name, wintypes.LPWSTR),
+        title=title,
+        flags=0x0001 | 0x0040,  # BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE
+    )
+    ole32.OleInitialize(None)  # the resizable dialog style needs OLE on this thread
     try:
-        chosen = filedialog.askdirectory(
-            title=messages.translate("Impor pengaturan CoC Auto lama")
-        )
-        return Path(chosen) if chosen else None
+        item = shell32.SHBrowseForFolderW(ctypes.byref(info))
+        if not item:
+            return None
+        path = ctypes.create_unicode_buffer(32768)
+        try:
+            found = shell32.SHGetPathFromIDListEx(item, path, len(path), 0)
+        finally:
+            ole32.CoTaskMemFree(item)
+        return Path(path.value) if found else None
     finally:
-        window.destroy()
+        ole32.OleUninitialize()
 
 
 def notify(title: str, text: str):
