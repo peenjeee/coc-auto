@@ -269,7 +269,7 @@ try:
     local = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
 except ValueError:
     local = {}
-base = json.loads((root / 'config.json').read_text(encoding='utf-8'))
+base = json.loads((root / 'src/coc_auto/resources/config.json').read_text(encoding='utf-8'))
 
 local['adb'] = adb
 local['serial'] = serial

@@ -1,5 +1,5 @@
-import {t as tr} from './i18n.js?v=4';
-import {translate} from './messages.js?v=4';
+import {t as tr} from './i18n.js?v=5';
+import {translate} from './messages.js?v=5';
 import {refreshSelects} from './select.js?v=2';
 import { VisiblePoller } from './visible-poller.js?v=2';
 

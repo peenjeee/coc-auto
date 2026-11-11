@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=75,<81"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coc-auto"
+version = "0.1.0"
+description = "Clash of Clans automation and local dashboard"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+dependencies = ["opencv-python>=4.10,<6", "numpy>=2,<3", "websockets>=14,<16"]
+
+[project.scripts]
+coc-auto = "coc_auto.launcher:main"
+coc-bot = "coc_auto.bot:main"
+coc-calibrate = "coc_auto.calibrate:main"
+coc-relay = "coc_auto.relay_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+coc_auto = ["resources/*.json", "resources/calibration/**/*.png", "resources/calibration/*.png", "resources/calibration-legacy/**/*.png", "resources/calibration-legacy/*.png"]
+
+[tool.setuptools.data-files]
+"share/coc-auto/web" = ["web/*.*"]
+"share/coc-auto/web/fonts" = ["web/fonts/*.*"]
+"share/coc-auto/web/icons" = ["web/icons/*.*"]
+"share/coc-auto/web/icons/entities" = ["web/icons/entities/*.*"]
+"share/coc-auto/web/icons/resources" = ["web/icons/resources/*.*"]
+"share/coc-auto/web/icons/sprites" = ["web/icons/sprites/*.*"]
+"share/coc-auto/web/icons/stats" = ["web/icons/stats/*.*"]
+"share/coc-auto/web/icons/upgrades" = ["web/icons/upgrades/*.*"]
+"share/coc-auto/web/maps" = ["web/maps/*.*"]

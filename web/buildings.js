@@ -1,7 +1,7 @@
 import {ongoingUpgrades, upgradeProgress} from './upgrade-progress.js?v=1';
 // Village sync: the game's JSON export supplies levels, counts and running timers for all six lists.
 // Each list has an ordered queue and optional target levels. Syncing starts no upgrades.
-import { t } from './i18n.js?v=4';
+import { t } from './i18n.js?v=5';
 import { upgradePortraitSource, upgradePortraitFallback, upgradePortraitSprite } from './upgrade-portrait.js?v=6';
 import { isFullyUpgraded } from './upgrade-availability.js?v=1';
 

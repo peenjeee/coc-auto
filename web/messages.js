@@ -1,5 +1,5 @@
 // Canonical device messages are localized only for display. Never use this on game recognition data.
-const response = await fetch(new URL('./messages_en.json?v=3', import.meta.url), { cache: 'no-store' });
+const response = await fetch(new URL('./messages_en.json?v=4', import.meta.url), { cache: 'no-store' });
 if (!response.ok) throw new Error('Could not load the message catalog');
 const english = await response.json();
 // No space flag: "50% saat" / "50% during" are text, and no message uses "% d" as a value.

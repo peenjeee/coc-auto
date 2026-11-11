@@ -68,8 +68,8 @@ if echo "$CHANGED" | grep -qx 'deploy/Caddyfile'; then
     fi
 fi
 
-# Relay code is self-contained in relay_server.py (stdlib only).
-if echo "$CHANGED" | grep -qx 'relay_server.py'; then
+# Restart when either the compatibility launcher or packaged relay changes.
+if echo "$CHANGED" | grep -Eq '^(relay_server.py|src/coc_auto/(relay_server|__init__).py)$'; then
     sudo systemctl restart coc-relay && log "coc-relay restarted (relay_server.py changed)"
 fi
 

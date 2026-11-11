@@ -54,7 +54,7 @@ systemctl enable --now coc-relay coc-web coc-analytics
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/        # 200: the dashboard page
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/analytics  # 401 without the password, 200 with it
 systemctl status coc-relay coc-web coc-analytics                       # all active
-.venv/bin/python -m unittest test_relay_server                         # protocol tests against the server
+.venv/bin/python -m unittest discover -s tests/python -p test_relay_server.py                         # protocol tests against the server
 ```
 
 Then open https://coc.0xpnj.dev: the page loads without CSP errors, and with the bot running on the PC

@@ -1,0 +1,163 @@
+{
+  "platform": "win-64",
+  "tesseract": "5.5.0",
+  "source": "https://conda-forge.org/",
+  "packages": [
+    {
+      "name": "ucrt",
+      "version": "10.0.26100.0",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/ucrt-10.0.26100.0-h57928b3_0.conda",
+      "sha256": "3005729dce6f3d3f5ec91dfc49fc75a0095f9cd23bab49efb899657297ac91a5"
+    },
+    {
+      "name": "vcomp14",
+      "version": "14.51.36247",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/vcomp14-14.51.36247-habf1de7_42.conda",
+      "sha256": "b3558ed059d6272ef919ea959311af73c35b5fe43c789cd43f71b398671fec49"
+    },
+    {
+      "name": "vc14_runtime",
+      "version": "14.51.36247",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.51.36247-habf1de7_42.conda",
+      "sha256": "8dfbfd68ebf53249d11e528cbb80ad5a2460b0c5b4636eed82ee0d3950827a3d"
+    },
+    {
+      "name": "vc",
+      "version": "14.5",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/vc-14.5-ha367084_42.conda",
+      "sha256": "0598ca1ce913618cff9bd90391bcf75cd9edb22057c85dd6784dd762b7a888e2"
+    },
+    {
+      "name": "libiconv",
+      "version": "1.18",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libiconv-1.18-hc1393d2_3.conda",
+      "sha256": "35e04e3ddac7720fc7c550a1c9f998604299d6a7bd1f3ec9b2825d825061daa2"
+    },
+    {
+      "name": "lzo",
+      "version": "2.10",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/lzo-2.10-h6a83c73_1003.conda",
+      "sha256": "e26c855c4b5d797ba5a9e96a6392d58676981660849b99fdb939aee3164e8323"
+    },
+    {
+      "name": "lz4-c",
+      "version": "1.10.0",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/lz4-c-1.10.0-h6a83c73_2.conda",
+      "sha256": "6824e36be0f95ae516dc36dddd18f69cbad0e4e07906fcb10a5f26a8dc471903"
+    },
+    {
+      "name": "bzip2",
+      "version": "1.0.8",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/bzip2-1.0.8-h0ad9c76_10.conda",
+      "sha256": "04767466ee9227c9c57ab2c6503e0149177d34111c7418d2f420297acb1eb229"
+    },
+    {
+      "name": "liblzma",
+      "version": "5.8.3",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/liblzma-5.8.3-hfd05255_1.conda",
+      "sha256": "d36c4a1e1f80fd08e18a407e03622ff2f34dfdd022da6488ad19603dea19e6d5"
+    },
+    {
+      "name": "libzlib",
+      "version": "1.3.2",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libzlib-1.3.2-hfd05255_3.conda",
+      "sha256": "0629c2cc0404d3bb29d6baa7b4ba62da80797015e86de050db81ea5a07050527"
+    },
+    {
+      "name": "libwebp-base",
+      "version": "1.6.0",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libwebp-base-1.6.0-h4d5522a_1.conda",
+      "sha256": "4470d98d3178b0d45492eed4808afe421d2e7808352b8d06c2dc29166b75d94d"
+    },
+    {
+      "name": "libdeflate",
+      "version": "1.26",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libdeflate-1.26-h1a1d4e4_0.conda",
+      "sha256": "f51f28e894579387a531c53d97e058642ecfb232c4cb156c43c9121a9044f3d8"
+    },
+    {
+      "name": "lerc",
+      "version": "4.3.0",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/lerc-4.3.0-hd936e49_0.conda",
+      "sha256": "e96230bcb2e65df55c14c52ef2cbd5b688482fbb8760de59688879edcdfa3679"
+    },
+    {
+      "name": "libjpeg-turbo",
+      "version": "3.2.1",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libjpeg-turbo-3.2.1-hfd05255_0.conda",
+      "sha256": "195be7b2ff1eeff02b31cf366437a38d84560c2f6c4facd56b2969024f50957f"
+    },
+    {
+      "name": "libxml2",
+      "version": "2.13.9",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libxml2-2.13.9-h741aa76_0.conda",
+      "sha256": "28ac5bbed11644b9e06241ba1dfdac7e3a99e74b69915d45f646717ad9645ca5"
+    },
+    {
+      "name": "zstd",
+      "version": "1.5.7",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/zstd-1.5.7-h534d264_7.conda",
+      "sha256": "ca7daae4f218a11fab82cc2857f0ea518ec3f46acec60490485347a4c22c6b3e"
+    },
+    {
+      "name": "libpng",
+      "version": "1.6.59",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libpng-1.6.59-hdc8cecf_0.conda",
+      "sha256": "36050852deae6edc98d7b71489b8d07254e2753c69bd524bf5784927cd1f0b2c"
+    },
+    {
+      "name": "libtiff",
+      "version": "4.7.2",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libtiff-4.7.2-hef6d50c_2.conda",
+      "sha256": "61a557e19917a459f871471ca523b93973372ebf01a97e5802b56d069a2789b8"
+    },
+    {
+      "name": "openjpeg",
+      "version": "2.5.4",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/openjpeg-2.5.4-h90fa87c_2.conda",
+      "sha256": "d1c630ccd9ae0898b48d84e986f4c330f66a25e535f99efe8cbf03f042b33da5"
+    },
+    {
+      "name": "leptonica",
+      "version": "1.83.1",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/leptonica-1.83.1-hb723d09_6.conda",
+      "sha256": "bea6d3d6e5b1c880333d2c0ead675b718ea75fc4efe7e55a26ca0c608949c775"
+    },
+    {
+      "name": "ca-certificates",
+      "version": "2026.10.23",
+      "url": "https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.10.23-h4c7d964_0.conda",
+      "sha256": "f1d280d2618de987204102090e83733089c092dc2dd45686fd3dcbe809034f6a"
+    },
+    {
+      "name": "openssl",
+      "version": "3.6.5",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/openssl-3.6.5-hf411b9b_0.conda",
+      "sha256": "bc44625e0c6d83f3e02b5f6adc01e0e3ca7001d3d94e24959591a57f5a011b9a"
+    },
+    {
+      "name": "libarchive",
+      "version": "3.7.7",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libarchive-3.7.7-h5343c79_4.conda",
+      "sha256": "fd947dfdcf70b56dad679ec4053cc76cc69b208fb1220072d543482640f56c57"
+    },
+    {
+      "name": "tesseract",
+      "version": "5.5.0",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/tesseract-5.5.0-h86caa34_0.conda",
+      "sha256": "d054fcf7138a76cc580c9d057ee236c794ad549e875050c0b28f4ff08470f45f"
+    }
+  ],
+  "models": [
+    {
+      "name": "eng.traineddata",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/eng.traineddata",
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    },
+    {
+      "name": "ind.traineddata",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/ind.traineddata",
+      "sha256": "69786901da87ab8766c1ea7fbb10b28f2110c14da3f6c8f2735df131fba95d88"
+    }
+  ]
+}

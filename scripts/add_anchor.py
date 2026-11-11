@@ -39,7 +39,7 @@ def main() -> int:
     parser.add_argument('--margin', type=int, default=0, help='search margin in pixels (0..40)')
     parser.add_argument('--replace', action='store_true',
                         help='drop the screen\'s other anchors; the detector requires all of them to match')
-    parser.add_argument('--config', type=Path, default=Path('config.json'))
+    parser.add_argument('--config', type=Path, default=Path(__file__).resolve().parents[1] / 'src/coc_auto/resources/config.json')
     args = parser.parse_args()
     if not 0 <= args.margin <= 40:
         raise SystemExit('margin must be 0..40')

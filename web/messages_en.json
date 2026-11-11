@@ -799,5 +799,22 @@
  "Peralatan di-upgrade: %s": "Equipment upgraded: %s",
  "Equipment upgraded: %s": "Equipment upgraded: %s",
  "Equipment upgraded: %s to level %s": "Equipment upgraded: %s to level %s",
- "Template ikon Goblin Builder hilang": "Goblin Builder icon template missing"
+ "Template ikon Goblin Builder hilang": "Goblin Builder icon template missing",
+ "Impor pengaturan CoC Auto lama": "Import existing CoC Auto setup",
+ "Tutup CoC Auto sebelum mengimpor.": "Close CoC Auto before importing.",
+ "CoC Auto sedang dimulai atau tidak tersedia. Coba lagi sebentar.": "CoC Auto is starting or unavailable. Try again shortly.",
+ "Impor selesai. Cadangan: {}": "Import complete. Backup: {}",
+ "Biarkan jendela ini terbuka. Tutup untuk keluar.": "Keep this window open. Close it to quit.",
+ "Tidak dapat memulai: {}": "Could not start: {}",
+ "Pilih folder instalasi lama": "Choose the old installation folder",
+ "config.local.json tidak ditemukan": "config.local.json not found",
+ "Database rusak": "Invalid database",
+ "Pemeriksaan desa selesai": "Village check complete",
+ "Instance yang dipilih belum menyala; nyalakan lalu deteksi lagi": "The selected instance is stopped; start it and detect again",
+ "Open the local CoC Auto dashboard": "Open the local CoC Auto dashboard",
+ "config.local.json must be an object": "config.local.json must be an object",
+ "Invalid config.json": "Invalid config.json",
+ "{}: {}": "{}: {}",
+ "Bundled OCR missing": "Bundled OCR missing",
+ "Packaged resources and OCR OK": "Packaged resources and OCR OK"
 }

@@ -1031,3 +1031,10 @@ summary::-webkit-details-marker { display: none; }
 .ongoing-percent{font-size:11px}.ongoing-progress{height:5px}.ongoing-finish{display:none}
 @media(max-width:1050px){.ongoing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:540px){.ongoing-grid{grid-template-columns:1fr}.ongoing-card-copy .ongoing-location{font-size:10px}}
+
+/* First-run setup uses the dashboard's existing Clash palette. */
+.setup-guide {padding:16px;margin:16px 0;border:1px solid var(--parchment-edge);border-radius:12px;background:var(--parchment-deep);color:var(--text)}
+.setup-guide h3 {margin:0 0 10px}.setup-guide ol {padding-left:22px;line-height:1.7}
+.setup-advanced {margin:12px 0}.setup-advanced summary {cursor:pointer;font-weight:600;padding:10px 0}
+#setup-instances {display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+#setup-instances [aria-checked="true"] {outline:2px solid var(--gold, #eab956);outline-offset:2px}

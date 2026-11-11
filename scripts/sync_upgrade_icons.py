@@ -8,6 +8,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+RESOURCES = ROOT / 'src/coc_auto/resources'
 DEST = ROOT / '.coc-auto/artwork/entities'
 REVISION = 'fdac291ae7fbc2901221ff945834be534d0344ae'
 BASE = f'https://raw.githubusercontent.com/ClashKingInc/ClashKingAssets/{REVISION}/'
@@ -18,7 +19,7 @@ def clean(value):
 def main():
     tree = json.load(urllib.request.urlopen(f'https://api.github.com/repos/ClashKingInc/ClashKingAssets/git/trees/{REVISION}?recursive=1'))
     paths = [item['path'] for item in tree['tree'] if item['path'].endswith('.webp')]
-    export_catalog = ROOT / 'village-export-catalog.json'
+    export_catalog = RESOURCES / 'village-export-catalog.json'
     identities = (json.loads(export_catalog.read_text(encoding='utf-8')).get('items', {}).values()
                   if export_catalog.exists() else [])
     game_names = {}

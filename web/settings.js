@@ -1,7 +1,7 @@
 // Device settings: the loot minimums the Home Village search skips opponents by, and where LDPlayer is on the
 // device. Auto-detect only fills the form with what the device found; nothing changes until save is pressed.
-import { t } from './i18n.js?v=4';
-import { translate } from './messages.js?v=4';
+import { t } from './i18n.js?v=5';
+import { translate } from './messages.js?v=5';
 
 const MINIMUM = ['gold', 'elixir', 'dark'];
 const SETUP = ['adb', 'ldconsole', 'serial', 'ld_index', 'touch_device'];
@@ -39,6 +39,9 @@ function formatLoot(input) {
 export class SettingsPanel {
   /** @param {(action: string, args?: Record<string, unknown>) => void} send */
   constructor(send) {
+    this.send = send;
+    this.checked = null;
+    this.isBusy = false;
     this.found = null;
     this.display = null;
     for (const name of MINIMUM) {
@@ -46,6 +49,12 @@ export class SettingsPanel {
       input.addEventListener('input', () => formatLoot(input));
     }
     $('settings-load').addEventListener('click', () => send('get_settings'));
+    $('setup-check').addEventListener('click', () => { this.invalidate(); send('check_setup'); });
+    $('setup-form').addEventListener('input', () => this.invalidate());
+    $('setup-form').addEventListener('invalid', () => {
+      const advanced = document.querySelector('.setup-advanced');
+      if (advanced) advanced.open = true;
+    }, true);
     $('setup-detect').addEventListener('click', () => send('detect_setup'));
     $('minimum-form').addEventListener('submit', (submitted) => {
       submitted.preventDefault();
@@ -76,12 +85,14 @@ export class SettingsPanel {
     for (const name of MINIMUM) formatLoot($('minimum-form').elements.namedItem(name));
     fill($('setup-form'), data.setup, SETUP);
     this.showDisplay(data.display);
+    this.invalidate();
   }
 
   /** @param {{current: Record<string, number>, target: Record<string, number>, saved: boolean} | null} display */
   showDisplay(display) {
     this.display = display && typeof display === 'object' && display.current && display.target ? display : null;
     this.renderDisplay();
+    this.invalidate();
   }
 
   displayMatches() {
@@ -105,26 +116,81 @@ export class SettingsPanel {
   /** @param {Record<string, unknown>} found what auto-detect found on the device, with its problems */
   detected(found) {
     if (!found || typeof found !== 'object') return;
-    fill($('setup-form'), found, SETUP);
+    const form = $('setup-form');
+    for (const name of SETUP) form.elements.namedItem(name).value = '';
+    fill(form, found, SETUP);
     this.found = found;
+    this.invalidate();
+    this.renderInstances();
     this.render();
+  }
+
+  invalidate() {
+    this.checked = null;
+    this.refreshButtons();
+    $('setup-check-result').textContent = t('setup_check_hint');
+  }
+
+  busy(value) {
+    this.isBusy = value;
+    this.refreshButtons();
+  }
+
+  refreshButtons() {
+    $('setup-continue').disabled = this.isBusy || this.checked !== true;
+    const complete = SETUP.every(name => $('setup-form').elements.namedItem(name).value.trim() !== '');
+    $('setup-save').disabled = this.isBusy || !complete;
+  }
+
+  checkedSetup(data) {
+    this.checked = data?.ready === true;
+    this.refreshButtons();
+    $('setup-check-result').textContent = t(this.checked ? 'setup_check_ready' : 'setup_check_failed');
+    $('setup-check-result').className = `hint ${this.checked ? 'ok' : 'problem'}`;
+  }
+
+  renderInstances() {
+    const group = $('setup-instances');
+    group.replaceChildren();
+    for (const instance of this.found?.instances || []) {
+      const button = document.createElement('button');
+      button.type = 'button'; button.setAttribute('role', 'radio');
+      const selected = instance.index === this.found.ld_index;
+      button.setAttribute('aria-checked', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      button.textContent = `${instance.name} · ${t(instance.running ? 'setup_on' : 'setup_off')}`;
+      button.addEventListener('click', () => this.send('detect_setup', {index: instance.index}));
+      button.addEventListener('keydown', event => {
+        const choices = [...group.children];
+        const current = choices.indexOf(button);
+        let next;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = choices[(current + 1) % choices.length];
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = choices[(current - 1 + choices.length) % choices.length];
+        if (event.key === 'Home') next = choices[0];
+        if (event.key === 'End') next = choices.at(-1);
+        if (next) { event.preventDefault(); next.focus(); next.click(); }
+      });
+      group.append(button);
+    }
   }
 
   render() {
     this.renderDisplay();
     const notes = $('setup-notes');
     notes.textContent = '';
+    const diagnostics = $('setup-diagnostics');
+    diagnostics.textContent = '';
     if (!this.found) return;
-    const add = (text, kind) => {
+    const add = (text, kind, target = notes) => {
       const note = document.createElement('li');
       note.textContent = text;
       note.className = kind;
-      notes.append(note);
+      target.append(note);
     };
     const list = (value) => (Array.isArray(value) ? value : []);
-    for (const folder of list(this.found.folders)) add(`${t('setup_folder')}: ${folder}`, 'info');
+    for (const folder of list(this.found.folders)) add(`${t('setup_folder')}: ${folder}`, 'info', diagnostics);
     for (const instance of list(this.found.instances)) {
-      add(`${t('setup_instance')} ${instance.index} "${instance.name}": ${t(instance.running ? 'setup_on' : 'setup_off')}`, 'info');
+      add(`${t('setup_instance')} ${instance.index} "${instance.name}": ${t(instance.running ? 'setup_on' : 'setup_off')}`, 'info', diagnostics);
     }
     if (Array.isArray(this.found.resolution)) add(`${t('setup_resolution')}: ${this.found.resolution.join('x')}`, 'info');
     const problems = list(this.found.problems);

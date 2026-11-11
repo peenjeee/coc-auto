@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#45a8ee">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=buildings-16"><script type="module" src="app.js?v=buildings-26"></script>
+<link rel="stylesheet" href="style.css?v=buildings-17"><script type="module" src="app.js?v=buildings-27"></script>
 </head><body>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <header class="site-header"><div class="header-inner">
@@ -217,9 +217,36 @@
           <h2 class="card-title" data-i18n="settings_prompt"></h2>
           <button id="settings-load" type="button" data-i18n="settings_load"></button>
         </div>
-        <section id="discord-settings" class="panel discord-settings"></section>
+        <section class="setup-guide" aria-labelledby="setup-guide-title">
+          <h3 id="setup-guide-title" data-i18n="setup_guide_title"></h3>
+          <ol>
+            <li><span data-i18n="setup_step_install"></span> <a href="https://www.ldplayer.net/" target="_blank" rel="noopener noreferrer">LDPlayer ↗</a></li>
+            <li data-i18n="setup_step_detect"></li>
+            <li data-i18n="setup_step_fit"></li>
+            <li data-i18n="setup_step_check"></li>
+          </ol>
+          <div class="actions"><button id="setup-detect" type="button" class="primary" data-i18n="setup_detect"></button><button id="setup-check" type="button" data-i18n="setup_check"></button><button id="setup-continue" type="button" class="primary" data-i18n="setup_continue" disabled></button></div>
+          <p id="setup-check-result" role="status" class="hint" data-i18n="setup_check_hint"></p>
+        </section>
         <div class="settings-grid">
 
+          <form id="setup-form" class="group">
+            <h3>LDPlayer</h3>
+            <p class="hint" data-i18n="setup_hint"></p>
+            <div id="setup-instances" role="radiogroup" aria-label="LDPlayer"></div>
+            <details class="setup-advanced"><summary data-i18n="setup_advanced"></summary>
+            <label><span>adb.exe</span> <input name="adb" type="text" spellcheck="false" autocomplete="off" placeholder="C:\LDPlayer\LDPlayer9\adb.exe" required></label>
+            <label><span>ldconsole.exe</span> <input name="ldconsole" type="text" spellcheck="false" autocomplete="off" placeholder="C:\LDPlayer\LDPlayer9\ldconsole.exe" required></label>
+            <label><span>serial</span> <input name="serial" type="text" spellcheck="false" autocomplete="off" placeholder="emulator-5554" required></label>
+            <label><span>ld_index</span> <input name="ld_index" type="number" min="0" max="99" step="1" value="0" required></label>
+            <label><span>touch_device</span> <input name="touch_device" type="text" spellcheck="false" autocomplete="off" placeholder="/dev/input/event4" required></label>
+            <ul id="setup-diagnostics" class="notes"></ul>
+            </details>
+            <ul id="setup-notes" class="notes" aria-live="polite"></ul>
+            <div class="actions">
+              <button id="setup-save" type="submit" class="primary" data-i18n="setup_save"></button>
+            </div>
+          </form>
           <div class="group display">
             <h3 data-i18n="display_title"></h3>
             <p class="hint" data-i18n="display_hint"></p>
@@ -231,21 +258,8 @@
               <button type="button" data-action="restore_display" data-i18n="display_restore" data-i18n-confirm="confirm_display_restore"></button>
             </div>
           </div>
-          <form id="setup-form" class="group">
-            <h3>LDPlayer</h3>
-            <p class="hint" data-i18n="setup_hint"></p>
-            <label><span>adb.exe</span> <input name="adb" type="text" spellcheck="false" autocomplete="off" placeholder="C:\LDPlayer\LDPlayer9\adb.exe" required></label>
-            <label><span>ldconsole.exe</span> <input name="ldconsole" type="text" spellcheck="false" autocomplete="off" placeholder="C:\LDPlayer\LDPlayer9\ldconsole.exe" required></label>
-            <label><span>serial</span> <input name="serial" type="text" spellcheck="false" autocomplete="off" placeholder="emulator-5554" required></label>
-            <label><span>ld_index</span> <input name="ld_index" type="number" min="0" max="99" step="1" value="0" required></label>
-            <label><span>touch_device</span> <input name="touch_device" type="text" spellcheck="false" autocomplete="off" placeholder="/dev/input/event4" required></label>
-            <ul id="setup-notes" class="notes" aria-live="polite"></ul>
-            <div class="actions">
-              <button id="setup-detect" type="button" data-i18n="setup_detect"></button>
-              <button type="submit" class="primary" data-i18n="setup_save"></button>
-            </div>
-          </form>
         </div>
+        <section id="discord-settings" class="panel discord-settings"></section>
         <p class="hint" data-i18n="deploy_note"></p>
       </section>
 
