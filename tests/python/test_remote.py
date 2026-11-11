@@ -174,6 +174,8 @@ class SupervisorTests(unittest.TestCase):
         with redirect_stdout(stream):
             self.supervisor.start([])
             self.assertTrue(until(lambda: 'INFO: Serangan selesai: home (1)' in self.supervisor.history()))
+            # The child's own startup line follows that one; wait for it so it cannot land after the test's log.
+            self.assertTrue(until(lambda: any(line.startswith('INFO: args') for line in self.supervisor.history())))
             child = self.supervisor.child
             result = self.supervisor.command(*signed('set_language', {'language': 'en'}))
             self.assertTrue(result['ok'])
