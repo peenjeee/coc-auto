@@ -1512,7 +1512,9 @@ class BotTests(unittest.TestCase):
 
     @staticmethod
     def rendered(text):
-        image = np.zeros((30, 14 * len(text) + 10, 3), dtype=np.uint8)
+        # Size the canvas from the font's real width; OpenCV builds differ, and a fixed width clips the last digit.
+        (text_width, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+        image = np.zeros((30, max(14 * len(text) + 10, text_width + 16), 3), dtype=np.uint8)
         cv2.putText(image, text, (4, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
         return image
 
