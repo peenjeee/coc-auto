@@ -14,6 +14,7 @@ import threading
 import time
 from types import SimpleNamespace
 import unittest
+import uuid
 from unittest.mock import Mock
 import base64
 
@@ -37,7 +38,7 @@ except KeyboardInterrupt:
 
 def signed(action, args=None, nonce=None, key=KEY):
     body = json.dumps({'action': action, 'args': args or {}, 'ts': time.time(),
-                       'nonce': nonce or f'{action}-{time.monotonic_ns()}'})
+                       'nonce': nonce or f'{action}-{uuid.uuid4().hex}'})
     return body, remote.sign(key, body)
 
 
