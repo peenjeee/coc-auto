@@ -15,7 +15,7 @@ import time
 from types import SimpleNamespace
 import unittest
 import uuid
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import base64
 
 from coc_auto import messages
@@ -60,6 +60,44 @@ class FakeDevice:
 
 
 class SupervisorTests(unittest.TestCase):
+    def test_cached_buildings_apply_confirmed_receipts_without_scanning_or_changing_saved_export(self):
+        from coc_auto import upgrade_history
+        root = Path(self.temp.name)
+        self.supervisor.settings = SimpleNamespace(config_path=root/'config.json')
+        self.device.scan_buildings = Mock()
+        path = root/upgrade_history.EXPORT
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps({'tag':'#AAA','timestamp':1000,'heroes':[{'data':28000006,'lvl':36,'timer':100}]}))
+        old = [{'id':'minion_prince','name':'Minion Prince','count':1,'current_level':36,'next_level':37,
+                'section':'in_progress','seconds':100,'source':'game_export'}]
+        self.supervisor.statistics.keep_scan('home','buildings',old,1000)
+        upgrade_history.record(root,'buildings',{'id':'minion_prince','name':'Minion Prince','next_level':38},72000,now=1400)
+        result = self.supervisor.command(*signed('get_buildings'))
+        self.assertTrue(result['ok'])
+        updated = result['data']['rows'][0]
+        self.assertEqual((updated['current_level'],updated['next_level'],updated['duration_seconds']), (37,38,72000))
+        self.device.scan_buildings.assert_not_called()
+        self.assertEqual(self.supervisor.statistics.last_scan('home','buildings')['rows'],old)
+
+    def test_shared_config_projects_receipts_from_user_data_not_bundled_resources(self):
+        from coc_auto import upgrade_history
+        from coc_auto.paths import default_config
+        root = Path(self.temp.name)
+        self.supervisor.settings = SimpleNamespace(config_path=default_config())
+        self.device.scan_buildings = Mock()
+        path = root/upgrade_history.EXPORT
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({'tag':'#AAA','timestamp':1000,'heroes':[{'data':28000006,'lvl':36,'timer':100}]}))
+        old = [{'id':'minion_prince','name':'Minion Prince','count':1,'current_level':36,'next_level':37,
+                'section':'in_progress','seconds':100,'source':'game_export'}]
+        self.supervisor.statistics.keep_scan('home','buildings',old,1000)
+        with patch.dict(os.environ, {'COC_AUTO_DATA_DIR': str(root)}):
+            upgrade_history.record(RESOURCE_ROOT,'buildings',{'id':'minion_prince','name':'Minion Prince','next_level':38},72000,now=1400)
+            result = self.supervisor.command(*signed('get_buildings'))
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['data']['rows'][0]['next_level'],38)
+        self.device.scan_buildings.assert_not_called()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

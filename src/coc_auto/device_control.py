@@ -144,7 +144,14 @@ class DeviceActions:
         config, root = bot.load_config(self.config_path), config_root(self.config_path)
         if listing not in village_export.SECTIONS:
             raise SettingRefused('Unknown upgrade list')
-        snapshot = village_export.scan(bot.Bot(config, root, self.adb(), live=True))
+        device = self.adb()
+        runner = bot.Bot(config, root, device, live=True)
+        # Long upgrade waits deliberately close CoC. Sync must open it before
+        # asking the export scanner to recognize the village/settings screens.
+        if not device.game_in_front():
+            device.launch(bot.GAME_ACTIVITY)
+            runner.wait({'home', 'builder'}, set(), 60)
+        snapshot = village_export.scan(runner)
         self.last_village_scan = snapshot
         return snapshot['lists'][listing]
 

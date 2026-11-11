@@ -21,6 +21,90 @@ def hero(target=None):
 
 
 class HistoryTests(unittest.TestCase):
+    def saved_scan(self):
+        return {'scanned_at':1000,'rows':[
+            {'id':'royal_champion','name':'Royal Champion','count':1,'current_level':46,
+             'next_level':47,'section':'in_progress','seconds':300,'source':'game_export'},
+            {'id':'cannon','name':'Cannon','count':1,'current_level':1,'next_level':2,
+             'section':'in_progress','seconds':9000,'source':'game_export'}]}
+
+    def test_confirmed_upgrade_replaces_expired_timer_without_rebasing_other_upgrades(self):
+        self.export([{'data':28000004,'lvl':46,'timer':300}])
+        history.record(self.root,'buildings',hero(48),3600,now=1400)
+        scan = self.saved_scan()
+        before = json.dumps(scan)
+        projected = history.project_scan(self.root,'buildings',scan)
+        row = projected['rows'][0]
+        self.assertEqual((row['current_level'],row['next_level']), (47,48))
+        self.assertEqual((row['started_at'],row['duration_seconds']), (1400,3600))
+        self.assertEqual(projected['scanned_at'],1000)
+        self.assertEqual(row['seconds'],4000)
+        self.assertEqual(projected['rows'][1],scan['rows'][1])
+        self.assertEqual(json.dumps(scan),before)
+        self.assertEqual(history.project_scan(self.root,'buildings',projected),projected)
+
+    def test_receipt_projection_handles_spaces_unicode_and_hash_in_the_data_path(self):
+        self.root = self.root / 'profile # 玩家'
+        self.root.mkdir()
+        self.export([{'data':28000004,'lvl':46,'timer':300}])
+        history.record(self.root,'buildings',hero(48),3600,now=1400)
+        row = history.project_scan(self.root,'buildings',self.saved_scan())['rows'][0]
+        self.assertEqual((row['current_level'],row['next_level']), (47,48))
+        self.assertEqual(row['duration_seconds'],3600)
+
+    def test_newer_sync_overrides_receipts_and_keeps_boosted_remaining_time(self):
+        self.export([{'data':28000004,'lvl':46,'timer':300}])
+        history.record(self.root,'buildings',hero(48),3600,now=1400)
+        fresh = self.saved_scan()
+        fresh['scanned_at'] = 2000
+        fresh['rows'][0].update(current_level=47,next_level=48,seconds=500)
+        self.assertEqual(history.project_scan(self.root,'buildings',fresh),fresh)
+
+    def test_receipts_from_another_account_or_list_are_not_applied(self):
+        self.export([{'data':28000004,'lvl':46}],tag='#AAA')
+        history.record(self.root,'buildings',hero(48),3600,now=1400)
+        scan = self.saved_scan()
+        self.assertEqual(history.project_scan(self.root,'pets',scan),scan)
+        self.export([{'data':28000004,'lvl':46}],tag='#BBB')
+        self.assertEqual(history.project_scan(self.root,'buildings',scan),scan)
+
+    def test_grouped_buildings_split_one_instance_per_confirmed_upgrade(self):
+        self.export([{'data':1000008,'lvl':1,'cnt':2}],section='buildings')
+        row = {'id':'cannon','name':'Cannon','next_level':2}
+        history.record(self.root,'buildings',row,100,now=1100)
+        history.record(self.root,'buildings',row,100,now=1150)
+        scan = {'scanned_at':1000,'rows':[{'id':'cannon','name':'Cannon','count':2,
+                 'current_level':1,'next_level':2,'section':'other','source':'game_export'}]}
+        result = history.project_scan(self.root,'buildings',scan)
+        self.assertEqual(len(result['rows']),2)
+        self.assertEqual(sum(r['count'] for r in result['rows']),2)
+        self.assertEqual(sorted(r['started_at'] for r in result['rows']),[1100,1150])
+
+    def test_grouped_unmatched_levels_are_not_guessed(self):
+        self.export([{'data':1000008,'lvl':1,'cnt':2}],section='buildings')
+        history.record(self.root,'buildings',{'id':'cannon','name':'Cannon','next_level':2},100,now=1100)
+        scan = {'scanned_at':1000,'rows':[{'id':'cannon','count':2,'current_level':5,'section':'other'}]}
+        self.assertEqual(history.project_scan(self.root,'buildings',scan),scan)
+
+    def test_same_second_fresh_sync_does_not_duplicate_a_grouped_upgrade(self):
+        self.export([{'data':1000008,'lvl':1,'cnt':2}],section='buildings')
+        history.record(self.root,'buildings',{'id':'cannon','name':'Cannon','next_level':2},100,now=1400.1)
+        data = self.export([{'data':1000008,'lvl':1}, {'data':1000008,'lvl':1,'timer':99}],
+                           section='buildings',timestamp=1400)
+        history.checkpoint(self.root,data)
+        scan = {'scanned_at':1400,'rows':[
+            {'id':'cannon','count':1,'current_level':1,'next_level':2,'section':'other'},
+            {'id':'cannon','count':1,'current_level':1,'next_level':2,'section':'in_progress','seconds':99}]}
+        self.assertEqual(history.project_scan(self.root,'buildings',scan),scan)
+
+    def test_unknown_duration_does_not_reuse_an_expired_old_countdown(self):
+        self.export([{'data':28000004,'lvl':46,'timer':300}])
+        history.record(self.root,'buildings',hero(48),None,now=1400)
+        row = history.project_scan(self.root,'buildings',self.saved_scan())['rows'][0]
+        self.assertIsNone(row['seconds'])
+        self.assertIsNone(row['duration_seconds'])
+        self.assertEqual(row['next_level'],48)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

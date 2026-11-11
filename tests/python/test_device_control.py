@@ -6,10 +6,53 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 from coc_auto import device_control
 
 REPO = RESOURCE_ROOT
+
+
+class ExportStartupTests(unittest.TestCase):
+    def scan(self, foreground, error=None):
+        from coc_auto import bot
+        from coc_auto import village_export
+        action = device_control.DeviceActions(REPO / 'config.json')
+        device = Mock()
+        device.game_in_front.return_value = foreground
+        action.adb = Mock(return_value=device)
+        runner = Mock()
+        if error:
+            runner.wait.side_effect = error
+        snapshot = {'lists': {'buildings': [{'id': 'cannon'}]}}
+        with patch.object(bot, 'load_config', return_value={}), \
+                patch.object(bot, 'Bot', return_value=runner), \
+                patch.object(village_export, 'scan', return_value=snapshot) as scan:
+            if error:
+                with self.assertRaises(type(error)):
+                    action.scan_buildings()
+                scan.assert_not_called()
+                self.assertFalse(hasattr(action, 'last_village_scan'))
+            else:
+                self.assertEqual(action.scan_buildings(), snapshot['lists']['buildings'])
+                scan.assert_called_once_with(runner)
+                self.assertEqual(action.last_village_scan, snapshot)
+        return device, runner
+
+    def test_sync_launches_a_closed_game_and_waits_before_exporting(self):
+        from coc_auto import bot
+        device, runner = self.scan(False)
+        device.launch.assert_called_once_with(bot.GAME_ACTIVITY)
+        runner.wait.assert_called_once_with({'home', 'builder'}, set(), 60)
+
+    def test_sync_preserves_an_already_open_game_or_settings_page(self):
+        device, runner = self.scan(True)
+        device.launch.assert_not_called()
+        runner.wait.assert_not_called()
+
+    def test_failed_game_start_never_runs_export_or_replaces_saved_scan(self):
+        from coc_auto import bot
+        self.scan(False, bot.WaitTimeout('launch timeout'))
 
 
 class FakeEmulator:
