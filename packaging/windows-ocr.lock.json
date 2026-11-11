@@ -136,6 +136,18 @@
       "sha256": "bc44625e0c6d83f3e02b5f6adc01e0e3ca7001d3d94e24959591a57f5a011b9a"
     },
     {
+      "name": "libssh2",
+      "version": "1.11.1",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libssh2-1.11.1-h734d217_1.conda",
+      "sha256": "1097b08429b4f53f5751a32c6d99a083d227ca7f7812c0b239eea124cec073a0"
+    },
+    {
+      "name": "libcurl",
+      "version": "8.21.0",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/libcurl-8.21.0-h8206538_1.conda",
+      "sha256": "4334b7298a1ec6da6260437fc873f0c9d180c9baf123616206c187d198591634"
+    },
+    {
       "name": "libarchive",
       "version": "3.7.7",
       "url": "https://conda.anaconda.org/conda-forge/win-64/libarchive-3.7.7-h5343c79_4.conda",

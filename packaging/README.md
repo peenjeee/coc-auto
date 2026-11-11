@@ -16,8 +16,9 @@ The build refuses non-Windows platforms. OCR preparation can be checked separate
 on macOS/Linux with `python packaging/prepare_ocr.py` after installing zstandard.
 
 `windows-ocr.lock.json` pins every conda-forge archive and model by URL and SHA-256.
-`prepare_ocr.py` verifies downloads and extracts only DLLs, the Tesseract executable,
-required language models, and licenses. It never runs downloaded installers.
+`prepare_ocr.py` verifies downloads and keeps only the Tesseract executable, the DLLs it
+loads, the required language models, and licenses. It fails when Tesseract needs a DLL that
+neither the lock nor Windows provides. It never runs downloaded installers.
 The build includes a clean-process smoke test before writing the ZIP.
 
 To update Python build dependencies, edit `requirements-build.in` and regenerate:

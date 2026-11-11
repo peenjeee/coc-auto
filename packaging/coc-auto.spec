@@ -20,7 +20,7 @@ for candidate in stage.rglob('*'):
         raise RuntimeError(f'Personal or temporary configuration in resources: {candidate.name}')
 
 datas = [(str(stage), 'coc_auto/resources'), (str(root/'web'), 'web'),
-         (str(root/'build/ocr'), 'ocr'), (str(root/'packaging/THIRD-PARTY-NOTICES.md'), '.')]
+         (str(root/'packaging/THIRD-PARTY-NOTICES.md'), '.')]
 a = Analysis([str(root/'packaging/entrypoint.py')], pathex=[str(root/'src')],
              binaries=[], datas=datas, hiddenimports=[], hookspath=[], hooksconfig={},
              runtime_hooks=[], excludes=[], noarchive=False)
@@ -28,6 +28,13 @@ a = Analysis([str(root/'packaging/entrypoint.py')], pathex=[str(root/'src')],
 a.datas = [entry for entry in a.datas if not entry[0].startswith('coc_auto/resources/')]
 a.datas += [(f'coc_auto/resources/{file.relative_to(stage).as_posix()}', str(file), 'DATA')
             for file in stage.rglob('*') if file.is_file()]
+# OCR is added after Analysis so PyInstaller does not copy Tesseract's DLLs into the app root;
+# tesseract.exe loads them from ocr/bin (see paths.ocr_process_options).
+ocr = root / 'build/ocr'
+a.datas += [(f'ocr/{file.relative_to(ocr).as_posix()}', str(file), 'DATA')
+            for file in ocr.rglob('*') if file.is_file()]
+# OpenCV's FFmpeg video backend (~28 MB); the bot never opens video.
+a.binaries = [entry for entry in a.binaries if not Path(entry[0]).name.startswith('opencv_videoio_ffmpeg')]
 
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='CoC Auto', debug=False,
