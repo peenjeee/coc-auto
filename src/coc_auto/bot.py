@@ -98,6 +98,8 @@ PINCH_STEP_SECONDS = 0.02
 ZOOM_SETTLE_SECONDS = 1.5
 PROBE_SETTLE_SECONDS = 0.4   # after a probe drop, before the card count is read
 PROBE_RESERVE = 4            # units the probe card must hold beyond the most probes it may spend
+PROBE_COUNT_SHIFTS = (4, 6, 0, 2, -2, -4, 8)   # a selected card is wider: its count label sits a few px to the right
+PROBE_COUNT_DROP = 2         # a probe drop lowers the count by 1; a read this far or less below the old count is believed
 BATTLE_SECONDS = 180         # a battle lasts this long from the first drop
 PLAN_MARGIN = 15             # seconds kept free at the end of the battle for the AI plan's last action
 RUN_SLICE_SECONDS = 2.0      # while a timeline step waits for its time, the screen is checked this often
@@ -1711,6 +1713,17 @@ def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = F
     return ([{'slots': heroes, 'abilities': True}] if heroes else []) + siege_steps + spell_steps + troop_steps
 
 
+def read_card_count(image: np.ndarray, bar: list, card: tuple, templates: dict, expected: int) -> int | None:
+    """The count of a card that may be selected, whose label is wider and shifted right a few pixels: the count read at
+    the first horizontal shift that gives a believable number (the expected count, or up to PROBE_COUNT_DROP below
+    it), else None. A wrong shift can read a different number, so an implausible one is never accepted."""
+    for shift in PROBE_COUNT_SHIFTS:
+        value = card_count(image, bar, (card[0] + shift, card[1] + shift), templates)
+        if value is not None and expected - PROBE_COUNT_DROP <= value <= expected:
+            return value
+    return None
+
+
 def card_empty(image: np.ndarray, slot: list) -> bool:
     """A used-up troop/spell card is rendered fully grey (saturation ~0)."""
     x, y = slot
@@ -2384,7 +2397,7 @@ class Bot:
             state, frame = self.checked_state(allowed, terminal)
             if state in terminal:
                 break
-            now = card_count(frame, auto['bar'], box, templates)
+            now = read_card_count(frame, auto['bar'], box, templates, count)
             if now is None:
                 LOG.warning('Uji titik deploy dihentikan: jumlah kartu tidak terbaca')
                 break

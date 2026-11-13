@@ -663,3 +663,34 @@ class DeployAiTest(unittest.TestCase):
         record = {'ran': []}
         state = self.bot_module.Bot.run_timeline(self.stub, self.screen, steps, {'home_battle'}, {'home_result'}, time.monotonic(), record)
         self.assertEqual((state, self.deployed, record['ran']), ('home_result', [], []))
+
+
+class ReadCardCountTest(unittest.TestCase):
+    """The probe reads a selected card, whose count label is wider and shifted right (real frames, Wizard card x25)."""
+
+    def setUp(self):
+        from coc_auto import bot as bot_module
+        from coc_auto.paths import RESOURCE_ROOT
+        self.bot_module = bot_module
+        config = json.loads((RESOURCE_ROOT / 'config.json').read_text(encoding='utf-8'))
+        self.auto = config['screens']['home_scout']['auto']
+        self.templates = bot_module.load_digit_templates(RESOURCE_ROOT, config['digits'])
+        self.before, self.selected = load('probe-before.png'), load('probe-selected.png')
+        found, _ = bot_module.read_bar(self.before, self.auto)
+        self.box = next(cell for cell, _kind, _group in found if abs((cell[0] + cell[1]) // 2 - 336) <= 12)
+
+    def read(self, image, expected):
+        return self.bot_module.read_card_count(image, self.auto['bar'], self.box, self.templates, expected)
+
+    def test_plain_card_reads_its_count(self):
+        self.assertEqual(self.read(self.before, 25), 25)
+
+    def test_selected_card_reads_after_one_drop(self):
+        self.assertEqual(self.read(self.selected, 25), 24)
+
+    def test_the_unshifted_read_alone_fails_on_the_selected_card(self):
+        self.assertIsNone(self.bot_module.card_count(self.selected, self.auto['bar'], self.box, self.templates))
+
+    def test_an_implausible_number_is_never_accepted(self):
+        self.assertIsNone(self.read(self.selected, 30))   # a misread such as 21 for 24 must not pass as a drop
+        self.assertIsNone(self.read(self.selected, 27))
