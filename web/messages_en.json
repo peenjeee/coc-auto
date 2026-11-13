@@ -847,5 +847,14 @@
  "Rencana AI tidak diterima": "AI plan was not accepted",
  "Jumlah titik uji harus 2 sampai 12": "Number of test points must be 2 to 12",
  "Batas percobaan titik harus 2 sampai 20": "Test point attempt limit must be 2 to 20",
- "Uji titik deploy dihentikan: jumlah kartu tidak terbaca": "Drop point test stopped: the card count could not be read"
+ "Uji titik deploy dihentikan: jumlah kartu tidak terbaca": "Drop point test stopped: the card count could not be read",
+ "Deploy AI dihentikan: %s": "AI deploy stopped: %s",
+ "Keluar dari battle gagal: %s": "Leaving the battle failed: %s",
+ "Rencana AI: %s langkah, %s dibuang, model %s detik": "AI plan: %s steps, %s dropped, model %s s",
+ "Uji titik deploy: %s dari %s titik valid, %s unit terpakai, %s detik": "Drop point test: %s of %s points valid, %s units spent, %s s",
+ "tidak ada kartu pasukan untuk uji titik deploy": "no troop card to test drop points with",
+ "titik uji tidak cukup": "not enough points to test",
+ "waktu battle tidak cukup": "not enough battle time left",
+ "zona deploy tidak terbaca": "deploy zone could not be read",
+ "titik deploy terverifikasi kurang dari 2": "fewer than 2 verified drop points"
 }

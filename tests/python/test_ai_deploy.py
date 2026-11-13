@@ -7,23 +7,9 @@ import cv2
 import numpy as np
 
 from coc_auto import ai_deploy
-from coc_auto.ai_deploy import AIPlanError, ChatClient, compile_plan, parse_reply
+from coc_auto.ai_deploy import AIPlanError, ChatClient, parse_reply
 
 BOUNDS = (1280, 651)
-CARDS = {
-    'T1': {'slot': [143, 651], 'kind': 'counted', 'count': 12},
-    'T2': {'slot': [237, 651], 'kind': 'counted', 'count': 5},
-    'H1': {'slot': [637, 651], 'kind': 'hero', 'count': 1},
-    'S1': {'slot': [746, 651], 'kind': 'counted', 'count': 2},
-}
-
-
-def stage(actions, wait=0, name='s'):
-    return {'name': name, 'wait_before': wait, 'actions': actions}
-
-
-def place(x, y, count):
-    return {'at': [x, y], 'count': count}
 
 
 class ParseReplyTest(unittest.TestCase):
@@ -46,92 +32,6 @@ class ParseReplyTest(unittest.TestCase):
         with self.assertRaises(AIPlanError):
             parse_reply('[1, 2]')
 
-
-class CompilePlanTest(unittest.TestCase):
-    def test_troop_tap_places_one_batch_per_place(self):
-        raw = {'stages': [stage([{'card': 'T1', 'place': [place(140, 300, 4), place(160, 420, 3)]}])]}
-        steps, stats = compile_plan(raw, CARDS, BOUNDS)
-        self.assertEqual(len(steps), 1)
-        self.assertEqual(steps[0]['slot'], [143, 651])
-        self.assertEqual(steps[0]['count'], 7)
-        self.assertEqual(steps[0]['points'], [[140, 300]] * 4 + [[160, 420]] * 3)
-        self.assertEqual(stats, {'clamped': 0, 'snapped': 0, 'dropped': 0, 'truncated': 0})
-
-    def test_unknown_card_is_dropped(self):
-        raw = {'stages': [stage([{'card': 'X9', 'place': [place(100, 100, 1)]}])]}
-        with self.assertRaises(AIPlanError):
-            compile_plan(raw, CARDS, BOUNDS)
-
-    def test_bad_card_id_type_is_dropped_not_crashing(self):
-        raw = {'stages': [stage([{'card': ['T1'], 'place': [place(100, 100, 1)]},
-                                 {'card': 'T2', 'place': [place(100, 100, 1)]}])]}
-        steps, stats = compile_plan(raw, CARDS, BOUNDS)
-        self.assertEqual(stats['dropped'], 1)
-        self.assertEqual(len(steps), 1)
-
-    def test_out_of_frame_points_are_clamped_and_counted(self):
-        raw = {'stages': [stage([{'card': 'T1', 'place': [place(-30, 9999, 2)]}])]}
-        steps, stats = compile_plan(raw, CARDS, BOUNDS)
-        self.assertEqual(steps[0]['points'], [[0, 650]] * 2)
-        self.assertEqual(stats['clamped'], 1)
-
-    def test_non_numeric_point_is_dropped(self):
-        raw = {'stages': [stage([{'card': 'T1', 'place': [{'at': ['a', 2], 'count': 1},
-                                                          {'at': [True, 2], 'count': 1},
-                                                          place(100, 100, 1)]}])]}
-        steps, stats = compile_plan(raw, CARDS, BOUNDS)
-        self.assertEqual(steps[0]['points'], [[100, 100]])
-        self.assertEqual(stats['dropped'], 2)
-
-    def test_count_capped_by_known_card_count(self):
-        raw = {'stages': [stage([{'card': 'S1', 'place': [place(300, 300, 9)]}])]}
-        steps, _ = compile_plan(raw, CARDS, BOUNDS)
-        self.assertEqual(steps[0]['count'], 2)
-
-    def test_repeated_card_across_actions_respects_total(self):
-        raw = {'stages': [stage([{'card': 'S1', 'place': [place(300, 300, 2)]}]),
-                          stage([{'card': 'S1', 'place': [place(500, 300, 2)]}], name='b')]}
-        steps, stats = compile_plan(raw, CARDS, BOUNDS)
-        self.assertEqual(sum(step['count'] for step in steps), 2)
-        self.assertEqual(stats['dropped'], 1)
-
-    def test_hero_gets_drop_then_ability_with_wait(self):
-        raw = {'stages': [stage([{'card': 'H1', 'place': [place(130, 360, 5)], 'ability_after': 6}])]}
-        steps, _ = compile_plan(raw, CARDS, BOUNDS)
-        self.assertEqual(steps[0], {'slot': [637, 651], 'count': 1, 'points': [[130, 360]]})
-        self.assertEqual(steps[1], {'slot': [637, 651], 'count': 1, 'tap_only': True, 'wait': 6.0})
-
-    def test_hold_mode_uses_first_point_and_caps_seconds(self):
-        raw = {'stages': [stage([{'card': 'T1', 'mode': 'hold', 'seconds': 99,
-                                  'place': [place(125, 346, 3), place(140, 400, 1)]}])]}
-        steps, stats = compile_plan(raw, CARDS, BOUNDS)
-        self.assertEqual(steps[0]['hold'], ai_deploy.MAX_HOLD)
-        self.assertTrue(steps[0]['until_empty'])
-        self.assertEqual(steps[0]['points'], [[125, 346]])
-        self.assertEqual(stats['dropped'], 1)
-
-    def test_stage_wait_goes_on_first_step_and_is_capped(self):
-        raw = {'stages': [stage([{'card': 'T1', 'place': [place(100, 100, 1)]}], wait=500),
-                          stage([{'card': 'T2', 'place': [place(100, 100, 1)]}], wait=20, name='b')]}
-        steps, _ = compile_plan(raw, CARDS, BOUNDS)
-        self.assertEqual(steps[0]['wait'], ai_deploy.MAX_STAGE_WAIT)
-        self.assertEqual(steps[1]['wait'], ai_deploy.MAX_STAGE_WAIT)
-        self.assertLessEqual(sum(s.get('wait', 0) for s in steps), ai_deploy.MAX_TOTAL_WAIT)
-
-    def test_too_many_stages_rejected(self):
-        raw = {'stages': [stage([]) for _ in range(ai_deploy.MAX_STAGES + 1)]}
-        with self.assertRaises(AIPlanError):
-            compile_plan(raw, CARDS, BOUNDS)
-
-    def test_step_count_truncated(self):
-        actions = [{'card': 'T1', 'place': [place(100, 100, 1)]} for _ in range(ai_deploy.MAX_STEPS + 5)]
-        steps, stats = compile_plan({'stages': [stage(actions)]}, {'T1': {**CARDS['T1'], 'count': None}}, BOUNDS)
-        self.assertEqual(len(steps), ai_deploy.MAX_STEPS)
-        self.assertEqual(stats['truncated'], 5)
-
-    def test_empty_plan_raises(self):
-        with self.assertRaises(AIPlanError):
-            compile_plan({'stages': [stage([{'card': 'NOPE', 'place': []}])]}, CARDS, BOUNDS)
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'fixtures' / 'ai'
@@ -185,44 +85,6 @@ class DroppableTest(unittest.TestCase):
         zone, _ = ai_deploy.droppable(np.full((720, 1280, 3), 90, np.uint8), BAR_TOP)
         self.assertIsNone(zone)
 
-    def test_snap_moves_a_base_point_out_to_droppable_ground(self):
-        zone, _ = self.zone('scout-oracle.png')
-        snapped = ai_deploy.snap_to_zone([585, 305], zone)
-        self.assertTrue(zone[snapped[1], snapped[0]])
-        self.assertEqual(ai_deploy.snap_to_zone([280, 400], zone), [280, 400])   # already droppable: unchanged
-
-    def test_compile_snaps_points_out_of_the_base(self):
-        zone, _ = self.zone('scout-oracle.png')
-        cards = {'T1': {'slot': [143, 651], 'kind': 'counted', 'count': 12}}
-        raw = {'stages': [stage([{'card': 'T1', 'place': [place(585, 305, 2), place(280, 400, 1)]}])]}
-        steps, stats = compile_plan(raw, cards, BOUNDS, zone)
-        self.assertEqual(stats['snapped'], 1)
-        for x, y in steps[0]['points']:
-            self.assertTrue(zone[y, x])
-
-    def test_spells_are_not_snapped_out_of_the_base(self):
-        zone, _ = self.zone('scout-oracle.png')
-        cards = {'S1': {'slot': [746, 651], 'kind': 'spell', 'count': 2},
-                 'T1': {'slot': [143, 651], 'kind': 'troop', 'count': 12}}
-        inside = place(585, 305, 1)
-        raw = {'stages': [stage([{'card': 'S1', 'place': [inside]}, {'card': 'T1', 'place': [inside]}])]}
-        steps, stats = compile_plan(raw, cards, BOUNDS, zone)
-        self.assertEqual(steps[0]['points'], [[585, 305]])     # the spell stays over the base
-        self.assertNotEqual(steps[1]['points'], [[585, 305]])  # the troop is moved out
-        self.assertEqual(stats['snapped'], 1)
-
-    def test_compile_without_zone_keeps_points(self):
-        cards = {'T1': {'slot': [143, 651], 'kind': 'counted', 'count': 12}}
-        raw = {'stages': [stage([{'card': 'T1', 'place': [place(10, 10, 1)]}])]}
-        steps, stats = compile_plan(raw, cards, BOUNDS, None)
-        self.assertEqual(steps[0]['points'], [[10, 10]])
-        self.assertEqual(stats['snapped'], 0)
-
-    def test_no_zone_refuses_the_ai_plan_before_calling_the_model(self):
-        client = ChatClient('https://example.test/v1', 'k', 'm', transport=lambda *a: self.fail('no call expected'))
-        with self.assertRaises(AIPlanError):
-            ai_deploy.plan(client, 'loot', '', np.full((720, 1280, 3), 90, np.uint8), {}, BOUNDS)
-
 
 class ClientTest(unittest.TestCase):
     def reply_for(self, content):
@@ -266,14 +128,6 @@ class ClientTest(unittest.TestCase):
 
 
 class MessagesTest(unittest.TestCase):
-    def test_images_sent_as_data_uri_and_inventory_listed(self):
-        jpeg = ai_deploy.encode_jpeg(np.zeros((720, 1280, 3), np.uint8))
-        messages = ai_deploy.build_messages('loot', 'keep heroes safe', CARDS, BOUNDS, [jpeg])
-        self.assertEqual(messages[0]['role'], 'system')
-        content = messages[1]['content']
-        self.assertIn('keep heroes safe', content[0]['text'])
-        self.assertIn('"id": "T1"', content[0]['text'])
-        self.assertTrue(content[1]['image_url']['url'].startswith('data:image/jpeg;base64,'))
 
     def test_encode_jpeg_downscales_large_frames(self):
         import cv2
@@ -323,34 +177,6 @@ class BotHookTest(unittest.TestCase):
         self.assertEqual(kinds.count('hero'), 1)
         self.assertNotIn('siege', kinds)
         self.assertEqual([cid for cid in cards if cid.startswith('T')], ['T1', 'T2', 'T3', 'T4', 'T5'])
-
-    def test_plan_from_model_replaces_builtin_plan(self):
-        reply = {'analysis': 'funnel left', 'stages': [
-            {'name': 'funnel', 'wait_before': 0, 'actions': [
-                {'card': 'T1', 'place': [{'at': [300, 300], 'count': 3}]}]},
-            {'name': 'heroes', 'wait_before': 2, 'actions': [
-                {'card': 'H1', 'place': [{'at': [640, 300], 'count': 1}], 'ability_after': 5}]}]}
-
-        def transport(url, payload, headers, timeout):
-            return json.dumps({'choices': [{'message': {'content': json.dumps(reply)}}]}).encode()
-
-        self.stub.ai = ai_deploy.ChatClient('https://example.test/v1', 'k', 'm', transport=transport)
-        self.stub.ai_goal, self.stub.ai_hint = 'loot', ''
-        steps = self.bot_module.Bot.ai_plan(self.stub, self.image, self.auto)
-        self.assertIsNotNone(steps)
-        self.assertEqual(steps[0]['slot'], [142, 651])
-        self.assertEqual(steps[0].get('wait', 0), 0)
-        self.assertTrue(any(step.get('tap_only') and step.get('wait') == 5 for step in steps))
-        record = json.loads((self.root / 'captures' / 'ai-plan.json').read_text(encoding='utf-8'))
-        self.assertEqual(record['analysis'], 'funnel left')
-
-    def test_model_failure_falls_back_to_none(self):
-        def transport(url, payload, headers, timeout):
-            raise ai_deploy.AIPlanError('Tidak bisa terhubung ke model AI')
-
-        self.stub.ai = ai_deploy.ChatClient('https://example.test/v1', 'k', 'm', transport=transport)
-        self.stub.ai_goal, self.stub.ai_hint = 'loot', ''
-        self.assertIsNone(self.bot_module.Bot.ai_plan(self.stub, self.image, self.auto))
 
 
 class SettingsTest(unittest.TestCase):
@@ -696,3 +522,144 @@ class ProbeTest(unittest.TestCase):
         self.assertIsNone(pick(self.stub, cards, 26))          # the best stack is too small to spend from
         self.assertIsNone(pick(self.stub, {'T1': {'kind': 'troop', 'count': None}}, 1))
         self.assertIsNone(pick(self.stub, {}, 1))
+
+
+class DeployAiTest(unittest.TestCase):
+    """Bot.deploy_ai and run_timeline with stubs: probe -> one model call -> timeline, or stop."""
+
+    CARDS = {'T1': {'slot': [143, 651], 'kind': 'troop', 'count': 12}, 'T2': {'slot': [237, 651], 'kind': 'troop', 'count': 25},
+             'H1': {'slot': [637, 651], 'kind': 'hero', 'count': None}, 'S1': {'slot': [746, 651], 'kind': 'spell', 'count': 2}}
+    PROBE = {'verified': [[200, 400], [300, 500], [400, 520]], 'failed': [[250, 300]], 'tried': 4, 'spent': 3,
+             'seconds': 3.2, 'assumed': False, 'state': 'home_battle'}
+    PLAN = {'analysis': 'push west', 'estimate': [{'t': 0, 'note': 'land'}], 'timeline': [
+        entry(14, 'spell', 'S1', at=[640, 334], count=1), entry(0, 'drop', 'T1', point='P2', count=3),
+        entry(1, 'drop', 'H1', point='P1', count=1), entry(8, 'ability', 'H1')]}
+
+    def setUp(self):
+        import types
+        from coc_auto import bot as bot_module
+        from coc_auto.paths import RESOURCE_ROOT
+        self.bot_module = bot_module
+        config = json.loads((RESOURCE_ROOT / 'config.json').read_text(encoding='utf-8'))
+        self.screen = config['screens']['home_scout']
+        self.image = load('scout-oracle.png')
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.deployed, self.left, self.requests, self.state = [], [], [], 'home_battle'
+        bot = bot_module.Bot
+        stub = types.SimpleNamespace(
+            live=False, ai_probe_points=3, ai_probe_max=12, ai_t_max=150.0, ai_goal='loot', ai_hint='', hero_slots=None,
+            battle_deadline=7, root=Path(self.tmp.name), probe=dict(self.PROBE), cards=dict(self.CARDS))
+        stub.ai_cards = lambda image, auto: stub.cards
+        stub.pick_probe_card = lambda cards, needed: bot.pick_probe_card(stub, cards, needed)
+        stub.probe_drop_points = lambda *args: stub.probe
+        stub.checked_state = lambda allowed, terminal, image=None: (self.state, self.image)
+        stub.deploy_card = lambda screen, step, allowed, terminal: (self.deployed.append(step), self.state)[1]
+        stub.keep_ai_run = lambda record: bot.keep_ai_run(stub, record)
+        stub.run_timeline = lambda *args: bot.run_timeline(stub, *args)
+        stub.ai_stop = lambda record, reason: bot.ai_stop(stub, record, reason)
+        stub.leave_home_search = lambda: self.left.append(True)
+        self.stub = stub
+        self.reply = json.dumps({'choices': [{'message': {'content': json.dumps(self.PLAN)}}]}).encode()
+
+    def client(self, transport=None):
+        def default(url, payload, headers, timeout):
+            self.requests.append(json.loads(payload))
+            return self.reply
+
+        self.stub.ai = ChatClient('https://example.test/v1', 'k', 'm', transport=transport or default)
+
+    def run_ai(self):
+        return self.bot_module.Bot.deploy_ai(self.stub, self.screen, {'home_scout', 'home_battle'}, {'home_result'}, self.image)
+
+    def record(self):
+        return json.loads((Path(self.tmp.name) / 'captures' / 'ai-plan.json').read_text(encoding='utf-8'))
+
+    def test_the_timeline_runs_in_time_order_on_the_verified_points(self):
+        self.client()
+        self.assertIsNone(self.run_ai())
+        self.assertEqual([step['at'] for step in self.deployed], [0.0, 1.0, 8.0, 14.0])
+        self.assertEqual(self.deployed[0]['points'], [[300, 500]] * 3)     # P2
+        self.assertEqual(self.deployed[1]['points'], [[200, 400]])          # hero on P1
+        self.assertTrue(self.deployed[2]['tap_only'])
+        self.assertEqual(self.deployed[3]['points'], [[640, 334]])          # spell, free coordinate
+
+    def test_the_model_is_told_the_verified_points_the_probe_card_and_what_is_left(self):
+        self.client()
+        self.run_ai()
+        self.assertEqual(len(self.requests), 1)                              # one call, no second look
+        text = self.requests[0]['messages'][1]['content'][0]['text']
+        self.assertIn('"id": "P1"', text)
+        self.assertIn('"id": "P3"', text)
+        self.assertNotIn('250, 300', text)                                   # a failed point is never offered
+        self.assertIn('card T2', text)
+        self.assertIn('Time budget: 150', text)
+
+    def test_the_record_keeps_candidates_probe_points_steps_and_real_times(self):
+        self.client()
+        self.run_ai()
+        record = self.record()
+        self.assertGreaterEqual(len(record['candidates']), 2)
+        self.assertEqual(record['probe']['spent'], 3)
+        self.assertEqual([p['id'] for p in record['points']], ['P1', 'P2', 'P3'])
+        self.assertEqual(len(record['steps']), 4)
+        self.assertEqual(len(record['ran']), 4)
+        self.assertEqual(record['info']['analysis'], 'push west')
+        self.assertIsNone(record['stopped'])
+
+    def test_no_probe_troop_stops_before_any_model_call_and_leaves_when_live(self):
+        self.stub.cards = {**self.CARDS, 'T2': {**self.CARDS['T2'], 'count': 5}, 'T1': {**self.CARDS['T1'], 'count': 5}}
+        self.stub.live = True
+        self.client(lambda *a: self.fail('no call expected'))
+        self.assertIsNone(self.run_ai())
+        self.assertEqual((self.deployed, self.left), ([], [True]))
+        self.assertIn('uji titik deploy', self.record()['stopped'])
+        self.assertIsNone(self.stub.battle_deadline)
+
+    def test_fewer_than_two_verified_points_stops(self):
+        self.stub.probe = {**self.PROBE, 'verified': [[200, 400]]}
+        self.client(lambda *a: self.fail('no call expected'))
+        self.assertIsNone(self.run_ai())
+        self.assertEqual(self.deployed, [])
+        self.assertIn('kurang dari 2', self.record()['stopped'])
+
+    def test_a_model_failure_stops_dropping(self):
+        def transport(*args):
+            raise AIPlanError('Tidak bisa terhubung ke model AI')
+
+        self.stub.live = True
+        self.client(transport)
+        self.assertIsNone(self.run_ai())
+        self.assertEqual((self.deployed, self.left), ([], [True]))
+
+    def test_a_plan_with_nothing_valid_stops_dropping(self):
+        self.reply = json.dumps({'choices': [{'message': {'content': json.dumps({'timeline': [entry(0, 'drop', 'T1', point='P9', count=1)]})}}]}).encode()
+        self.client()
+        self.assertIsNone(self.run_ai())
+        self.assertEqual(self.deployed, [])
+        self.assertEqual(len(self.requests), 2)                              # one retry, then give up
+
+    def test_a_result_screen_after_the_probe_ends_the_deploy(self):
+        self.stub.probe = {**self.PROBE, 'state': 'home_result'}
+        self.client(lambda *a: self.fail('no call expected'))
+        self.assertEqual(self.run_ai(), 'home_result')
+
+    def test_run_timeline_waits_for_each_step_when_live(self):
+        import time
+        self.stub.live = True
+        self.client()
+        steps = [{'slot': [143, 651], 'count': 1, 'points': [[1, 1]], 'at': 0.0}, {'slot': [143, 651], 'count': 1, 'points': [[2, 2]], 'at': 0.4}]
+        record = {'ran': []}
+        started = time.monotonic()
+        self.assertIsNone(self.bot_module.Bot.run_timeline(self.stub, self.screen, steps, {'home_battle'}, {'home_result'}, started, record))
+        self.assertLess(record['ran'][0]['actual'], 0.3)
+        self.assertGreaterEqual(record['ran'][1]['actual'], 0.4)
+
+    def test_run_timeline_stops_when_the_battle_ends_while_waiting(self):
+        import time
+        self.stub.live = True
+        self.state = 'home_result'
+        steps = [{'slot': [143, 651], 'count': 1, 'points': [[1, 1]], 'at': 0.3}]
+        record = {'ran': []}
+        state = self.bot_module.Bot.run_timeline(self.stub, self.screen, steps, {'home_battle'}, {'home_result'}, time.monotonic(), record)
+        self.assertEqual((state, self.deployed, record['ran']), ('home_result', [], []))

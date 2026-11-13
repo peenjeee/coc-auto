@@ -97,6 +97,10 @@ PINCH_STEPS = 10
 PINCH_STEP_SECONDS = 0.02
 ZOOM_SETTLE_SECONDS = 1.5
 PROBE_SETTLE_SECONDS = 0.4   # after a probe drop, before the card count is read
+PROBE_RESERVE = 4            # units the probe card must hold beyond the most probes it may spend
+BATTLE_SECONDS = 180         # a battle lasts this long from the first drop
+PLAN_MARGIN = 15             # seconds kept free at the end of the battle for the AI plan's last action
+RUN_SLICE_SECONDS = 2.0      # while a timeline step waits for its time, the screen is checked this often
 # A pinch on a map already zoomed out moves nothing but the animations, which stay well under this.
 ZOOM_UNCHANGED_DIFF = 5
 STILL_DIFF = 1.5
@@ -1811,10 +1815,14 @@ class Bot:
                  quake: bool = False, surrender_stars: int = 0, builder_stack: bool = False,
                  trophy_floor: int = 0, bulk_walls: bool = False, wall_every: int = 0,
                  wall_resources: tuple = WALL_RESOURCES, ai: object | None = None, ai_goal: str = 'loot',
-                 ai_hint: str = '') -> None:
+                 ai_hint: str = '', ai_probe_points: int = 6, ai_probe_max: int = 12,
+                 ai_t_max: float = 150.0) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         # ai: an ai_deploy.ChatClient; the Home Village plan comes from the model, the built-in plan is the fallback.
         self.ai, self.ai_goal, self.ai_hint = ai, ai_goal, ai_hint
+        # The AI first drops single probe units to learn which points the game accepts (up to ai_probe_max drops, until
+        # ai_probe_points are verified), then runs one timeline of at most ai_t_max seconds.
+        self.ai_probe_points, self.ai_probe_max, self.ai_t_max = ai_probe_points, ai_probe_max, ai_t_max
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.battle_deadline: float | None = None
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
@@ -2272,14 +2280,12 @@ class Bot:
             if state in terminal:
                 return state
         self.keep_deploy_frame(screen_name, image)
+        if self.ai is not None and screen_name == 'home_scout' and 'auto' in screen:
+            return self.deploy_ai(screen, allowed, terminal, image)
         if 'auto' in screen:
             # Read the card bar before any card is used; the plan follows the army that is trained. The home cards
             # stand still, so the frame in hand is read; Builder Base stage 2 waits for its cards to slide in.
-            plan = None
-            if self.ai is not None and screen_name == 'home_scout' and image is not None:
-                plan = self.ai_plan(image, screen['auto'])
-            if plan is None:
-                plan = self.bar_plan(screen['auto'], allowed, image if screen_name == 'home_scout' else None)
+            plan = self.bar_plan(screen['auto'], allowed, image if screen_name == 'home_scout' else None)
             cards = {tuple(slot) for troop in plan for slot in troop.get('slots') or [troop['slot']]}
             LOG.info('Rencana deploy dari bar: %s kartu', len(cards))
         else:
@@ -2391,29 +2397,105 @@ class Bot:
         return {'verified': verified, 'failed': failed, 'tried': tried, 'spent': spent, 'assumed': not self.live,
                 'seconds': round(time.monotonic() - started, 1), 'state': state}
 
-    def ai_plan(self, image: np.ndarray, auto: dict) -> list | None:
-        """Staged plan from the model for this frame, or None (with a log line) so the built-in plan is used."""
+    def deploy_ai(self, screen: dict, allowed: set, terminal: set, image: np.ndarray) -> str | None:
+        """Home Village deploy by the AI, open loop. 1) Propose points around the base. 2) Drop single units of the troop
+        card with the most units on them: the game accepts or refuses each drop, which is how the verified points are
+        found. 3) One model call with the verified points, the cards left and the battle seconds left returns a timeline,
+        spells included. 4) Run it on the clock without looking back. Anything that fails (no probe troop, fewer than 2
+        verified points, no usable reply) stops the dropping and leaves the battle."""
+        auto, bar_top = screen['auto'], screen['auto']['bar'][1]
+        self.hero_slots = []
+        record = {'candidates': [], 'probe': None, 'points': [], 'cards': None, 'info': None, 'steps': [], 'ran': [],
+                  'stopped': None}
         cards = self.ai_cards(image, auto)
-        if not cards:
-            LOG.warning('AI dilewati: tidak ada kartu terbaca di bar')
-            return None
-        bounds = (image.shape[1], auto['bar'][1])
+        probe_id = self.pick_probe_card(cards, self.ai_probe_max + PROBE_RESERVE)
+        if probe_id is None:
+            return self.ai_stop(record, 'tidak ada kartu pasukan untuk uji titik deploy')
+        zone, _how = ai_deploy.droppable(image, bar_top)
+        centre = ai_deploy.base_centre(image, bar_top)
+        if zone is None or centre is None:
+            return self.ai_stop(record, 'zona deploy tidak terbaca')
+        candidates, centre = ai_deploy.candidate_points(zone, 2 * self.ai_probe_max, centre)
+        record['candidates'] = candidates
+        if len(candidates) < 2:
+            return self.ai_stop(record, 'titik uji tidak cukup')
+        battle_start = time.monotonic()
+        probe = self.probe_drop_points(image, auto, candidates, cards[probe_id], self.ai_probe_points,
+                                       self.ai_probe_max, allowed, terminal)
+        record['probe'] = {key: value for key, value in probe.items() if key != 'state'}
+        LOG.info('Uji titik deploy: %s dari %s titik valid, %s unit terpakai, %s detik', len(probe['verified']),
+                 probe['tried'], probe['spent'], probe['seconds'])
+        if probe['state'] in terminal:
+            self.keep_ai_run(record)
+            return probe['state']
+        if len(probe['verified']) < 2:
+            return self.ai_stop(record, 'titik deploy terverifikasi kurang dari 2')
+        state, frame = self.checked_state(allowed, terminal)
+        if state in terminal:
+            self.keep_ai_run(record)
+            return state
+        cards = self.ai_cards(frame, auto)
+        points = [{'id': f'P{index + 1}', 'at': point, 'side': ai_deploy.side_label(point, centre)}
+                  for index, point in enumerate(probe['verified'])]
+        record.update(points=points, cards=cards)
+        spent = time.monotonic() - battle_start if self.live else 0.0
+        t_left = min(self.ai_t_max, BATTLE_SECONDS - PLAN_MARGIN - spent)
+        if t_left < 20:
+            return self.ai_stop(record, 'waktu battle tidak cukup')
+        asked = time.monotonic()
         try:
-            steps, stats, analysis = ai_deploy.plan(self.ai, self.ai_goal, self.ai_hint, image, cards, bounds)
+            steps, stats, info = ai_deploy.plan_timeline(
+                self.ai, self.ai_goal, self.ai_hint, frame, cards, points, (frame.shape[1], bar_top), t_left,
+                probe={'card': probe_id}, units=ai_deploy.load_units(),
+                deadline=battle_start + BATTLE_SECONDS - PLAN_MARGIN)
         except AIPlanError as exc:
-            LOG.warning('Rencana AI gagal (%s); pakai rencana bawaan', exc)
-            return None
-        LOG.info('Rencana AI: %s langkah, %s titik digeser ke zona deploy, %s dibuang',
-                 len(steps), stats['snapped'], stats['dropped'])
-        self.keep_ai_plan(steps, stats, analysis, cards)
-        return steps
+            return self.ai_stop(record, str(exc))
+        record.update(info=info, steps=steps, stats=stats, model_seconds=round(time.monotonic() - asked, 1))
+        LOG.info('Rencana AI: %s langkah, %s dibuang, model %s detik', len(steps), stats['dropped'],
+                 record['model_seconds'])
+        self.keep_ai_run(record)
+        state = self.run_timeline(screen, steps, allowed, terminal, time.monotonic(), record)
+        self.keep_ai_run(record)
+        return state if state in terminal else None
 
-    def keep_ai_plan(self, steps: list, stats: dict, analysis: str, cards: dict) -> None:
-        """The plan and its validation as JSON in captures, for review after the battle."""
+    def run_timeline(self, screen: dict, steps: list, allowed: set, terminal: set, started: float,
+                     record: dict) -> str | None:
+        """Run the steps at their 'at' seconds after started, open loop: only the screen is watched, so a result or
+        surrender screen ends the run. A step already late runs at once. Each step's real time is kept in record."""
+        for step in steps:
+            while self.live:
+                remaining = started + step['at'] - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(min(remaining, RUN_SLICE_SECONDS))
+                state = self.checked_state(allowed, terminal)[0]
+                if state in terminal:
+                    return state
+            state = self.deploy_card(screen, step, allowed, terminal)
+            record['ran'].append({'at': step['at'], 'actual': round(time.monotonic() - started, 1),
+                                  'slot': step['slot'][0]})
+            if state in terminal:
+                return state
+        return None
+
+    def ai_stop(self, record: dict, reason: str) -> None:
+        """No plan to run: say why, keep the record and leave the battle, so nothing more is spent."""
+        LOG.warning('Deploy AI dihentikan: %s', messages.translate(reason))
+        record['stopped'] = reason
+        self.keep_ai_run(record)
+        self.battle_deadline = None
+        if self.live:
+            try:
+                self.leave_home_search()
+            except BotError as exc:
+                LOG.warning('Keluar dari battle gagal: %s', exc)
+
+    def keep_ai_run(self, record: dict) -> None:
+        """What the AI deploy did, as JSON in captures: candidates, probe result, points, model reply, steps and the
+        real time of each step."""
         folder = captures_dir(self.root)
         try:
             folder.mkdir(exist_ok=True)
-            record = {'analysis': analysis, 'stats': stats, 'cards': cards, 'steps': steps}
             (folder / 'ai-plan.json').write_text(json.dumps(record, indent=1, default=str), encoding='utf-8')
         except OSError as exc:
             LOG.warning('Rencana AI tidak tersimpan: %s', exc)
@@ -4224,6 +4306,9 @@ def main() -> int:
         runner = Bot(config, config_root(args.config), device, live=args.live, emulator=emulator, goals=goals, walls=walls,
                      ai=ai_client, ai_goal=ai_settings['goal'] if ai_settings else 'loot',
                      ai_hint=ai_settings['hint'] if ai_settings else '',
+                     ai_probe_points=ai_settings['probe_points'] if ai_settings else 6,
+                     ai_probe_max=ai_settings['probe_max'] if ai_settings else 12,
+                     ai_t_max=ai_settings['t_max'] if ai_settings else 150.0,
                      minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
                      surrender_after=surrender_after, surrender_at=surrender_at, ring='home' in ring, quake=args.quake,
                      surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor,

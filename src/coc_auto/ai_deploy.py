@@ -13,11 +13,8 @@ import numpy as np
 
 from .paths import RESOURCE_ROOT
 
-MAX_STAGES = 8
 MAX_STEPS = 40
 MAX_TAPS = 400
-MAX_STAGE_WAIT = 15.0
-MAX_TOTAL_WAIT = 60.0
 MAX_HOLD = 10.0
 DEFAULT_HOLD = 6.0
 MAX_TIMEOUT = 30.0
@@ -26,17 +23,6 @@ GOALS = {
     'trophy': 'Goal: trophies. Destroy the Town Hall and as much of the base as possible.',
     'stars': 'Goal: stars. Maximise destruction and take all three stars if possible.',
 }
-SYSTEM_PROMPT = (
-    'You plan a Clash of Clans attack from a screenshot. Reply with JSON only, no prose: '
-    '{"analysis": "<short>", "stages": [{"name": "<short>", "wait_before": <seconds>, "actions": ['
-    '{"card": "<card id>", "place": [{"at": [x, y], "count": <int>}], "mode": "tap" or "hold", '
-    '"seconds": <hold seconds, hold mode only>, "ability_after": <seconds, heroes only>}]}]}. '
-    'Coordinates are screen pixels of the 1280x720 frame shown by the grid. Troops, siege machines and heroes '
-    'must go outside the enemy base (a drop inside it is refused); spells may go anywhere, including over the '
-    'base. Use only the card ids listed. Never exceed a card\'s count when it is known. '
-    'Heroes take count 1 and get ability_after. Keep stages short and ordered: funnel first, then main push, '
-    'then spells, then heroes if they are needed.'
-)
 
 
 class AIPlanError(Exception):
@@ -194,111 +180,6 @@ def droppable(image: np.ndarray, bar_top: int) -> tuple[np.ndarray | None, str]:
         return None, how
     return zone, how
 
-
-def snap_to_zone(point: list, zone: np.ndarray) -> list:
-    """The point itself when it is droppable, else the nearest droppable pixel."""
-    x, y = point
-    if zone[y, x]:
-        return point
-    ys, xs = np.nonzero(zone)
-    xs, ys = xs[::2].astype(np.int64), ys[::2].astype(np.int64)
-    nearest = int(np.argmin((xs - x) ** 2 + (ys - y) ** 2))
-    return [int(xs[nearest]), int(ys[nearest])]
-
-
-def _point(value: object, bounds: tuple, stats: dict, zone: np.ndarray | None = None) -> list | None:
-    """An [x, y] pixel inside the frame above the card bar; out-of-range points are clamped, not guessed. With a
-    deploy zone, a point outside it is moved to the zone's edge."""
-    if not isinstance(value, list) or len(value) != 2:
-        return None
-    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or v != v for v in value):
-        return None
-    width, bar_top = bounds
-    x, y = int(round(value[0])), int(round(value[1]))
-    clamped = [min(max(x, 0), width - 1), min(max(y, 0), bar_top - 1)]
-    if clamped != [x, y]:
-        stats['clamped'] += 1
-    if zone is not None and not zone[clamped[1], clamped[0]]:
-        stats['snapped'] += 1
-        return snap_to_zone(clamped, zone)
-    return clamped
-
-
-def compile_plan(raw: dict, cards: dict, bounds: tuple, zone: np.ndarray | None = None) -> tuple[list, dict]:
-    """Validated plan as deploy steps (the shapes auto_plan returns) and counts of what was clamped, snapped into
-    the deploy zone, or dropped.
-
-    cards: id -> {'slot': [x, y], 'kind': str, 'count': int | None}, from the card bar read.
-    bounds: (frame width, card bar top y). zone: droppable mask (ground outside the base), or None when it could not be read.
-    """
-    stages = raw.get('stages')
-    if not isinstance(stages, list) or not 1 <= len(stages) <= MAX_STAGES:
-        raise AIPlanError('Rencana AI harus berisi 1 sampai 8 tahap')
-    stats = {'clamped': 0, 'snapped': 0, 'dropped': 0, 'truncated': 0}
-    steps, used, total_wait = [], {}, 0.0
-    for stage in stages:
-        actions = stage.get('actions') if isinstance(stage, dict) else None
-        if not isinstance(actions, list):
-            stats['dropped'] += 1
-            continue
-        wait = _number(stage.get('wait_before', 0), MAX_STAGE_WAIT) or 0.0
-        wait = min(wait, MAX_TOTAL_WAIT - total_wait)
-        total_wait += wait
-        first = len(steps)
-        for action in actions:
-            for step in _action_steps(action, cards, bounds, used, stats, zone):
-                if len(steps) >= MAX_STEPS:
-                    stats['truncated'] += 1
-                    continue
-                steps.append(step)
-        if wait > 0 and len(steps) > first:
-            steps[first]['wait'] = wait
-    if not steps:
-        raise AIPlanError('Rencana AI kosong setelah divalidasi')
-    return steps, stats
-
-
-def _action_steps(action: object, cards: dict, bounds: tuple, used: dict, stats: dict,
-                  zone: np.ndarray | None = None) -> list:
-    card_id = action.get('card') if isinstance(action, dict) else None
-    card = cards.get(card_id) if isinstance(card_id, str) else None
-    if card is None:
-        stats['dropped'] += 1
-        return []
-    if card['kind'] == 'spell':
-        zone = None   # the no-deploy zone is for troops, siege and heroes; a spell may land on the base
-    points = []
-    for place in action.get('place') or []:
-        at = _point(place.get('at') if isinstance(place, dict) else None, bounds, stats, zone)
-        count = place.get('count') if isinstance(place, dict) else None
-        if at is None or isinstance(count, bool) or not isinstance(count, int) or count < 1:
-            stats['dropped'] += 1
-            continue
-        points += [at] * min(count, MAX_TAPS)
-    budget = (card['count'] if card.get('count') is not None else MAX_TAPS) - used.get(card_id, 0)
-    points = points[:max(budget, 0)]
-    if not points:
-        stats['dropped'] += 1
-        return []
-    used[card_id] = used.get(card_id, 0) + len(points)
-    slot = card['slot']
-    if card['kind'] in ('hero', 'warden'):
-        steps = [{'slot': slot, 'count': 1, 'points': [points[0]]}]
-        if action.get('ability_after') is not None:
-            wait = _number(action['ability_after'], MAX_STAGE_WAIT) or 0.0
-            steps.append({'slot': slot, 'count': 1, 'tap_only': True, 'wait': wait})
-        else:
-            steps.append({'slot': slot, 'count': 1, 'tap_only': True})
-        return steps
-    if action.get('mode') == 'hold':
-        seconds = _number(action.get('seconds', DEFAULT_HOLD), MAX_HOLD)
-        if seconds is None or seconds <= 0:
-            seconds = DEFAULT_HOLD
-        # A hold keeps one finger on one spot until the card empties, so only its first point is used.
-        if len(points) > 1:
-            stats['dropped'] += 1
-        return [{'slot': slot, 'count': 1, 'hold': seconds, 'until_empty': True, 'points': [points[0]]}]
-    return [{'slot': slot, 'count': len(points), 'points': points, 'burst': len(points)}]
 
 
 T_MAX = 150.0             # latest second of the plan (the battle lasts 180 s from the first drop)
@@ -533,21 +414,6 @@ def encode_jpeg(image: np.ndarray, max_edge: int = 1024, quality: int = 80) -> b
     return buffer.tobytes()
 
 
-def build_messages(goal: str, hint: str, cards: dict, bounds: tuple, jpegs: list) -> list:
-    """Chat messages: the base screenshot, the card bar crop, and the card inventory as text."""
-    inventory = [{'id': cid, 'kind': c['kind'], 'count': c.get('count')} for cid, c in cards.items()]
-    lines = [GOALS.get(goal, GOALS['loot'])]
-    if hint and hint.strip():
-        lines.append(f'Player note: {hint.strip()}')
-    lines.append(f'Frame width {bounds[0]}; the card bar starts at y {bounds[1]}, so drop only above it.')
-    lines.append(f'Cards: {json.dumps(inventory)}. Count null means unknown.')
-    text = '\n'.join(lines)
-    content = [{'type': 'text', 'text': text}]
-    for jpeg in jpegs:
-        url = 'data:image/jpeg;base64,' + base64.b64encode(jpeg).decode('ascii')
-        content.append({'type': 'image_url', 'image_url': {'url': url}})
-    return [{'role': 'system', 'content': SYSTEM_PROMPT}, {'role': 'user', 'content': content}]
-
 
 def _post(url: str, payload: bytes, headers: dict, timeout: float) -> bytes:
     opener = request.build_opener(NoRedirect)
@@ -588,18 +454,6 @@ class ChatClient:
         except (ValueError, KeyError, IndexError, TypeError):
             raise AIPlanError('Format balasan model tidak dikenal') from None
 
-
-def plan(client: ChatClient, goal: str, hint: str, image: np.ndarray, cards: dict, bounds: tuple) -> tuple:
-    """(steps, stats, analysis) for the frame, or raises AIPlanError; the caller falls back to the built-in plan."""
-    zone, how = droppable(image, bounds[1])
-    if zone is None:
-        raise AIPlanError('Zona deploy tidak terbaca; pakai rencana bawaan')
-    jpegs = [encode_jpeg(image)]
-    reply = client.complete(build_messages(goal, hint, cards, bounds, jpegs))
-    raw = parse_reply(reply)
-    steps, stats = compile_plan(raw, cards, bounds, zone)
-    stats['zone'] = how
-    return steps, stats, str(raw.get('analysis', ''))[:300]
 
 
 SETTINGS_FILE = 'ai.json'
