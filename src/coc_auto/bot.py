@@ -96,6 +96,7 @@ TOUCH_DEVICE = re.compile(r'/dev/input/event\d{1,2}')
 PINCH_STEPS = 10
 PINCH_STEP_SECONDS = 0.02
 ZOOM_SETTLE_SECONDS = 1.5
+PROBE_SETTLE_SECONDS = 0.4   # after a probe drop, before the card count is read
 # A pinch on a map already zoomed out moves nothing but the animations, which stay well under this.
 ZOOM_UNCHANGED_DIFF = 5
 STILL_DIFF = 1.5
@@ -2335,6 +2336,60 @@ class Bot:
             cards[f'{prefix}{numbers[prefix]}'] = {'slot': [(card[0] + card[1]) // 2, middle], 'kind': role,
                                                    'count': count}
         return cards
+
+    def pick_probe_card(self, cards: dict, needed: int) -> str | None:
+        """Id of the probe troop: the troop card with the highest known count, the cheapest stack to spend from.
+        None when no troop count is known or the best one holds fewer than needed units."""
+        troops = [(card['count'], cid) for cid, card in cards.items()
+                  if card['kind'] == 'troop' and card['count'] is not None]
+        if not troops:
+            return None
+        count, cid = max(troops, key=lambda item: item[0])
+        return cid if count >= needed else None
+
+    def probe_drop_points(self, image: np.ndarray, auto: dict, candidates: list, card: dict, target: int,
+                          max_tries: int, allowed: set, terminal: set) -> dict:
+        """Ask the game which candidate points are deployable: drop one unit of the probe card on a point and read its
+        count. A point is verified when the count falls, which is the game's own answer, and failed when it does not.
+        Stops at target verified points or max_tries drops (every drop spends at most one unit). Not live, nothing is
+        tapped and the first candidates are returned as assumed, so a dry run can still show a plan.
+
+        card: {'slot': [x, y], 'count': int}. Returns {'verified', 'failed', 'tried', 'spent', 'seconds', 'assumed',
+        'state'}, state being the screen after the last probe."""
+        started = time.monotonic()
+        found, _ = read_bar(image, auto)
+        box = next((cell for cell, _kind, _group in found if abs((cell[0] + cell[1]) // 2 - card['slot'][0]) <= 12), None)
+        verified, failed, tried, spent, state = [], [], 0, 0, None
+        templates, count, first = self.digits(), card['count'], True
+        for point in candidates:
+            if len(verified) >= target or tried >= max_tries:
+                break
+            tried += 1
+            if not self.live:
+                verified.append(list(point))
+                continue
+            if box is None or not templates:
+                LOG.warning('Uji titik deploy dihentikan: jumlah kartu tidak terbaca')
+                break
+            self.device.tap_many([card['slot'], list(point)] if first else [list(point)])
+            first = False
+            if self.poll:
+                time.sleep(PROBE_SETTLE_SECONDS)
+            state, frame = self.checked_state(allowed, terminal)
+            if state in terminal:
+                break
+            now = card_count(frame, auto['bar'], box, templates)
+            if now is None:
+                LOG.warning('Uji titik deploy dihentikan: jumlah kartu tidak terbaca')
+                break
+            if now < count:
+                verified.append(list(point))
+                spent += count - now
+                count = now
+            else:
+                failed.append(list(point))
+        return {'verified': verified, 'failed': failed, 'tried': tried, 'spent': spent, 'assumed': not self.live,
+                'seconds': round(time.monotonic() - started, 1), 'state': state}
 
     def ai_plan(self, image: np.ndarray, auto: dict) -> list | None:
         """Staged plan from the model for this frame, or None (with a log line) so the built-in plan is used."""

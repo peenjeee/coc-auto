@@ -614,3 +614,85 @@ class UnitsAndProbeSettingsTest(unittest.TestCase):
                 with self.subTest(bad=bad):
                     with self.assertRaises(AIPlanError):
                         ai_deploy.save_settings(path, bad)
+
+
+class ProbeTest(unittest.TestCase):
+    """Bot.probe_drop_points and pick_probe_card with a fake game: a drop lowers the card count only on valid points."""
+
+    def setUp(self):
+        import types
+        from unittest import mock
+        from coc_auto import bot as bot_module
+        from coc_auto.paths import RESOURCE_ROOT
+        self.bot_module = bot_module
+        config = json.loads((RESOURCE_ROOT / 'config.json').read_text(encoding='utf-8'))
+        self.auto = config['screens']['home_scout']['auto']
+        self.image = load('zone-selected.png')
+        self.valid = {(100, 100), (200, 200), (300, 300), (400, 400), (500, 500)}
+        self.taps, self.count, self.state = [], 12, 'home_battle'
+        outer = self
+
+        class Device:
+            def tap_many(self, points):
+                outer.taps.append([list(p) for p in points])
+                if tuple(points[-1]) in outer.valid:
+                    outer.count -= 1
+
+        self.read = {'value': True}
+        patcher = mock.patch.object(bot_module, 'card_count',
+                                    lambda *args, **kwargs: self.count if self.read['value'] else None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.stub = types.SimpleNamespace(live=True, poll=0, digits=lambda: {'0': 1}, device=Device())
+        self.stub.checked_state = lambda allowed, terminal, image=None: (self.state, self.image)
+        self.card = {'slot': [142, 651], 'count': 12}
+
+    def probe(self, candidates, target=3, max_tries=12):
+        return self.bot_module.Bot.probe_drop_points(self.stub, self.image, self.auto, candidates, self.card, target,
+                                                     max_tries, {'home_scout', 'home_battle'}, {'home_result'})
+
+    def test_valid_points_are_verified_and_refused_ones_failed(self):
+        result = self.probe([[100, 100], [150, 150], [200, 200], [250, 250], [300, 300]], target=3)
+        self.assertEqual(result['verified'], [[100, 100], [200, 200], [300, 300]])
+        self.assertEqual(result['failed'], [[150, 150], [250, 250]])
+        self.assertEqual((result['tried'], result['spent'], result['assumed']), (5, 3, False))
+
+    def test_it_stops_at_the_target(self):
+        result = self.probe([[100, 100], [200, 200], [300, 300], [400, 400]], target=2)
+        self.assertEqual(result['verified'], [[100, 100], [200, 200]])
+        self.assertEqual(len(self.taps), 2)
+
+    def test_it_stops_at_the_try_limit(self):
+        result = self.probe([[1, 1], [2, 2], [3, 3], [4, 4], [100, 100]], target=3, max_tries=3)
+        self.assertEqual((result['verified'], result['tried']), ([], 3))
+        self.assertEqual(result['failed'], [[1, 1], [2, 2], [3, 3]])
+
+    def test_first_tap_selects_the_card_and_later_taps_only_drop(self):
+        self.probe([[100, 100], [200, 200]], target=2)
+        self.assertEqual(self.taps, [[[142, 651], [100, 100]], [[200, 200]]])
+
+    def test_an_unreadable_count_stops_the_probe_without_guessing(self):
+        self.read['value'] = False
+        result = self.probe([[100, 100], [200, 200]], target=2)
+        self.assertEqual((result['verified'], result['failed'], len(self.taps)), ([], [], 1))
+
+    def test_a_result_screen_ends_the_probe(self):
+        self.state = 'home_result'
+        result = self.probe([[100, 100], [200, 200]], target=2)
+        self.assertEqual((result['verified'], result['state']), ([], 'home_result'))
+
+    def test_not_live_taps_nothing_and_marks_the_points_assumed(self):
+        self.stub.live = False
+        result = self.probe([[1, 1], [2, 2], [3, 3], [4, 4]], target=3)
+        self.assertEqual(result['verified'], [[1, 1], [2, 2], [3, 3]])
+        self.assertTrue(result['assumed'])
+        self.assertEqual(self.taps, [])
+
+    def test_probe_card_is_the_troop_with_the_most_units(self):
+        cards = {'T1': {'kind': 'troop', 'count': 12}, 'T2': {'kind': 'troop', 'count': 25}, 'T3': {'kind': 'troop', 'count': None},
+                 'S1': {'kind': 'spell', 'count': 40}, 'H1': {'kind': 'hero', 'count': None}}
+        pick = self.bot_module.Bot.pick_probe_card
+        self.assertEqual(pick(self.stub, cards, 16), 'T2')
+        self.assertIsNone(pick(self.stub, cards, 26))          # the best stack is too small to spend from
+        self.assertIsNone(pick(self.stub, {'T1': {'kind': 'troop', 'count': None}}, 1))
+        self.assertIsNone(pick(self.stub, {}, 1))

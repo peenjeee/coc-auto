@@ -846,5 +846,6 @@
  "Rencana AI harus berisi linimasa": "AI plan must contain a timeline",
  "Rencana AI tidak diterima": "AI plan was not accepted",
  "Jumlah titik uji harus 2 sampai 12": "Number of test points must be 2 to 12",
- "Batas percobaan titik harus 2 sampai 20": "Test point attempt limit must be 2 to 20"
+ "Batas percobaan titik harus 2 sampai 20": "Test point attempt limit must be 2 to 20",
+ "Uji titik deploy dihentikan: jumlah kartu tidak terbaca": "Drop point test stopped: the card count could not be read"
 }
