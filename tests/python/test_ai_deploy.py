@@ -200,6 +200,17 @@ class DroppableTest(unittest.TestCase):
         for x, y in steps[0]['points']:
             self.assertTrue(zone[y, x])
 
+    def test_spells_are_not_snapped_out_of_the_base(self):
+        zone, _ = self.zone('scout-oracle.png')
+        cards = {'S1': {'slot': [746, 651], 'kind': 'spell', 'count': 2},
+                 'T1': {'slot': [143, 651], 'kind': 'troop', 'count': 12}}
+        inside = place(585, 305, 1)
+        raw = {'stages': [stage([{'card': 'S1', 'place': [inside]}, {'card': 'T1', 'place': [inside]}])]}
+        steps, stats = compile_plan(raw, cards, BOUNDS, zone)
+        self.assertEqual(steps[0]['points'], [[585, 305]])     # the spell stays over the base
+        self.assertNotEqual(steps[1]['points'], [[585, 305]])  # the troop is moved out
+        self.assertEqual(stats['snapped'], 1)
+
     def test_compile_without_zone_keeps_points(self):
         cards = {'T1': {'slot': [143, 651], 'kind': 'counted', 'count': 12}}
         raw = {'stages': [stage([{'card': 'T1', 'place': [place(10, 10, 1)]}])]}

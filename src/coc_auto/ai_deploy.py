@@ -27,8 +27,9 @@ SYSTEM_PROMPT = (
     '{"analysis": "<short>", "stages": [{"name": "<short>", "wait_before": <seconds>, "actions": ['
     '{"card": "<card id>", "place": [{"at": [x, y], "count": <int>}], "mode": "tap" or "hold", '
     '"seconds": <hold seconds, hold mode only>, "ability_after": <seconds, heroes only>}]}]}. '
-    'Coordinates are screen pixels of the 1280x720 frame shown by the grid. Only place troops outside the '
-    'enemy base border. Use only the card ids listed. Never exceed a card\'s count when it is known. '
+    'Coordinates are screen pixels of the 1280x720 frame shown by the grid. Troops, siege machines and heroes '
+    'must go outside the enemy base (a drop inside it is refused); spells may go anywhere, including over the '
+    'base. Use only the card ids listed. Never exceed a card\'s count when it is known. '
     'Heroes take count 1 and get ability_after. Keep stages short and ordered: funnel first, then main push, '
     'then spells, then heroes if they are needed.'
 )
@@ -260,6 +261,8 @@ def _action_steps(action: object, cards: dict, bounds: tuple, used: dict, stats:
     if card is None:
         stats['dropped'] += 1
         return []
+    if card['kind'] == 'spell':
+        zone = None   # the no-deploy zone is for troops, siege and heroes; a spell may land on the base
     points = []
     for place in action.get('place') or []:
         at = _point(place.get('at') if isinstance(place, dict) else None, bounds, stats, zone)
