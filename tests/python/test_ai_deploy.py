@@ -298,11 +298,20 @@ class CompileTimelineTest(unittest.TestCase):
         self.assertEqual([s['at'] for s in steps], [0.0, 100.0])
         self.assertEqual(stats['dropped'], 1)
 
-    def test_hold_mode_for_a_troop(self):
+    def test_hold_mode_is_plain_taps_with_the_full_count(self):
         steps, _ = self.compile(entry(0, 'drop', 'T1', point='P1', count=12, mode='hold', seconds=99))
-        self.assertEqual(steps[0]['hold'], ai_deploy.MAX_HOLD)
-        self.assertTrue(steps[0]['until_empty'])
-        self.assertEqual(steps[0]['points'], [[200, 400]])
+        self.assertEqual(steps[0]['count'], 12)
+        self.assertEqual(steps[0]['points'], [[200, 400]] * 12)
+        self.assertNotIn('hold', steps[0])
+        self.assertNotIn('until_empty', steps[0])
+
+    def test_the_prompt_asks_to_spend_everything_spread_over_points_and_fire_abilities(self):
+        prompt = ai_deploy.TIMELINE_PROMPT
+        for part in ('spend the whole army and every spell', 'at least two different ones', '150 px', 'Fire every hero ability'):
+            self.assertIn(part, prompt)
+
+    def test_the_prompt_offers_no_hold_mode(self):
+        self.assertNotIn('hold', ai_deploy.TIMELINE_PROMPT.lower().replace('hero', ''))
 
     def test_step_cap_truncates(self):
         entries = [entry(i, 'spell', 'S1', at=[10, 10], count=1) for i in range(ai_deploy.MAX_STEPS + 3)]

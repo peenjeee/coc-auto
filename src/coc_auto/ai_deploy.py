@@ -15,8 +15,6 @@ from .paths import RESOURCE_ROOT
 
 MAX_STEPS = 40
 MAX_TAPS = 400
-MAX_HOLD = 10.0
-DEFAULT_HOLD = 6.0
 MAX_TIMEOUT = 30.0
 GOALS = {
     'loot': 'Goal: loot. Hit storages and collectors; prefer the edge with the fewest defences.',
@@ -189,15 +187,19 @@ TIMELINE_PROMPT = (
     'estimate how it will unfold (where each troop group is and when it reaches the defences) and time every action '
     'to that estimate. Reply with JSON only, no prose: {"analysis": "<short>", "estimate": [{"t": <seconds>, '
     '"note": "<where the army is>"}], "timeline": [{"t": <seconds>, "do": "drop", "card": "<id>", "point": '
-    '"<point id>", "count": <int>, "mode": "tap" or "hold", "seconds": <hold seconds>}, {"t": <seconds>, "do": '
-    '"ability", "card": "<hero id>"}, {"t": <seconds>, "do": "spell", "card": "<id>", "at": [x, y], "count": '
-    '<int>}]}. t is seconds from now; the first drop is at t=0 and no action may be later than the time budget. '
+    '"<point id>", "count": <int>}, {"t": <seconds>, "do": "ability", "card": "<hero id>"}, {"t": <seconds>, '
+    '"do": "spell", "card": "<id>", "at": [x, y], "count": <int>}]}. A drop puts exactly count units on the point '
+    'at that moment, one tap each; split a big card over several moments if you want a trickle. t is seconds from now; the first drop is at t=0 and no action may be later than the time budget. '
     'Troops, siege machines and heroes may only be dropped on the verified drop points listed (each already '
     'tested in this very battle); give the point id, never coordinates. Spells use screen coordinates of the '
     '1280x720 frame and may land anywhere, including over the base. Use only the card ids listed and never more '
     'than the counts shown (counts are what is left after the tests). Heroes take count 1; fire their ability '
     'with an ability action once they are fighting. Funnel first, then the main push, then spells timed to when '
-    'the army reaches the defences, using the reference table for speeds and durations (it is approximate).'
+    'the army reaches the defences, using the reference table for speeds and durations (it is approximate). '
+    'Rules: spend the whole army and every spell by the end of the timeline; nothing is held back. When three or '
+    'more verified points are listed, use at least two different ones: the main push on one point and a funnel or '
+    'second wave on another point at least 150 px from it. Fire every hero ability once the hero is fighting. Never '
+    'put all spells at one moment; time each to when the army reaches what it should hit.'
 )
 
 
@@ -314,12 +316,8 @@ def compile_timeline(raw: dict, cards: dict, points: dict, bounds: tuple, t_max:
                 count = min(count, MAX_TAPS, max(budget, 0))
                 if count >= 1:
                     used[card_id] = used.get(card_id, 0) + count
-                    if entry.get('mode') == 'hold' and card['kind'] not in ('hero', 'warden'):
-                        seconds = _number(entry.get('seconds', DEFAULT_HOLD), MAX_HOLD) or DEFAULT_HOLD
-                        step = {'slot': card['slot'], 'count': 1, 'hold': seconds, 'until_empty': True,
-                                'points': [list(spot)]}
-                    else:
-                        step = {'slot': card['slot'], 'count': count, 'points': [list(spot)] * count, 'burst': count}
+                    # Always exact taps: a held finger drops "until the card is empty" and would ignore the count.
+                    step = {'slot': card['slot'], 'count': count, 'points': [list(spot)] * count, 'burst': count}
         elif action == 'ability' and card['kind'] in ('hero', 'warden'):
             step = {'slot': card['slot'], 'count': 1, 'tap_only': True}
         elif action == 'spell' and card['kind'] == 'spell':
