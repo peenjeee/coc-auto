@@ -816,5 +816,18 @@
  "Invalid config.json": "Invalid config.json",
  "{}: {}": "{}: {}",
  "Bundled OCR missing": "Bundled OCR missing",
- "Packaged resources and OCR OK": "Packaged resources and OCR OK"
+ "Packaged resources and OCR OK": "Packaged resources and OCR OK",
+ "Balasan model tidak berisi JSON": "Model reply has no JSON",
+ "Balasan model bukan teks": "Model reply is not text",
+ "JSON balasan model tidak valid": "Model reply JSON is not valid",
+ "JSON balasan model harus berupa objek": "Model reply JSON must be an object",
+ "JSON balasan model tidak lengkap": "Model reply JSON is incomplete",
+ "Rencana AI harus berisi 1 sampai 8 tahap": "AI plan must have 1 to 8 stages",
+ "Rencana AI kosong setelah divalidasi": "AI plan is empty after validation",
+ "Base URL model harus diawali http:// atau https://": "Model base URL must start with http:// or https://",
+ "Nama model belum diisi": "Model name is not filled in",
+ "Tidak bisa terhubung ke model AI": "Cannot connect to the AI model",
+ "Format balasan model tidak dikenal": "Model reply format is not recognised",
+ "Gambar untuk model tidak bisa dikodekan": "Image for the model cannot be encoded",
+ "Model menolak permintaan (HTTP {})": "Model refused the request (HTTP {})"
 }
