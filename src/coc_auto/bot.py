@@ -2467,6 +2467,7 @@ class Bot:
                 probe={'card': probe_id}, units=ai_deploy.load_units(),
                 deadline=battle_start + BATTLE_SECONDS - PLAN_MARGIN)
         except AIPlanError as exc:
+            record['failure'] = getattr(exc, 'attempts', None)
             return self.ai_stop(record, str(exc))
         record.update(info=info, steps=steps, stats=stats, model_seconds=round(time.monotonic() - asked, 1))
         LOG.info('Rencana AI: %s langkah, %s dibuang, model %s detik', len(steps), stats['dropped'],

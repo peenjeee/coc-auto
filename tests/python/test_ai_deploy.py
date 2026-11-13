@@ -955,3 +955,101 @@ class AiDashboardTest(unittest.TestCase):
     def test_the_builder_village_cannot_use_the_ai(self):
         with self.assertRaises(self.remote.CommandRefused):
             self.remote.build_args({'task': 'attack', 'village': 'both', 'builder_style': 'ai'})
+
+
+class ReasoningModelTest(unittest.TestCase):
+    """A reasoning model can spend the whole token cap thinking and stop mid-answer (finish_reason 'length')."""
+
+    POINTS = [{'id': 'P1', 'at': [200, 400], 'side': 'west'}, {'id': 'P2', 'at': [300, 500], 'side': 'south-west'}]
+    CARDS = {'T1': {'slot': [143, 651], 'kind': 'troop', 'count': 12}}
+    GOOD = json.dumps({'analysis': 'x', 'timeline': [{'t': 0, 'do': 'drop', 'card': 'T1', 'point': 'P1', 'count': 3}]})
+
+    def reply(self, content, finish='stop', tokens=900, reasoning=0):
+        return json.dumps({'choices': [{'message': {'content': content}, 'finish_reason': finish}],
+                           'usage': {'completion_tokens': tokens, 'completion_tokens_details': {'reasoning_tokens': reasoning}}}).encode()
+
+    def plan(self, transport, effort=''):
+        client = ChatClient('https://example.test/v1', 'k', 'm', max_tokens=4000, transport=transport, reasoning_effort=effort)
+        return client, lambda: ai_deploy.plan_timeline(client, 'loot', '', np.zeros((720, 1280, 3), np.uint8), self.CARDS,
+                                                       self.POINTS, BOUNDS, 150.0)
+
+    def test_the_effort_is_sent_only_when_set(self):
+        bodies = []
+        for effort in ('', 'low'):
+            client, run = self.plan(lambda url, payload, headers, timeout: (bodies.append(json.loads(payload)), self.reply(self.GOOD))[1], effort)
+            run()
+        self.assertNotIn('reasoning_effort', bodies[0])
+        self.assertEqual(bodies[1]['reasoning_effort'], 'low')
+
+    def test_the_client_keeps_the_finish_reason_and_token_counts(self):
+        client, run = self.plan(lambda *a: self.reply(self.GOOD, tokens=2500, reasoning=1800))
+        _, _, info = run()
+        self.assertEqual(client.last_meta, {'finish_reason': 'stop', 'completion_tokens': 2500, 'reasoning_tokens': 1800})
+        self.assertEqual(info['attempt_log'][0]['finish_reason'], 'stop')
+        self.assertEqual(info['attempt_log'][0]['reasoning_tokens'], 1800)
+
+    def test_a_cut_off_answer_is_retried_with_twice_the_tokens(self):
+        sent = []
+        replies = [self.reply('```json\n{"analysis": "x", "timeline": [{"t": 0, "do"', finish='length', tokens=4000, reasoning=3600),
+                   self.reply(self.GOOD)]
+
+        def transport(url, payload, headers, timeout):
+            sent.append(json.loads(payload)['max_tokens'])
+            return replies.pop(0)
+
+        client, run = self.plan(transport)
+        steps, _, info = run()
+        self.assertEqual(sent, [4000, 8000])
+        self.assertEqual(info['attempts'], 2)
+        self.assertEqual([a['finish_reason'] for a in info['attempt_log']], ['length', 'stop'])
+        self.assertEqual(len(steps), 1)
+
+    def test_the_doubled_cap_never_passes_the_limit(self):
+        sent = []
+        replies = [self.reply('{"timeline": [', finish='length'), self.reply(self.GOOD)]
+
+        def transport(url, payload, headers, timeout):
+            sent.append(json.loads(payload)['max_tokens'])
+            return replies.pop(0)
+
+        client = ChatClient('https://example.test/v1', 'k', 'm', max_tokens=ai_deploy.MAX_TOKENS, transport=transport)
+        ai_deploy.plan_timeline(client, 'loot', '', np.zeros((720, 1280, 3), np.uint8), self.CARDS, self.POINTS, BOUNDS, 150.0)
+        self.assertEqual(sent, [ai_deploy.MAX_TOKENS, ai_deploy.MAX_TOKENS])
+
+    def test_a_bad_reply_that_was_not_cut_off_is_retried_with_the_same_cap(self):
+        sent = []
+        replies = [self.reply('no json at all'), self.reply(self.GOOD)]
+
+        def transport(url, payload, headers, timeout):
+            sent.append(json.loads(payload)['max_tokens'])
+            return replies.pop(0)
+
+        client, run = self.plan(transport)
+        run()
+        self.assertEqual(sent, [4000, 4000])
+
+    def test_two_cut_off_answers_fail_with_the_attempts_attached(self):
+        client, run = self.plan(lambda *a: self.reply('```json\n{"timeline": [{"t": 0', finish='length', tokens=4000, reasoning=3800))
+        with self.assertRaises(AIPlanError) as caught:
+            run()
+        attempts = caught.exception.attempts
+        self.assertEqual([a['finish_reason'] for a in attempts], ['length', 'length'])
+        self.assertTrue(all('error' in a and a['reply_head'].startswith('```json') for a in attempts))
+
+    def test_the_log_line_of_a_failed_battle_names_the_finish_reasons(self):
+        record = {'stopped': 'JSON balasan model tidak valid', 'candidates': [], 'probe': None,
+                  'failure': [{'finish_reason': 'length'}, {'finish_reason': 'length'}]}
+        entry = ai_deploy.history_entry(record, 'm', 'loot', {}, 70.0)
+        self.assertEqual(entry['finish_reasons'], ['length', 'length'])
+
+    def test_defaults_and_validation_of_the_new_settings(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ai.json'
+            settings = ai_deploy.load_settings(path)
+            self.assertEqual((settings['max_tokens'], settings['reasoning_effort']), (8000, ''))
+            self.assertEqual(ai_deploy.save_settings(path, {'reasoning_effort': 'low'})['reasoning_effort'], 'low')
+            with self.assertRaises(AIPlanError):
+                ai_deploy.save_settings(path, {'reasoning_effort': 'extreme'})
+            client = ai_deploy.client_from_settings({**ai_deploy.load_settings(path), 'enabled': True, 'base_url': 'https://x.test/v1',
+                                                     'model': 'm', 'api_key': 'k'})
+            self.assertEqual((client.reasoning_effort, client.max_tokens), ('low', 8000))

@@ -180,6 +180,7 @@ def droppable(image: np.ndarray, bar_top: int) -> tuple[np.ndarray | None, str]:
 
 
 
+MAX_TOKENS = 16000
 T_MAX = 150.0             # latest second of the plan (the battle lasts 180 s from the first drop)
 COMPASS = ('east', 'north-east', 'north', 'north-west', 'west', 'south-west', 'south', 'south-east')
 TIMELINE_PROMPT = (
@@ -385,20 +386,28 @@ def plan_timeline(client: 'ChatClient', goal: str, hint: str, image: np.ndarray,
     points: [{'id': 'P1', 'at': [x, y], 'side': 'west'}] verified drop points."""
     messages = build_timeline_messages(goal, hint, cards, points, bounds, [encode_jpeg(image)], t_left, probe, units)
     spots = {item['id']: item['at'] for item in points}
-    last = None
+    last, log = None, []
     for attempt in range(2):
         if attempt and deadline is not None and time.monotonic() >= deadline:
             break
-        reply = client.complete(messages)
+        started = time.monotonic()
+        # A reasoning model that ran out of tokens would do so again with the same cap: the retry gets twice as many.
+        cut = last is not None and log and log[-1].get('finish_reason') == 'length'
+        reply = client.complete(messages, min(MAX_TOKENS, client.max_tokens * 2) if cut else None)
+        meta = {'seconds': round(time.monotonic() - started, 1), **getattr(client, 'last_meta', {})}
+        log.append({**meta, 'reply_head': str(reply)[:200], 'reply_tail': str(reply)[-120:] if reply else ''})
         try:
             raw = parse_reply(reply)
             steps, stats = compile_timeline(raw, cards, spots, bounds, min(T_MAX, float(t_left)))
         except AIPlanError as exc:
             last = exc
+            log[-1]['error'] = str(exc)
             continue
         return steps, stats, {'analysis': str(raw.get('analysis', ''))[:300], 'estimate': _estimate(raw),
-                              'reply': reply[:4000], 'attempts': attempt + 1}
-    raise last or AIPlanError('Rencana AI tidak diterima')
+                              'reply': reply[:4000], 'attempts': attempt + 1, 'attempt_log': log}
+    error = last or AIPlanError('Rencana AI tidak diterima')
+    error.attempts = log          # what each try returned, for the record and the outcome log
+    raise error
 
 
 def encode_jpeg(image: np.ndarray, max_edge: int = 1024, quality: int = 80) -> bytes:
@@ -430,7 +439,7 @@ class ChatClient:
     """OpenAI-compatible /chat/completions. base_url is the API root, e.g. https://api.openai.com/v1."""
 
     def __init__(self, base_url: str, api_key: str, model: str, timeout: float = 20.0, max_tokens: int = 800,
-                 temperature: float = 0.2, transport=None) -> None:
+                 temperature: float = 0.2, transport=None, reasoning_effort: str = '') -> None:
         if not isinstance(base_url, str) or not base_url.startswith(('http://', 'https://')):
             raise AIPlanError('Base URL model harus diawali http:// atau https://')
         if not model:
@@ -440,17 +449,28 @@ class ChatClient:
         self.timeout = min(max(float(timeout), 1.0), MAX_TIMEOUT)
         self.max_tokens, self.temperature = max_tokens, temperature
         self.transport = transport or _post
+        # 'low', 'medium' or 'high' asks a reasoning model to think less or more; '' leaves it to the model.
+        self.reasoning_effort = reasoning_effort
+        self.last_meta: dict = {}
 
-    def complete(self, messages: list) -> str:
-        body = {'model': self.model, 'messages': messages, 'max_tokens': self.max_tokens,
+    def complete(self, messages: list, max_tokens: int | None = None) -> str:
+        body = {'model': self.model, 'messages': messages, 'max_tokens': max_tokens or self.max_tokens,
                 'temperature': self.temperature}
+        if self.reasoning_effort:
+            body['reasoning_effort'] = self.reasoning_effort
         headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.api_key}'}
         raw = self.transport(self.url, json.dumps(body).encode('utf-8'), headers, self.timeout)
         try:
             data = json.loads(raw)
-            return data['choices'][0]['message']['content']
+            choice = data['choices'][0]
+            content = choice['message']['content']
         except (ValueError, KeyError, IndexError, TypeError):
             raise AIPlanError('Format balasan model tidak dikenal') from None
+        usage = data.get('usage') if isinstance(data.get('usage'), dict) else {}
+        details = usage.get('completion_tokens_details') if isinstance(usage.get('completion_tokens_details'), dict) else {}
+        self.last_meta = {'finish_reason': choice.get('finish_reason'), 'completion_tokens': usage.get('completion_tokens'),
+                          'reasoning_tokens': details.get('reasoning_tokens')}
+        return content
 
 
 
@@ -475,6 +495,7 @@ def history_entry(record: dict, model: str, goal: str, damage: dict | None, seco
         'probe_tried': probe.get('tried'), 'probe_verified': len(probe.get('verified') or []),
         'probe_spent': probe.get('spent'), 'probe_seconds': probe.get('seconds'),
         'model_seconds': record.get('model_seconds'), 'attempts': info.get('attempts'),
+        'finish_reasons': [item.get('finish_reason') for item in (record.get('failure') or info.get('attempt_log') or [])],
         'steps': len(steps), 'dropped': stats.get('dropped'), 'clamped': stats.get('clamped'),
         'units': sum(step.get('count', 0) for step in steps if step.get('points') and step['slot'][0] not in spells),
         'spells': sum(step.get('count', 0) for step in steps if step.get('points') and step['slot'][0] in spells),
@@ -533,7 +554,8 @@ def summarize_history(entries: list) -> dict:
 
 SETTINGS_FILE = 'ai.json'
 SETTINGS_DEFAULTS = {'enabled': False, 'base_url': '', 'api_key': '', 'model': '', 'goal': 'loot', 'hint': '',
-                     'timeout': 20.0, 'max_tokens': 4000, 'probe_points': 6, 'probe_max': 12, 't_max': 150.0}
+                     'timeout': 20.0, 'max_tokens': 8000, 'reasoning_effort': '', 'probe_points': 6, 'probe_max': 12,
+                     't_max': 150.0}
 MAX_HINT = 500
 
 
@@ -575,8 +597,10 @@ def save_settings(path, value: dict) -> dict:
         raise AIPlanError('Isi base URL, nama model, dan API key sebelum menyalakan AI')
     merged['timeout'] = min(max(float(merged['timeout']), 1.0), MAX_TIMEOUT)
     # Reasoning models spend the budget on thinking before the JSON; a small cap cuts the plan off mid-answer.
-    if type(merged['max_tokens']) is not int or not 256 <= merged['max_tokens'] <= 16000:
+    if type(merged['max_tokens']) is not int or not 256 <= merged['max_tokens'] <= MAX_TOKENS:
         raise AIPlanError('Batas token model harus 256 sampai 16000')
+    if merged['reasoning_effort'] not in ('', 'low', 'medium', 'high'):
+        raise AIPlanError('Tingkat nalar model tidak dikenal')
     for key, low, high, message in (('probe_points', 2, 12, 'Jumlah titik uji harus 2 sampai 12'),
                                     ('probe_max', 2, 20, 'Batas percobaan titik harus 2 sampai 20')):
         if type(merged[key]) is not int or not low <= merged[key] <= high:
@@ -614,4 +638,5 @@ def client_from_settings(settings: dict, transport=None) -> ChatClient | None:
     if not settings.get('enabled'):
         return None
     return ChatClient(settings['base_url'], settings['api_key'], settings['model'], timeout=settings['timeout'],
-                      max_tokens=settings['max_tokens'], transport=transport)
+                      max_tokens=settings['max_tokens'], transport=transport,
+                      reasoning_effort=settings.get('reasoning_effort', ''))
