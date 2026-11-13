@@ -1810,10 +1810,17 @@ class Bot:
                  quake: bool = False, surrender_stars: int = 0, builder_stack: bool = False,
                  trophy_floor: int = 0, bulk_walls: bool = False, wall_every: int = 0,
                  wall_resources: tuple = WALL_RESOURCES, ai: object | None = None, ai_goal: str = 'loot',
-                 ai_hint: str = '') -> None:
+                 ai_hint: str = '', ai_checkpoint: bool = False, ai_checkpoint_wait: float = 10.0,
+                 ai_checkpoint_timeout: float = 15.0) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
         # ai: an ai_deploy.ChatClient; the Home Village plan comes from the model, the built-in plan is the fallback.
         self.ai, self.ai_goal, self.ai_hint = ai, ai_goal, ai_hint
+        # With ai_checkpoint the spells wait: after ai_checkpoint_wait seconds of fighting the model sees the battle
+        # again and places the spells (ai_checkpoint_timeout caps that call); its first-plan spell points are the fallback.
+        self.ai_checkpoint, self.ai_checkpoint_wait = ai_checkpoint, ai_checkpoint_wait
+        self.ai_checkpoint_timeout = ai_checkpoint_timeout
+        self.ai_last_cards: dict = {}
+        self.ai_drop_points: list | None = None
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.battle_deadline: float | None = None
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
@@ -2271,12 +2278,17 @@ class Bot:
             if state in terminal:
                 return state
         self.keep_deploy_frame(screen_name, image)
+        spell_steps: list = []
         if 'auto' in screen:
             # Read the card bar before any card is used; the plan follows the army that is trained. The home cards
             # stand still, so the frame in hand is read; Builder Base stage 2 waits for its cards to slide in.
             plan = None
             if self.ai is not None and screen_name == 'home_scout' and image is not None:
                 plan = self.ai_plan(image, screen['auto'])
+            spell_steps = []
+            if plan is not None and self.ai_checkpoint:
+                spell_x = {card['slot'][0] for card in self.ai_last_cards.values() if card['kind'] == 'spell'}
+                plan, spell_steps = ai_deploy.split_spell_steps(plan, spell_x)
             if plan is None:
                 plan = self.bar_plan(screen['auto'], allowed, image if screen_name == 'home_scout' else None)
             cards = {tuple(slot) for troop in plan for slot in troop.get('slots') or [troop['slot']]}
@@ -2293,6 +2305,10 @@ class Bot:
                 if state in terminal:
                     return state
             state = self.deploy_card(screen, troop, allowed, terminal)
+            if state in terminal:
+                return state
+        if spell_steps:
+            state = self.ai_spell_stage(screen, spell_steps, screen['auto'], allowed, terminal)
             if state in terminal:
                 return state
         sweep = screen.get('sweep')
@@ -2351,6 +2367,12 @@ class Bot:
         LOG.info('Rencana AI: %s langkah, %s titik digeser ke zona deploy, %s dibuang',
                  len(steps), stats['snapped'], stats['dropped'])
         self.keep_ai_plan(steps, stats, analysis, cards)
+        self.ai_last_cards = cards
+        # Where the army goes in: the middle of every non-spell drop, so the spell look can say where to start.
+        spell_x = {card['slot'][0] for card in cards.values() if card['kind'] == 'spell'}
+        drops = [point for step in steps if step['slot'][0] not in spell_x for point in step.get('points') or []]
+        self.ai_drop_points = [int(sum(p[0] for p in drops) / len(drops)),
+                               int(sum(p[1] for p in drops) / len(drops))] if drops else None
         return steps
 
     def keep_ai_plan(self, steps: list, stats: dict, analysis: str, cards: dict) -> None:
@@ -2362,6 +2384,58 @@ class Bot:
             (folder / 'ai-plan.json').write_text(json.dumps(record, indent=1, default=str), encoding='utf-8')
         except OSError as exc:
             LOG.warning('Rencana AI tidak tersimpan: %s', exc)
+
+    def ai_spells_left(self, image: np.ndarray, auto: dict) -> dict | None:
+        """The first plan's spells that still have charges in this frame's bar, with the count read now (None when it
+        does not read). Empty when every spell is used; None when the bar cannot be read at all."""
+        found, _ = read_bar(image, auto)
+        if not found:
+            return None
+        templates = self.digits()
+        spells = {}
+        for sid, spell in self.ai_last_cards.items():
+            if spell['kind'] != 'spell':
+                continue
+            for card, kind, _group in found:
+                if kind == 'counted' and abs((card[0] + card[1]) // 2 - spell['slot'][0]) <= 12:
+                    count = card_count(image, auto['bar'], card, templates) if templates else None
+                    spells[sid] = {**spell, 'count': count}
+        return spells
+
+    def ai_spell_stage(self, screen: dict, fallback: list, auto: dict, allowed: set, terminal: set) -> str:
+        """The spells, placed after a second look at the battle: wait for the army to engage, show the model the frame
+        and use its spell points. Any failure keeps the first plan's spell steps (fallback)."""
+        if self.live and self.ai_checkpoint_wait > 0:
+            time.sleep(self.ai_checkpoint_wait)
+        state, image = self.checked_state(allowed, terminal)
+        if state in terminal:
+            return state
+        steps = fallback
+        spells = self.ai_spells_left(image, auto)
+        if spells is None:
+            LOG.warning('Spell AI: bar tidak terbaca; pakai titik spell dari rencana awal')
+        elif not spells:
+            LOG.info('Spell AI dilewati: tidak ada spell tersisa di bar')
+            return state
+        else:
+            try:
+                new, stats, _analysis = ai_deploy.spell_plan(
+                    self.ai.with_timeout(self.ai_checkpoint_timeout), self.ai_goal, self.ai_hint, image, spells,
+                    (image.shape[1], auto['bar'][1]), self.ai_drop_points)
+                LOG.info('Rencana spell AI: %s langkah, %s dibuang', len(new), stats['dropped'])
+                steps = new
+            except AIPlanError as exc:
+                LOG.warning('Spell AI gagal (%s); pakai titik spell dari rencana awal', exc)
+        for step in steps:
+            if step.get('wait') and self.live:
+                time.sleep(step['wait'])
+                state = self.checked_state(allowed, terminal)[0]
+                if state in terminal:
+                    return state
+            state = self.deploy_card(screen, step, allowed, terminal)
+            if state in terminal:
+                return state
+        return state
 
     def bar_plan(self, auto: dict, allowed: set, image: np.ndarray | None = None) -> list:
         """Deploy plan from the card bar of the given frame, or once two frames in a row show the same cards; at
@@ -4169,6 +4243,9 @@ def main() -> int:
         runner = Bot(config, config_root(args.config), device, live=args.live, emulator=emulator, goals=goals, walls=walls,
                      ai=ai_client, ai_goal=ai_settings['goal'] if ai_settings else 'loot',
                      ai_hint=ai_settings['hint'] if ai_settings else '',
+                     ai_checkpoint=bool(ai_settings and ai_settings['spell_checkpoint']),
+                     ai_checkpoint_wait=ai_settings['checkpoint_wait'] if ai_settings else 10.0,
+                     ai_checkpoint_timeout=ai_settings['checkpoint_timeout'] if ai_settings else 15.0,
                      minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
                      surrender_after=surrender_after, surrender_at=surrender_at, ring='home' in ring, quake=args.quake,
                      surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor,

@@ -842,5 +842,10 @@
  "Isi base URL, nama model, dan API key sebelum menyalakan AI": "Fill in the base URL, model name and API key before switching the AI on",
  "Rencana AI: %s langkah, %s titik digeser ke zona deploy, %s dibuang": "AI plan: %s steps, %s points moved into the deploy zone, %s dropped",
  "Batas token model harus 256 sampai 16000": "Model token limit must be 256 to 16000",
- "Zona deploy tidak terbaca; pakai rencana bawaan": "Deploy zone could not be read; using the built-in plan"
+ "Zona deploy tidak terbaca; pakai rencana bawaan": "Deploy zone could not be read; using the built-in plan",
+ "Pilihan cek ulang spell tidak valid": "Spell re-check choice is not valid",
+ "Spell AI: bar tidak terbaca; pakai titik spell dari rencana awal": "Spell AI: bar not readable; using the spell points of the first plan",
+ "Spell AI dilewati: tidak ada spell tersisa di bar": "Spell AI skipped: no spells left in the bar",
+ "Rencana spell AI: %s langkah, %s dibuang": "Spell AI plan: %s steps, %s dropped",
+ "Spell AI gagal (%s); pakai titik spell dari rencana awal": "Spell AI failed (%s); using the spell points of the first plan"
 }
