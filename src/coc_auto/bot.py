@@ -102,6 +102,7 @@ PROBE_COUNT_SHIFTS = (4, 6, 0, 2, -2, -4, 8)   # a selected card is wider: its c
 PROBE_COUNT_DROP = 2         # a probe drop lowers the count by 1; a read this far or less below the old count is believed
 BATTLE_SECONDS = 180         # a battle lasts this long from the first drop
 PLAN_MARGIN = 15             # seconds kept free at the end of the battle for the AI plan's last action
+DAMAGE_READ_SECONDS = 1.5    # the AI outcome log reads the battle's damage percent at most this often
 RUN_SLICE_SECONDS = 2.0      # while a timeline step waits for its time, the screen is checked this often
 # A pinch on a map already zoomed out moves nothing but the animations, which stay well under this.
 ZOOM_UNCHANGED_DIFF = 5
@@ -1836,6 +1837,8 @@ class Bot:
         # The AI first drops single probe units to learn which points the game accepts (up to ai_probe_max drops, until
         # ai_probe_points are verified), then runs one timeline of at most ai_t_max seconds.
         self.ai_probe_points, self.ai_probe_max, self.ai_t_max = ai_probe_points, ai_probe_max, ai_t_max
+        # The battle being logged: {'record', 'damage': {'last', 'max'}, 'started', 'read_at'}; None outside an AI battle.
+        self.ai_outcome: dict | None = None
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.battle_deadline: float | None = None
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
@@ -1910,6 +1913,7 @@ class Bot:
                 time.sleep(self.poll)
                 continue
             unknown_since = None
+            self.note_battle(state, image)
             if state in targets or (give_up and give_up(state, image)):
                 return state
             if state == 'maintenance':
@@ -2420,6 +2424,7 @@ class Bot:
         self.hero_slots = []
         record = {'candidates': [], 'probe': None, 'points': [], 'cards': None, 'info': None, 'steps': [], 'ran': [],
                   'stopped': None}
+        self.ai_outcome = {'record': record, 'damage': {}, 'started': time.monotonic(), 'read_at': float('-inf')}
         cards = self.ai_cards(image, auto)
         probe_id = self.pick_probe_card(cards, self.ai_probe_max + PROBE_RESERVE)
         if probe_id is None:
@@ -2503,6 +2508,32 @@ class Bot:
             except BotError as exc:
                 LOG.warning('Keluar dari battle gagal: %s', exc)
 
+    def note_battle(self, state: str, image: np.ndarray) -> None:
+        """While an AI battle is logged, keep the latest and highest damage percent read from the battle screen. Reads
+        are spaced DAMAGE_READ_SECONDS apart; a number that does not read is skipped, never guessed."""
+        outcome = self.ai_outcome
+        if outcome is None or state != 'home_battle':
+            return
+        now = time.monotonic()
+        if now - outcome['read_at'] < DAMAGE_READ_SECONDS:
+            return
+        outcome['read_at'] = now
+        damage = self.read_damage(image)
+        if damage is not None:
+            outcome['damage'] = {'last': damage, 'max': max(damage, outcome['damage'].get('max') or 0)}
+
+    def finish_ai_outcome(self) -> None:
+        """Write the finished AI battle to the outcome log (one JSON line) and stop watching the damage. Never fails the run."""
+        outcome, self.ai_outcome = self.ai_outcome, None
+        if outcome is None:
+            return
+        try:
+            entry = ai_deploy.history_entry(outcome['record'], getattr(self.ai, 'model', ''), self.ai_goal,
+                                            outcome['damage'], round(time.monotonic() - outcome['started'], 1))
+            ai_deploy.append_history(runtime_dir(root=self.root) / ai_deploy.HISTORY_FILE, entry)
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            LOG.warning('Riwayat AI tidak tersimpan: %s', exc)
+
     def keep_ai_run(self, record: dict) -> None:
         """What the AI deploy did, as JSON in captures: candidates, probe result, points, model reply, steps and the
         real time of each step."""
@@ -2583,6 +2614,7 @@ class Bot:
         if (state in SURRENDER_STATES['builder'] and self.surrender_stars and not self.climbing
                 and self.stars_reached(image)):
             raise SurrenderReached(f'{self.surrender_stars} bintang saat deploy; sisa pasukan tidak dikerahkan')
+        self.note_battle(state, image)
         return state, image
 
     def deploy_card(self, screen: dict, troop: dict, allowed: set, terminal: set) -> str:
@@ -2851,6 +2883,7 @@ class Bot:
                     LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
                 else:
                     self.tap_until('home_result', 'return', {'home'}, 30)
+                self.finish_ai_outcome()
                 self.count_broke_attack(broke and not passes)
                 return
             try:

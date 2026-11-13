@@ -456,6 +456,83 @@ class ChatClient:
 
 
 
+HISTORY_FILE = 'ai-history.jsonl'
+HISTORY_MAX_BYTES = 1_000_000
+
+
+def history_entry(record: dict, model: str, goal: str, damage: dict | None, seconds: float | None) -> dict:
+    """One line for the outcome log, from the deploy record: what was probed, what the model planned and how long it
+    took, how the timeline ran and how the battle ended. No key, no image, no model text beyond the short analysis."""
+    probe = record.get('probe') or {}
+    steps, ran = record.get('steps') or [], record.get('ran') or []
+    late = [round(item['actual'] - item['at'], 1) for item in ran if 'actual' in item and 'at' in item]
+    info = record.get('info') or {}
+    stats = record.get('stats') or {}
+    spells = {card['slot'][0] for card in (record.get('cards') or {}).values() if card.get('kind') == 'spell'}
+    return {
+        'time': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        'model': model, 'goal': goal,
+        'stopped': record.get('stopped'),
+        'candidates': len(record.get('candidates') or []),
+        'probe_tried': probe.get('tried'), 'probe_verified': len(probe.get('verified') or []),
+        'probe_spent': probe.get('spent'), 'probe_seconds': probe.get('seconds'),
+        'model_seconds': record.get('model_seconds'), 'attempts': info.get('attempts'),
+        'steps': len(steps), 'dropped': stats.get('dropped'), 'clamped': stats.get('clamped'),
+        'units': sum(step.get('count', 0) for step in steps if step.get('points') and step['slot'][0] not in spells),
+        'spells': sum(step.get('count', 0) for step in steps if step.get('points') and step['slot'][0] in spells),
+        'steps_run': len(ran), 'max_late': max(late) if late else None,
+        'last_step_at': steps[-1]['at'] if steps else None,
+        'damage_last': (damage or {}).get('last'), 'damage_max': (damage or {}).get('max'),
+        'battle_seconds': seconds,
+        'analysis': (info.get('analysis') or '')[:200],
+    }
+
+
+def append_history(path, entry: dict, max_bytes: int = HISTORY_MAX_BYTES) -> None:
+    """Append one JSON line. When the file is over max_bytes it is moved to '<name>.1' first (one old file is kept)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if path.is_file() and path.stat().st_size > max_bytes:
+            path.replace(path.with_name(path.name + '.1'))
+    except OSError:
+        pass
+    with open(path, 'a', encoding='utf-8') as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False) + '\n')
+
+
+def load_history(path) -> list:
+    """The entries of the log, oldest first; lines that are not valid JSON objects are skipped."""
+    entries = []
+    try:
+        lines = path.read_text(encoding='utf-8').splitlines()
+    except OSError:
+        return entries
+    for line in lines:
+        try:
+            value = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(value, dict):
+            entries.append(value)
+    return entries
+
+
+def summarize_history(entries: list) -> dict:
+    """Totals for judging the AI over many battles: how many ran, how many stopped and why, and the mean damage, probe
+    result and model time of the ones that ran a plan."""
+    ran = [entry for entry in entries if not entry.get('stopped')]
+    damages = [entry['damage_last'] for entry in ran if isinstance(entry.get('damage_last'), (int, float))]
+    mean = lambda values: round(sum(values) / len(values), 1) if values else None
+    reasons = {}
+    for entry in entries:
+        if entry.get('stopped'):
+            reasons[entry['stopped']] = reasons.get(entry['stopped'], 0) + 1
+    return {'battles': len(entries), 'planned': len(ran), 'stopped': reasons, 'damage_mean': mean(damages),
+            'damage_max': max(damages) if damages else None,
+            'probe_verified_mean': mean([entry['probe_verified'] for entry in ran if entry.get('probe_verified') is not None]),
+            'model_seconds_mean': mean([entry['model_seconds'] for entry in ran if entry.get('model_seconds')])}
+
+
 SETTINGS_FILE = 'ai.json'
 SETTINGS_DEFAULTS = {'enabled': False, 'base_url': '', 'api_key': '', 'model': '', 'goal': 'loot', 'hint': '',
                      'timeout': 20.0, 'max_tokens': 4000, 'probe_points': 6, 'probe_max': 12, 't_max': 150.0}

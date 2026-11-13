@@ -856,5 +856,6 @@
  "titik uji tidak cukup": "not enough points to test",
  "waktu battle tidak cukup": "not enough battle time left",
  "zona deploy tidak terbaca": "deploy zone could not be read",
- "titik deploy terverifikasi kurang dari 2": "fewer than 2 verified drop points"
+ "titik deploy terverifikasi kurang dari 2": "fewer than 2 verified drop points",
+ "Riwayat AI tidak tersimpan: %s": "AI history was not saved: %s"
 }

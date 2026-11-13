@@ -694,3 +694,132 @@ class ReadCardCountTest(unittest.TestCase):
     def test_an_implausible_number_is_never_accepted(self):
         self.assertIsNone(self.read(self.selected, 30))   # a misread such as 21 for 24 must not pass as a drop
         self.assertIsNone(self.read(self.selected, 27))
+
+
+class HistoryTest(unittest.TestCase):
+    RECORD = {
+        'candidates': [[1, 1]] * 6, 'probe': {'tried': 5, 'verified': [[1, 1]] * 4, 'spent': 4, 'seconds': 4.7},
+        'cards': {'T1': {'slot': [143, 651], 'kind': 'troop', 'count': 12}, 'S1': {'slot': [746, 651], 'kind': 'spell', 'count': 2}},
+        'info': {'analysis': 'a' * 500, 'attempts': 1}, 'stats': {'dropped': 1, 'clamped': 0},
+        'model_seconds': 17.9, 'stopped': None,
+        'steps': [{'slot': [143, 651], 'count': 8, 'points': [[1, 1]] * 8, 'at': 0.0},
+                  {'slot': [637, 651], 'count': 1, 'tap_only': True, 'at': 8.0},
+                  {'slot': [746, 651], 'count': 1, 'points': [[5, 5]], 'at': 20.0}],
+        'ran': [{'at': 0.0, 'actual': 1.0, 'slot': 143}, {'at': 8.0, 'actual': 10.5, 'slot': 637}, {'at': 20.0, 'actual': 21.2, 'slot': 746}],
+    }
+
+    def entry(self, **changes):
+        record = {**self.RECORD, **changes}
+        return ai_deploy.history_entry(record, 'some/model', 'loot', {'last': 60, 'max': 71}, 143.2)
+
+    def test_entry_summarises_the_battle_without_images_or_keys(self):
+        entry = self.entry()
+        self.assertEqual((entry['probe_tried'], entry['probe_verified'], entry['probe_spent']), (5, 4, 4))
+        self.assertEqual((entry['steps'], entry['dropped'], entry['steps_run']), (3, 1, 3))
+        self.assertEqual((entry['units'], entry['spells']), (8, 1))       # the ability tap has no points; the spell is counted apart
+        self.assertEqual((entry['max_late'], entry['last_step_at']), (2.5, 20.0))
+        self.assertEqual((entry['damage_last'], entry['damage_max'], entry['battle_seconds']), (60, 71, 143.2))
+        self.assertEqual(len(entry['analysis']), 200)
+        self.assertEqual((entry['model'], entry['goal']), ('some/model', 'loot'))
+        json.dumps(entry)                                                  # serialisable as it is
+
+    def test_a_stopped_battle_keeps_its_reason_and_empty_numbers(self):
+        entry = ai_deploy.history_entry({'stopped': 'titik deploy terverifikasi kurang dari 2', 'candidates': [], 'probe': None},
+                                        'm', 'loot', {}, 12.0)
+        self.assertEqual(entry['stopped'], 'titik deploy terverifikasi kurang dari 2')
+        self.assertEqual((entry['steps'], entry['units'], entry['max_late'], entry['damage_last']), (0, 0, None, None))
+
+    def test_append_load_round_trip_skips_damaged_lines(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'sub' / ai_deploy.HISTORY_FILE
+            ai_deploy.append_history(path, self.entry())
+            ai_deploy.append_history(path, self.entry(stopped='x'))
+            with open(path, 'a', encoding='utf-8') as handle:
+                handle.write('not json\n[1, 2]\n')
+            entries = ai_deploy.load_history(path)
+            self.assertEqual([bool(e['stopped']) for e in entries], [False, True])
+            self.assertEqual(ai_deploy.load_history(Path(folder) / 'nothing.jsonl'), [])
+
+    def test_the_log_is_rotated_when_it_gets_big(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / ai_deploy.HISTORY_FILE
+            for index in range(5):
+                ai_deploy.append_history(path, {'n': index}, max_bytes=30)
+            old = path.with_name(path.name + '.1')
+            self.assertTrue(old.is_file())
+            self.assertLess(path.stat().st_size, 60)
+            self.assertEqual(ai_deploy.load_history(path)[-1], {'n': 4})
+
+    def test_summary_counts_stops_and_averages_the_battles_that_ran(self):
+        entries = [self.entry(), ai_deploy.history_entry(self.RECORD, 'm', 'loot', {'last': 40}, 100.0),
+                   {'stopped': 'zona deploy tidak terbaca'}, {'stopped': 'zona deploy tidak terbaca'}]
+        summary = ai_deploy.summarize_history(entries)
+        self.assertEqual((summary['battles'], summary['planned']), (4, 2))
+        self.assertEqual(summary['stopped'], {'zona deploy tidak terbaca': 2})
+        self.assertEqual((summary['damage_mean'], summary['damage_max']), (50.0, 60))
+        self.assertEqual((summary['probe_verified_mean'], summary['model_seconds_mean']), (4.0, 17.9))
+        self.assertEqual(ai_deploy.summarize_history([])['battles'], 0)
+
+
+class BattleOutcomeTest(unittest.TestCase):
+    """Bot.note_battle / finish_ai_outcome: the damage the log gets comes from battle frames and never from a guess."""
+
+    def setUp(self):
+        import types
+        from unittest import mock
+        from coc_auto import bot as bot_module
+        self.bot_module = bot_module
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.damage = [None]
+        self.stub = types.SimpleNamespace(
+            ai_outcome={'record': {'stopped': None, 'candidates': [], 'probe': None}, 'damage': {}, 'started': 100.0,
+                        'read_at': float('-inf')},
+            root=Path(self.tmp.name), ai=types.SimpleNamespace(model='m'), ai_goal='loot')
+        self.stub.read_damage = lambda image: self.damage[0]
+        self.image = np.zeros((720, 1280, 3), np.uint8)
+        patcher = mock.patch.object(bot_module, 'runtime_dir', lambda *a, **k: Path(self.tmp.name) / '.coc-auto')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.clock = [100.0]
+        patcher = mock.patch.object(bot_module.time, 'monotonic', lambda: self.clock[0])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def note(self, state, damage):
+        self.damage[0] = damage
+        self.bot_module.Bot.note_battle(self.stub, state, self.image)
+
+    def test_last_and_highest_damage_are_kept(self):
+        self.note('home_battle', 40)
+        self.clock[0] += 2
+        self.note('home_battle', 71)
+        self.clock[0] += 2
+        self.note('home_battle', 65)
+        self.assertEqual(self.stub.ai_outcome['damage'], {'last': 65, 'max': 71})
+
+    def test_reads_are_spaced_out_and_misreads_skipped(self):
+        self.note('home_battle', 40)
+        self.note('home_battle', 90)                       # too soon: not read
+        self.assertEqual(self.stub.ai_outcome['damage']['last'], 40)
+        self.clock[0] += 2
+        self.note('home_battle', None)                      # unreadable: the last good value stays
+        self.assertEqual(self.stub.ai_outcome['damage'], {'last': 40, 'max': 40})
+
+    def test_other_screens_and_no_battle_are_ignored(self):
+        self.note('home_scout', 55)
+        self.assertEqual(self.stub.ai_outcome['damage'], {})
+        self.stub.ai_outcome = None
+        self.note('home_battle', 55)                         # nothing logged, nothing raised
+        self.assertIsNone(self.stub.ai_outcome)
+
+    def test_finishing_writes_one_line_and_stops_watching(self):
+        self.note('home_battle', 62)
+        self.clock[0] += 50
+        self.bot_module.Bot.finish_ai_outcome(self.stub)
+        self.assertIsNone(self.stub.ai_outcome)
+        entries = ai_deploy.load_history(Path(self.tmp.name) / '.coc-auto' / ai_deploy.HISTORY_FILE)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual((entries[0]['damage_last'], entries[0]['model'], entries[0]['battle_seconds']), (62, 'm', 50.0))
+        self.bot_module.Bot.finish_ai_outcome(self.stub)     # a second call writes nothing more
+        self.assertEqual(len(ai_deploy.load_history(Path(self.tmp.name) / '.coc-auto' / ai_deploy.HISTORY_FILE)), 1)
