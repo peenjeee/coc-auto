@@ -10,7 +10,7 @@ import { SettingsPanel } from './settings.js?v=10';
 import { setupSelects, refreshSelects } from './select.js?v=2';
 import { StatsPanel, previewStatistics } from './stats.js?v=17';
 import { DiscordPanel } from './discord.js?v=7';
-import { AiPanel } from './ai.js?v=1';
+import { AiPanel } from './ai.js?v=2';
 import { VisiblePoller } from './visible-poller.js?v=2';
 import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=22';
 
@@ -849,7 +849,7 @@ class DemoLink {
     this.picks = {buildings:{targets:[{id:'archer_tower',name:'Archer Tower',level:8},{id:'spring_trap',name:'Spring Trap',level:null}],keep_builders:1},
       lab:{targets:[{id:'giant',name:'Giant',level:null}]}, pets:{targets:[]}};
     this.discord = {configured:false,enabled:false,ping_id:'',events:['ended','recovery','summary'],interval:30,status:'Not connected'};
-    this.ai = {enabled:false,base_url:'',model:'',goal:'loot',hint:'',timeout:20,max_tokens:4000,probe_points:6,probe_max:12,t_max:150,key_set:false};
+    this.ai = {enabled:false,base_url:'',model:'',goal:'loot',hint:'',timeout:20,max_tokens:8000,reasoning_effort:'',probe_points:6,probe_max:12,t_max:150,key_set:false};
   }
   async send(body) {
     const {action,args} = JSON.parse(body);

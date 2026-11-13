@@ -20,7 +20,7 @@ globalThis.localStorage = { getItem: () => null, setItem() {} };
 const { AiPanel } = await import('../../web/ai.js');
 
 const SAVED = { enabled: true, base_url: 'https://openrouter.ai/api/v1', model: 'some/model', goal: 'stars', hint: 'no healers',
-  probe_points: 4, probe_max: 10, key_set: true };
+  probe_points: 4, probe_max: 10, reasoning_effort: 'low', key_set: true };
 
 function panel(local = true) {
   elements.clear();
@@ -38,6 +38,7 @@ test('loading fills the form, never a key, and enables the test button', () => {
   assert.equal(element('ai-hint').value, 'no healers');
   assert.equal(element('ai-probe-points').value, '4');
   assert.equal(element('ai-probe-max').value, '10');
+  assert.equal(element('ai-effort').value, 'low');
   assert.equal(element('ai-enabled').checked, true);
   assert.equal(element('ai-key').value, '');
   assert.match(element('ai-key').placeholder, /saved/i);
@@ -56,8 +57,8 @@ test('saving sends the typed key only, so a saved key is not overwritten by blan
   assert.equal(sent.at(-1).args.api_key, 'sk-new-key');
   assert.deepEqual(
     { goal: sent.at(-1).args.goal, probe_points: sent.at(-1).args.probe_points, probe_max: sent.at(-1).args.probe_max,
-      enabled: sent.at(-1).args.enabled, base_url: sent.at(-1).args.base_url },
-    { goal: 'stars', probe_points: 4, probe_max: 10, enabled: true, base_url: SAVED.base_url });
+      reasoning_effort: sent.at(-1).args.reasoning_effort, enabled: sent.at(-1).args.enabled, base_url: sent.at(-1).args.base_url },
+    { goal: 'stars', probe_points: 4, probe_max: 10, reasoning_effort: 'low', enabled: true, base_url: SAVED.base_url });
 });
 
 test('a load clears the typed key field and an answer after editing does not wipe the edit', () => {
@@ -100,4 +101,13 @@ test('the online dashboard shows the form disabled with the local-only note', ()
   made.load(SAVED, 'ai_loaded');
   assert.match(element('ai-feedback').textContent, /local dashboard/i);
   assert.equal(element('ai-test').disabled, true);
+});
+
+test('an unknown or missing reasoning effort falls back to the model default', () => {
+  const { made } = panel();
+  made.load({ ...SAVED, reasoning_effort: 'extreme' }, 'ai_loaded');
+  assert.equal(element('ai-effort').value, '');
+  const { made: second } = panel();
+  second.load({ ...SAVED, reasoning_effort: undefined }, 'ai_loaded');
+  assert.equal(element('ai-effort').value, '');
 });

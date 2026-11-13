@@ -1,6 +1,7 @@
 import {t as tr} from './i18n.js?v=5';
 const $=id=>document.getElementById(id);
 const GOALS=['loot','trophy','stars'];
+const EFFORTS=['','low','medium','high'];
 const field=(id,key,control,note='')=>`<label class="discord-field"><span data-i18n="${key}">${tr(key)}</span>${control}${note}</label>`;
 const note=key=>`<small data-i18n="${key}">${tr(key)}</small>`;
 /** The AI deploy settings of the Settings tab: endpoint, model and key stay on the device; the key is never shown again. */
@@ -17,6 +18,7 @@ ${field('ai-goal','ai_goal',`<select id="ai-goal">${GOALS.map(goal=>`<option val
 ${field('ai-probe-points','ai_probe_points','<input id="ai-probe-points" type="number" min="2" max="12" step="1" inputmode="numeric">',note('ai_probe_points_note'))}
 ${field('ai-probe-max','ai_probe_max','<input id="ai-probe-max" type="number" min="2" max="20" step="1" inputmode="numeric">',note('ai_probe_max_note'))}
 </div>
+${field('ai-effort','ai_effort',`<select id="ai-effort">${EFFORTS.map(effort=>`<option value="${effort}" data-i18n="ai_effort_${effort||'default'}">${tr('ai_effort_'+(effort||'default'))}</option>`).join('')}</select>`,note('ai_effort_note'))}
 ${field('ai-hint','ai_hint','<textarea id="ai-hint" rows="2" maxlength="500" spellcheck="false"></textarea>')}
 <div class="discord-enabled"><label class="toggle"><input type="checkbox" id="ai-enabled"><span data-i18n="ai_enable">${tr('ai_enable')}</span></label></div>
 <div class="discord-actions"><button type="submit" class="primary" data-i18n="ai_save">${tr('ai_save')}</button><button id="ai-test" type="button" class="secondary" disabled data-i18n="ai_test">${tr('ai_test')}</button></div>
@@ -47,7 +49,7 @@ ${field('ai-hint','ai_hint','<textarea id="ai-hint" rows="2" maxlength="500" spe
   /** Settings sent to the device; the key goes only when a new one was typed, so a saved key is never overwritten by blank. */
   values(){
     const body={base_url:$('ai-url').value.trim(),model:$('ai-model').value.trim(),goal:$('ai-goal').value,hint:$('ai-hint').value,
-      probe_points:Number($('ai-probe-points').value),probe_max:Number($('ai-probe-max').value),enabled:$('ai-enabled').checked};
+      probe_points:Number($('ai-probe-points').value),probe_max:Number($('ai-probe-max').value),reasoning_effort:$('ai-effort').value,enabled:$('ai-enabled').checked};
     const key=$('ai-key').value.trim();
     if(key)body.api_key=key;
     return body;
@@ -58,6 +60,7 @@ ${field('ai-hint','ai_hint','<textarea id="ai-hint" rows="2" maxlength="500" spe
     this.dirty=false;this.saved=data;this.lastCode=code;
     $('ai-url').value=data.base_url||'';$('ai-model').value=data.model||'';$('ai-key').value='';
     $('ai-goal').value=GOALS.includes(data.goal)?data.goal:'loot';$('ai-hint').value=data.hint||'';
+    $('ai-effort').value=EFFORTS.includes(data.reasoning_effort)?data.reasoning_effort:'';
     $('ai-probe-points').value=String(data.probe_points??6);$('ai-probe-max').value=String(data.probe_max??12);
     $('ai-enabled').checked=Boolean(data.enabled);
     $('ai-test').disabled=!this.local||!data.key_set||!data.base_url||!data.model;
