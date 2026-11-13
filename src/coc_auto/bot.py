@@ -1637,6 +1637,17 @@ def card_count(image: np.ndarray, bar: list, card: tuple, templates: dict, insid
     return int(''.join(digits))
 
 
+def read_bar(image: np.ndarray, auto: dict) -> tuple[list, int]:
+    """Every card in the bar as (card, kind, group), left to right, and the last counted group. Counted cards are
+    troops in the first group and spells in the last counted group after it, with or without heroes and siege
+    machines between them; a counted card in a group between those is a siege machine."""
+    region = auto['bar']
+    found = bar_cards(image, region, auto.get('colour', BAR_CARD_COLOUR))
+    cards = [(card, card_kind(image, region, card), group) for card, group in zip(found, card_groups(found))]
+    last = max((group for _, kind, group in cards if kind == 'counted'), default=0)
+    return cards, last
+
+
 def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = False,
               templates: dict | None = None, stack: bool = False) -> list:
     """Deploy order for the cards on screen: every troop held at the deploy point until empty, the siege machine,
@@ -1649,11 +1660,7 @@ def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = F
         return camp_plan(image, auto, stack, templates)
     region = auto['bar']
     middle = region[1] + region[3] // 2
-    found = bar_cards(image, region, auto.get('colour', BAR_CARD_COLOUR))
-    cards = [(card, card_kind(image, region, card), group) for card, group in zip(found, card_groups(found))]
-    # Counted cards are troops in the first group and spells in the last counted group after it, with or without
-    # heroes and siege machines between them; a counted card in a group between those is a siege machine.
-    last = max((group for _, kind, group in cards if kind == 'counted'), default=0)
+    cards, last = read_bar(image, auto)
     troops, siege, heroes, spells = [], [], [], []
     for card, kind, group in cards:
         slot = [(card[0] + card[1]) // 2, middle]
