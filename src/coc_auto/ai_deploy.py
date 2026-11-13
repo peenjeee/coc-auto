@@ -299,7 +299,7 @@ def plan(client: ChatClient, goal: str, hint: str, image: np.ndarray, cards: dic
 
 SETTINGS_FILE = 'ai.json'
 SETTINGS_DEFAULTS = {'enabled': False, 'base_url': '', 'api_key': '', 'model': '', 'goal': 'loot', 'hint': '',
-                     'timeout': 20.0}
+                     'timeout': 20.0, 'max_tokens': 4000}
 MAX_HINT = 500
 
 
@@ -317,7 +317,7 @@ def load_settings(path) -> dict:
 
 def public_settings(settings: dict) -> dict:
     """What the dashboard may show: everything but the key, plus whether a key is saved."""
-    return {key: value for key, value in settings.items() if key != 'api_key'} | {'key_set': bool(settings['api_key'])}
+    return {key: value for key, value in settings.items() if key != 'api_key'} | {'key_set': bool(settings.get('api_key', settings.get('key_set')))}
 
 
 def save_settings(path, value: dict) -> dict:
@@ -340,6 +340,9 @@ def save_settings(path, value: dict) -> dict:
     if merged['enabled'] and not (merged['base_url'] and merged['model'] and merged['api_key']):
         raise AIPlanError('Isi base URL, nama model, dan API key sebelum menyalakan AI')
     merged['timeout'] = min(max(float(merged['timeout']), 1.0), MAX_TIMEOUT)
+    # Reasoning models spend the budget on thinking before the JSON; a small cap cuts the plan off mid-answer.
+    if type(merged['max_tokens']) is not int or not 256 <= merged['max_tokens'] <= 16000:
+        raise AIPlanError('Batas token model harus 256 sampai 16000')
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix('.tmp')
     with open(temporary, 'w', encoding='utf-8', opener=lambda p, f: os.open(p, f, 0o600)) as handle:
@@ -354,4 +357,4 @@ def client_from_settings(settings: dict, transport=None) -> ChatClient | None:
     if not settings.get('enabled'):
         return None
     return ChatClient(settings['base_url'], settings['api_key'], settings['model'], timeout=settings['timeout'],
-                      transport=transport)
+                      max_tokens=settings['max_tokens'], transport=transport)
