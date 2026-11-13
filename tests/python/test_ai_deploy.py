@@ -1,6 +1,8 @@
 import json
 import unittest
+from pathlib import Path
 
+import cv2
 import numpy as np
 
 from coc_auto import ai_deploy
@@ -52,7 +54,7 @@ class CompilePlanTest(unittest.TestCase):
         self.assertEqual(steps[0]['slot'], [143, 651])
         self.assertEqual(steps[0]['count'], 7)
         self.assertEqual(steps[0]['points'], [[140, 300]] * 4 + [[160, 420]] * 3)
-        self.assertEqual(stats, {'clamped': 0, 'dropped': 0, 'truncated': 0})
+        self.assertEqual(stats, {'clamped': 0, 'snapped': 0, 'dropped': 0, 'truncated': 0})
 
     def test_unknown_card_is_dropped(self):
         raw = {'stages': [stage([{'card': 'X9', 'place': [place(100, 100, 1)]}])]}
@@ -129,6 +131,56 @@ class CompilePlanTest(unittest.TestCase):
     def test_empty_plan_raises(self):
         with self.assertRaises(AIPlanError):
             compile_plan({'stages': [stage([{'card': 'NOPE', 'place': []}])]}, CARDS, BOUNDS)
+
+
+FIXTURES = Path(__file__).resolve().parents[1] / 'fixtures' / 'ai'
+
+
+def load(name):
+    image = cv2.imread(str(FIXTURES / name))
+    assert image is not None, name
+    return image
+
+
+class DeployZoneTest(unittest.TestCase):
+    def check_zone(self, name):
+        zone = ai_deploy.deploy_zone(load(name))
+        self.assertIsNotNone(zone, name)
+        self.assertTrue(ai_deploy.ZONE_MIN_SHARE <= zone.mean() <= ai_deploy.ZONE_MAX_SHARE)
+        self.assertTrue(zone[360, 640])  # base centre is deployable
+        self.assertFalse(zone[10, 10])  # corners are outside the boundary
+        self.assertFalse(zone[700, 640])  # the card bar is never deployable
+        return zone
+
+    def test_scout_frame_zone_follows_orange_boundary(self):
+        self.check_zone('zone-scout.png')
+
+    def test_card_selected_frame_zone_follows_orange_boundary(self):
+        self.check_zone('zone-selected.png')
+
+    def test_blank_frame_has_no_zone(self):
+        self.assertIsNone(ai_deploy.deploy_zone(np.full((720, 1280, 3), 90, np.uint8)))
+
+    def test_snap_moves_outside_point_inside_zone(self):
+        zone = self.check_zone('zone-scout.png')
+        snapped = ai_deploy.snap_to_zone([10, 10], zone)
+        self.assertTrue(zone[snapped[1], snapped[0]])
+
+    def test_compile_snaps_points_into_zone(self):
+        zone = self.check_zone('zone-scout.png')
+        cards = {'T1': {'slot': [143, 651], 'kind': 'counted', 'count': 12}}
+        raw = {'stages': [stage([{'card': 'T1', 'place': [place(10, 10, 2), place(640, 360, 1)]}])]}
+        steps, stats = compile_plan(raw, cards, BOUNDS, zone)
+        self.assertEqual(stats['snapped'], 1)
+        for x, y in steps[0]['points']:
+            self.assertTrue(zone[y, x])
+
+    def test_compile_without_zone_keeps_points(self):
+        cards = {'T1': {'slot': [143, 651], 'kind': 'counted', 'count': 12}}
+        raw = {'stages': [stage([{'card': 'T1', 'place': [place(10, 10, 1)]}])]}
+        steps, stats = compile_plan(raw, cards, BOUNDS, None)
+        self.assertEqual(steps[0]['points'], [[10, 10]])
+        self.assertEqual(stats['snapped'], 0)
 
 
 class ClientTest(unittest.TestCase):

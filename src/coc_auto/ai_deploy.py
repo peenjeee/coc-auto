@@ -66,8 +66,69 @@ def _number(value: object, cap: float) -> float | None:
     return min(max(float(value), 0.0), cap)
 
 
-def _point(value: object, bounds: tuple, stats: dict) -> list | None:
-    """An [x, y] pixel inside the frame above the card bar; out-of-range points are clamped, not guessed."""
+ZONE_MIN_SHARE, ZONE_MAX_SHARE = 0.15, 0.75
+ZONE_MIN_LINE = 60   # px; the boundary is long, plot outlines and building edges are short
+ZONE_INSET = 4       # px a snapped drop moves inside the boundary, so it lands on the deployable side
+
+
+def deploy_zone(image: np.ndarray) -> np.ndarray | None:
+    """Deployable area of a battle frame as a bool mask, from the orange boundary line that runs beside the grass.
+
+    Line candidates are orange-brown strokes at least ZONE_MIN_LINE long and only a few pixels thick, with grass
+    next to them; the zone is the convex hull of those strokes, since the boundary is near-convex and the strokes
+    have gaps. None when the result does not look like a base (too small, too large, or the centre is outside).
+    """
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    line = ((hue >= 5) & (hue <= 22) & (sat >= 90) & (val >= 90)).astype(np.uint8)
+    grass = ((hue >= 25) & (hue <= 50) & (sat >= 70) & (val >= 70)).astype(np.uint8)
+    grass_near = cv2.dilate(grass, np.ones((9, 9), np.uint8))
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(line, connectivity=8)
+    strokes = []
+    for index in range(1, count):
+        x, y, w, h, area = stats[index]
+        long_side = max(w, h)
+        if long_side < ZONE_MIN_LINE or area / float(long_side) > 4.0:
+            continue
+        # Work on the stroke's own box, not the whole frame, to keep this cheap.
+        x0, y0, x1, y1 = max(x - 4, 0), max(y - 4, 0), x + w + 4, y + h + 4
+        comp = (labels[y0:y1, x0:x1] == index).astype(np.uint8)
+        ring = cv2.dilate(comp, np.ones((7, 7), np.uint8)) - comp
+        if ring.any() and float(grass_near[y0:y1, x0:x1][ring > 0].mean()) >= 0.4:
+            strokes.append(np.argwhere(comp)[:, ::-1] + [x0, y0])
+    if not strokes:
+        return None
+    points = np.vstack(strokes).astype(np.int32)
+    if len(points) < 300:
+        return None
+    hull = cv2.convexHull(points)
+    zone = np.zeros(line.shape, np.uint8)
+    cv2.fillPoly(zone, [hull], 1)
+    share = float(zone.mean())
+    height, width = line.shape
+    if not ZONE_MIN_SHARE <= share <= ZONE_MAX_SHARE or not zone[height // 2, width // 2]:
+        return None
+    return zone.astype(bool)
+
+
+def snap_to_zone(point: list, zone: np.ndarray) -> list:
+    """The point itself when it is deployable, else the nearest deployable pixel pulled ZONE_INSET inside."""
+    x, y = point
+    if zone[y, x]:
+        return point
+    contours, _ = cv2.findContours(zone.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    edge = max(contours, key=cv2.contourArea).reshape(-1, 2).astype(np.int64)
+    centre = np.argwhere(zone).mean(axis=0)[::-1]
+    nearest = edge[np.argmin(((edge - [x, y]) ** 2).sum(axis=1))]
+    direction = centre - nearest
+    norm = float(np.hypot(*direction)) or 1.0
+    inside = nearest + direction / norm * ZONE_INSET
+    return [int(round(inside[0])), int(round(inside[1]))]
+
+
+def _point(value: object, bounds: tuple, stats: dict, zone: np.ndarray | None = None) -> list | None:
+    """An [x, y] pixel inside the frame above the card bar; out-of-range points are clamped, not guessed. With a
+    deploy zone, a point outside it is moved to the zone's edge."""
     if not isinstance(value, list) or len(value) != 2:
         return None
     if any(isinstance(v, bool) or not isinstance(v, (int, float)) or v != v for v in value):
@@ -77,19 +138,23 @@ def _point(value: object, bounds: tuple, stats: dict) -> list | None:
     clamped = [min(max(x, 0), width - 1), min(max(y, 0), bar_top - 1)]
     if clamped != [x, y]:
         stats['clamped'] += 1
+    if zone is not None and not zone[clamped[1], clamped[0]]:
+        stats['snapped'] += 1
+        return snap_to_zone(clamped, zone)
     return clamped
 
 
-def compile_plan(raw: dict, cards: dict, bounds: tuple) -> tuple[list, dict]:
-    """Validated plan as deploy steps (the shapes auto_plan returns) and counts of what was clamped or dropped.
+def compile_plan(raw: dict, cards: dict, bounds: tuple, zone: np.ndarray | None = None) -> tuple[list, dict]:
+    """Validated plan as deploy steps (the shapes auto_plan returns) and counts of what was clamped, snapped into
+    the deploy zone, or dropped.
 
     cards: id -> {'slot': [x, y], 'kind': str, 'count': int | None}, from the card bar read.
-    bounds: (frame width, card bar top y).
+    bounds: (frame width, card bar top y). zone: deploy_zone mask, or None when it could not be read.
     """
     stages = raw.get('stages')
     if not isinstance(stages, list) or not 1 <= len(stages) <= MAX_STAGES:
         raise AIPlanError('Rencana AI harus berisi 1 sampai 8 tahap')
-    stats = {'clamped': 0, 'dropped': 0, 'truncated': 0}
+    stats = {'clamped': 0, 'snapped': 0, 'dropped': 0, 'truncated': 0}
     steps, used, total_wait = [], {}, 0.0
     for stage in stages:
         actions = stage.get('actions') if isinstance(stage, dict) else None
@@ -101,7 +166,7 @@ def compile_plan(raw: dict, cards: dict, bounds: tuple) -> tuple[list, dict]:
         total_wait += wait
         first = len(steps)
         for action in actions:
-            for step in _action_steps(action, cards, bounds, used, stats):
+            for step in _action_steps(action, cards, bounds, used, stats, zone):
                 if len(steps) >= MAX_STEPS:
                     stats['truncated'] += 1
                     continue
@@ -113,7 +178,8 @@ def compile_plan(raw: dict, cards: dict, bounds: tuple) -> tuple[list, dict]:
     return steps, stats
 
 
-def _action_steps(action: object, cards: dict, bounds: tuple, used: dict, stats: dict) -> list:
+def _action_steps(action: object, cards: dict, bounds: tuple, used: dict, stats: dict,
+                  zone: np.ndarray | None = None) -> list:
     card_id = action.get('card') if isinstance(action, dict) else None
     card = cards.get(card_id) if isinstance(card_id, str) else None
     if card is None:
@@ -121,7 +187,7 @@ def _action_steps(action: object, cards: dict, bounds: tuple, used: dict, stats:
         return []
     points = []
     for place in action.get('place') or []:
-        at = _point(place.get('at') if isinstance(place, dict) else None, bounds, stats)
+        at = _point(place.get('at') if isinstance(place, dict) else None, bounds, stats, zone)
         count = place.get('count') if isinstance(place, dict) else None
         if at is None or isinstance(count, bool) or not isinstance(count, int) or count < 1:
             stats['dropped'] += 1
@@ -222,8 +288,10 @@ class ChatClient:
 
 def plan(client: ChatClient, goal: str, hint: str, image: np.ndarray, cards: dict, bounds: tuple) -> tuple:
     """(steps, stats, analysis) for the frame, or raises AIPlanError; the caller falls back to the built-in plan."""
+    zone = deploy_zone(image)
     jpegs = [encode_jpeg(image)]
     reply = client.complete(build_messages(goal, hint, cards, bounds, jpegs))
     raw = parse_reply(reply)
-    steps, stats = compile_plan(raw, cards, bounds)
+    steps, stats = compile_plan(raw, cards, bounds, zone)
+    stats['zone'] = zone is not None
     return steps, stats, str(raw.get('analysis', ''))[:300]
