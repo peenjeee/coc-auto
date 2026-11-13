@@ -143,34 +143,58 @@ def load(name):
     return image
 
 
-class DeployZoneTest(unittest.TestCase):
-    def check_zone(self, name):
-        zone = ai_deploy.deploy_zone(load(name))
+BAR_TOP = 651
+
+
+class DroppableTest(unittest.TestCase):
+    """The droppable ground is outside the enemy base. The oracle frame was checked live with single Giants: the
+    left-hand point deployed, the point between buildings inside the base was refused."""
+
+    def zone(self, name):
+        zone, how = ai_deploy.droppable(load(name), BAR_TOP)
         self.assertIsNotNone(zone, name)
-        self.assertTrue(ai_deploy.ZONE_MIN_SHARE <= zone.mean() <= ai_deploy.ZONE_MAX_SHARE)
-        self.assertTrue(zone[360, 640])  # base centre is deployable
-        self.assertFalse(zone[10, 10])  # corners are outside the boundary
-        self.assertFalse(zone[700, 640])  # the card bar is never deployable
-        return zone
+        return zone, how
 
-    def test_scout_frame_zone_follows_orange_boundary(self):
-        self.check_zone('zone-scout.png')
+    def test_oracle_points_match_what_the_game_accepted(self):
+        zone, _ = self.zone('scout-oracle.png')
+        self.assertTrue(zone[400, 280])       # light ground left of the base: deployed live
+        self.assertFalse(zone[305, 585])      # between buildings inside the base: refused live
 
-    def test_card_selected_frame_zone_follows_orange_boundary(self):
-        self.check_zone('zone-selected.png')
+    def test_every_sample_frame_gives_ground_outside_the_base(self):
+        for name in ('scout-oracle.png', 'scout-clean.png', 'scout-sprawl.png', 'zone-scout.png', 'zone-selected.png'):
+            with self.subTest(name=name):
+                zone, how = self.zone(name)
+                self.assertGreaterEqual(float(zone.mean()), ai_deploy.DROPPABLE_MIN_SHARE)
+                self.assertLess(float(zone.mean()), 0.5)
+                self.assertFalse(zone[BAR_TOP:, :].any())      # never on the card bar
+                self.assertFalse(zone[360, 640])                # the middle of the base is never droppable
+
+    def test_ground_keeps_clear_of_the_fixed_ui(self):
+        zone, _ = self.zone('scout-clean.png')
+        for x0, y0, x1, y1 in ai_deploy.HUD_RECTS:
+            self.assertFalse(zone[y0:y1, x0:x1].any())
+
+    def test_clean_base_uses_both_hulls(self):
+        self.assertEqual(self.zone('scout-clean.png')[1], 'union')
+
+    def test_decorated_base_trusts_the_line_hull(self):
+        # the object hull is more than 1.5x the line hull here (trees and rocks pulled it out)
+        self.assertEqual(self.zone('scout-sprawl.png')[1], 'line')
 
     def test_blank_frame_has_no_zone(self):
-        self.assertIsNone(ai_deploy.deploy_zone(np.full((720, 1280, 3), 90, np.uint8)))
+        zone, _ = ai_deploy.droppable(np.full((720, 1280, 3), 90, np.uint8), BAR_TOP)
+        self.assertIsNone(zone)
 
-    def test_snap_moves_outside_point_inside_zone(self):
-        zone = self.check_zone('zone-scout.png')
-        snapped = ai_deploy.snap_to_zone([10, 10], zone)
+    def test_snap_moves_a_base_point_out_to_droppable_ground(self):
+        zone, _ = self.zone('scout-oracle.png')
+        snapped = ai_deploy.snap_to_zone([585, 305], zone)
         self.assertTrue(zone[snapped[1], snapped[0]])
+        self.assertEqual(ai_deploy.snap_to_zone([280, 400], zone), [280, 400])   # already droppable: unchanged
 
-    def test_compile_snaps_points_into_zone(self):
-        zone = self.check_zone('zone-scout.png')
+    def test_compile_snaps_points_out_of_the_base(self):
+        zone, _ = self.zone('scout-oracle.png')
         cards = {'T1': {'slot': [143, 651], 'kind': 'counted', 'count': 12}}
-        raw = {'stages': [stage([{'card': 'T1', 'place': [place(10, 10, 2), place(640, 360, 1)]}])]}
+        raw = {'stages': [stage([{'card': 'T1', 'place': [place(585, 305, 2), place(280, 400, 1)]}])]}
         steps, stats = compile_plan(raw, cards, BOUNDS, zone)
         self.assertEqual(stats['snapped'], 1)
         for x, y in steps[0]['points']:
@@ -182,6 +206,11 @@ class DeployZoneTest(unittest.TestCase):
         steps, stats = compile_plan(raw, cards, BOUNDS, None)
         self.assertEqual(steps[0]['points'], [[10, 10]])
         self.assertEqual(stats['snapped'], 0)
+
+    def test_no_zone_refuses_the_ai_plan_before_calling_the_model(self):
+        client = ChatClient('https://example.test/v1', 'k', 'm', transport=lambda *a: self.fail('no call expected'))
+        with self.assertRaises(AIPlanError):
+            ai_deploy.plan(client, 'loot', '', np.full((720, 1280, 3), 90, np.uint8), {}, BOUNDS)
 
 
 class ClientTest(unittest.TestCase):

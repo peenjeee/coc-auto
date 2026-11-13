@@ -841,5 +841,6 @@
  "Catatan AI terlalu panjang": "AI note is too long",
  "Isi base URL, nama model, dan API key sebelum menyalakan AI": "Fill in the base URL, model name and API key before switching the AI on",
  "Rencana AI: %s langkah, %s titik digeser ke zona deploy, %s dibuang": "AI plan: %s steps, %s points moved into the deploy zone, %s dropped",
- "Batas token model harus 256 sampai 16000": "Model token limit must be 256 to 16000"
+ "Batas token model harus 256 sampai 16000": "Model token limit must be 256 to 16000",
+ "Zona deploy tidak terbaca; pakai rencana bawaan": "Deploy zone could not be read; using the built-in plan"
 }

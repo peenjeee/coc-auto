@@ -66,23 +66,46 @@ def _number(value: object, cap: float) -> float | None:
     return min(max(float(value), 0.0), cap)
 
 
-ZONE_MIN_SHARE, ZONE_MAX_SHARE = 0.15, 0.75
-ZONE_MIN_LINE = 60   # px; the boundary is long, plot outlines and building edges are short
-ZONE_INSET = 4       # px a snapped drop moves inside the boundary, so it lands on the deployable side
+# The deployable ground is OUTSIDE the enemy base: a drop inside the base's no-deploy zone does nothing (checked live:
+# drops 10 px outside the base hull all deployed, one between buildings inside was refused).
+ZONE_MIN_SHARE, ZONE_MAX_SHARE = 0.15, 0.75   # a line hull outside this share of the frame is not a base
+ZONE_MIN_LINE = 60        # px; the boundary line is long, plot outlines and building edges are short
+BASE_LINK = 9             # px gap across which object pixels count as one cluster
+BASE_MIN_PX = 2500        # object pixels the largest cluster needs to count as a base
+HULL_RATIO = 1.5          # object hull this much bigger than the line hull = decoration pulled in; trust the line
+MARGIN = 14               # px the no-deploy region is grown by
+LINE_MISSING_EXTRA = 14   # more margin when no boundary line was found
+GROUND_VAL = 150          # smoothed brightness the playable ground needs; the dark forest stays below it
+NEAR_OBJECT = 16          # px kept clear around any sizeable object cluster
+OBJECT_MIN_PX = 1500      # an object cluster this big (buildings, walls) keeps NEAR_OBJECT clear
+REGION_MIN_PX = 1500      # droppable pockets smaller than this are dropped
+DROPPABLE_MIN_SHARE = 0.02
+# Fixed UI on the 1280x720 battle screen (x0, y0, x1, y1): loot box, resources, timer, End Battle, Next.
+HUD_RECTS = ((0, 0, 270, 215), (985, 0, 1280, 175), (520, 0, 760, 85), (0, 500, 400, 651), (1050, 455, 1280, 651))
 
 
-def deploy_zone(image: np.ndarray) -> np.ndarray | None:
-    """Deployable area of a battle frame as a bool mask, from the orange boundary line that runs beside the grass.
+def _grass(hsv: np.ndarray, val_min: int = 70) -> np.ndarray:
+    hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    return (hue >= 25) & (hue <= 50) & (sat >= 70) & (val >= val_min)
 
-    Line candidates are orange-brown strokes at least ZONE_MIN_LINE long and only a few pixels thick, with grass
-    next to them; the zone is the convex hull of those strokes, since the boundary is near-convex and the strokes
-    have gaps. None when the result does not look like a base (too small, too large, or the centre is outside).
-    """
+
+def _playable(shape: tuple, bar_top: int) -> np.ndarray:
+    """Where a drop can be: above the card bar and clear of the fixed UI."""
+    height, width = shape
+    keep = np.ones(shape, bool)
+    keep[bar_top:, :] = False
+    for x0, y0, x1, y1 in HUD_RECTS:
+        keep[y0:min(y1, height), x0:min(x1, width)] = False
+    return keep
+
+
+def line_hull(image: np.ndarray) -> np.ndarray | None:
+    """Convex hull of the orange boundary strokes around the base (long, thin, grass beside them), as a bool mask.
+    None when too few strokes were found or the hull does not look like a base."""
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     line = ((hue >= 5) & (hue <= 22) & (sat >= 90) & (val >= 90)).astype(np.uint8)
-    grass = ((hue >= 25) & (hue <= 50) & (sat >= 70) & (val >= 70)).astype(np.uint8)
-    grass_near = cv2.dilate(grass, np.ones((9, 9), np.uint8))
+    grass_near = cv2.dilate(_grass(hsv).astype(np.uint8), np.ones((9, 9), np.uint8))
     count, labels, stats, _ = cv2.connectedComponentsWithStats(line, connectivity=8)
     strokes = []
     for index in range(1, count):
@@ -90,7 +113,6 @@ def deploy_zone(image: np.ndarray) -> np.ndarray | None:
         long_side = max(w, h)
         if long_side < ZONE_MIN_LINE or area / float(long_side) > 4.0:
             continue
-        # Work on the stroke's own box, not the whole frame, to keep this cheap.
         x0, y0, x1, y1 = max(x - 4, 0), max(y - 4, 0), x + w + 4, y + h + 4
         comp = (labels[y0:y1, x0:x1] == index).astype(np.uint8)
         ring = cv2.dilate(comp, np.ones((7, 7), np.uint8)) - comp
@@ -101,29 +123,82 @@ def deploy_zone(image: np.ndarray) -> np.ndarray | None:
     points = np.vstack(strokes).astype(np.int32)
     if len(points) < 300:
         return None
-    hull = cv2.convexHull(points)
     zone = np.zeros(line.shape, np.uint8)
-    cv2.fillPoly(zone, [hull], 1)
-    share = float(zone.mean())
+    cv2.fillPoly(zone, [cv2.convexHull(points)], 1)
     height, width = line.shape
-    if not ZONE_MIN_SHARE <= share <= ZONE_MAX_SHARE or not zone[height // 2, width // 2]:
+    if not ZONE_MIN_SHARE <= float(zone.mean()) <= ZONE_MAX_SHARE or not zone[height // 2, width // 2]:
         return None
     return zone.astype(bool)
 
 
+def object_hull(image: np.ndarray, bar_top: int) -> np.ndarray | None:
+    """Convex hull of the largest cluster of non-grass objects (the base: buildings and walls), as a bool mask."""
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    objects = (~_grass(hsv)) & _playable(hsv.shape[:2], bar_top)
+    linked = cv2.dilate(objects.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (BASE_LINK, BASE_LINK)))
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(linked, connectivity=8)
+    if count < 2:
+        return None
+    base = (labels == 1 + int(np.argmax(stats[1:, 4]))) & objects
+    points = cv2.findNonZero(base.astype(np.uint8))
+    if points is None or len(points) < BASE_MIN_PX:
+        return None
+    zone = np.zeros(objects.shape, np.uint8)
+    cv2.fillPoly(zone, [cv2.convexHull(points)], 1)
+    return zone.astype(bool)
+
+
+def droppable(image: np.ndarray, bar_top: int) -> tuple[np.ndarray | None, str]:
+    """(mask, how) of the ground a drop may land on: playable ground outside the base, as a bool mask.
+
+    The base is the union of the object hull and the line hull (each misses what the other sees: the line includes
+    outlying buildings, the objects survive a hidden line); when the object hull is much bigger than the line hull,
+    decorations pulled it out and the line alone is used. The base is grown by a margin, anything near a sizeable
+    object cluster is kept clear, and small pockets are dropped. None when no base is found or too little is left."""
+    objects_hull = object_hull(image, bar_top)
+    lines_hull = line_hull(image)
+    if objects_hull is None and lines_hull is None:
+        return None, 'none'
+    if objects_hull is not None and lines_hull is not None:
+        if objects_hull.sum() > HULL_RATIO * lines_hull.sum():
+            base, how = lines_hull, 'line'
+        else:
+            base, how = objects_hull | lines_hull, 'union'
+    elif lines_hull is not None:
+        base, how = lines_hull, 'line'
+    else:
+        base, how = objects_hull, 'objects'
+    margin = MARGIN + (LINE_MISSING_EXTRA if lines_hull is None else 0)
+    base = cv2.dilate(base.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * margin + 1,) * 2))
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    smooth = cv2.GaussianBlur(hsv[..., 2], (0, 0), 6)   # forest leaves speckle bright; their local mean stays dark
+    ground = _grass(hsv) & (smooth >= GROUND_VAL)
+    ground = cv2.morphologyEx(ground.astype(np.uint8), cv2.MORPH_OPEN, np.ones((7, 7), np.uint8)) > 0
+    keep = _playable(ground.shape, bar_top)
+    # Keep clear of any sizeable object cluster whatever the hulls say.
+    objects = ((~_grass(hsv)) & keep).astype(np.uint8)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(
+        cv2.dilate(objects, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))), connectivity=8)
+    big = [index for index in range(1, count) if stats[index, 4] >= OBJECT_MIN_PX]
+    near = cv2.dilate((np.isin(labels, big) & (objects > 0)).astype(np.uint8),
+                      cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * NEAR_OBJECT + 1,) * 2))
+    zone = ground & keep & (base == 0) & (near == 0)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(zone.astype(np.uint8), connectivity=8)
+    zone = np.isin(labels, [index for index in range(1, count) if stats[index, 4] >= REGION_MIN_PX])
+    if float(zone.mean()) < DROPPABLE_MIN_SHARE:
+        return None, how
+    return zone, how
+
+
 def snap_to_zone(point: list, zone: np.ndarray) -> list:
-    """The point itself when it is deployable, else the nearest deployable pixel pulled ZONE_INSET inside."""
+    """The point itself when it is droppable, else the nearest droppable pixel."""
     x, y = point
     if zone[y, x]:
         return point
-    contours, _ = cv2.findContours(zone.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    edge = max(contours, key=cv2.contourArea).reshape(-1, 2).astype(np.int64)
-    centre = np.argwhere(zone).mean(axis=0)[::-1]
-    nearest = edge[np.argmin(((edge - [x, y]) ** 2).sum(axis=1))]
-    direction = centre - nearest
-    norm = float(np.hypot(*direction)) or 1.0
-    inside = nearest + direction / norm * ZONE_INSET
-    return [int(round(inside[0])), int(round(inside[1]))]
+    ys, xs = np.nonzero(zone)
+    xs, ys = xs[::2].astype(np.int64), ys[::2].astype(np.int64)
+    nearest = int(np.argmin((xs - x) ** 2 + (ys - y) ** 2))
+    return [int(xs[nearest]), int(ys[nearest])]
 
 
 def _point(value: object, bounds: tuple, stats: dict, zone: np.ndarray | None = None) -> list | None:
@@ -149,7 +224,7 @@ def compile_plan(raw: dict, cards: dict, bounds: tuple, zone: np.ndarray | None 
     the deploy zone, or dropped.
 
     cards: id -> {'slot': [x, y], 'kind': str, 'count': int | None}, from the card bar read.
-    bounds: (frame width, card bar top y). zone: deploy_zone mask, or None when it could not be read.
+    bounds: (frame width, card bar top y). zone: droppable mask (ground outside the base), or None when it could not be read.
     """
     stages = raw.get('stages')
     if not isinstance(stages, list) or not 1 <= len(stages) <= MAX_STAGES:
@@ -288,12 +363,14 @@ class ChatClient:
 
 def plan(client: ChatClient, goal: str, hint: str, image: np.ndarray, cards: dict, bounds: tuple) -> tuple:
     """(steps, stats, analysis) for the frame, or raises AIPlanError; the caller falls back to the built-in plan."""
-    zone = deploy_zone(image)
+    zone, how = droppable(image, bounds[1])
+    if zone is None:
+        raise AIPlanError('Zona deploy tidak terbaca; pakai rencana bawaan')
     jpegs = [encode_jpeg(image)]
     reply = client.complete(build_messages(goal, hint, cards, bounds, jpegs))
     raw = parse_reply(reply)
     steps, stats = compile_plan(raw, cards, bounds, zone)
-    stats['zone'] = zone is not None
+    stats['zone'] = how
     return steps, stats, str(raw.get('analysis', ''))[:300]
 
 
