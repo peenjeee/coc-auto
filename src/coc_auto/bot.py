@@ -2310,7 +2310,8 @@ class Bot:
 
     def ai_cards(self, image: np.ndarray, auto: dict) -> dict:
         """The card bar as the AI sees it: id -> slot, kind and count (None when the count does not read).
-        Ids: T troops, S spells, G siege machines, H heroes; kinds follow auto_plan's grouping."""
+        Ids: T troops (every counted card before the spells), S spells (the last counted group), G siege machines
+        (cyan cards), H heroes. Unlike auto_plan, a counted card in a middle group is a troop, not a siege machine."""
         region = auto['bar']
         middle = region[1] + region[3] // 2
         found, last = read_bar(image, auto)
@@ -2321,7 +2322,11 @@ class Bot:
                 prefix, role = 'T', 'troop'
             elif kind == 'counted' and group == last:
                 prefix, role = 'S', 'spell'
-            elif kind == 'counted' or kind == 'siege':
+            elif kind == 'counted':
+                # Counted cards between the first group and the spells are troops too: the bar spaces a big army in
+                # several groups (a 25-wizard card landed here and was told to the model as a siege machine).
+                prefix, role = 'T', 'troop'
+            elif kind == 'siege':
                 prefix, role = 'G', 'siege'
             else:
                 prefix, role = 'H', 'hero'

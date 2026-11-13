@@ -303,6 +303,16 @@ class BotHookTest(unittest.TestCase):
         for card in cards.values():
             self.assertEqual(card['slot'][1], self.auto['bar'][1] + self.auto['bar'][3] // 2)
 
+    def test_counted_cards_before_the_spells_are_troops_not_siege(self):
+        # This bar: five troop cards (the 25-wizard card among them), a hero, three spells.
+        cards = self.bot_module.Bot.ai_cards(self.stub, self.image, self.auto)
+        kinds = [card['kind'] for card in cards.values()]
+        self.assertEqual(kinds.count('troop'), 5)
+        self.assertEqual(kinds.count('spell'), 3)
+        self.assertEqual(kinds.count('hero'), 1)
+        self.assertNotIn('siege', kinds)
+        self.assertEqual([cid for cid in cards if cid.startswith('T')], ['T1', 'T2', 'T3', 'T4', 'T5'])
+
     def test_plan_from_model_replaces_builtin_plan(self):
         reply = {'analysis': 'funnel left', 'stages': [
             {'name': 'funnel', 'wait_before': 0, 'actions': [
