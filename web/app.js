@@ -10,6 +10,7 @@ import { SettingsPanel } from './settings.js?v=10';
 import { setupSelects, refreshSelects } from './select.js?v=2';
 import { StatsPanel, previewStatistics } from './stats.js?v=17';
 import { DiscordPanel } from './discord.js?v=7';
+import { AiPanel } from './ai.js?v=2';
 import { VisiblePoller } from './visible-poller.js?v=2';
 import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=22';
 
@@ -39,6 +40,7 @@ let editor = null;
 let settings = null;
 let stats = null;
 let discord = null;
+let ai = null;
 let buildings = null;
 let settingsAsked = false;
 let currentNotice = null;
@@ -151,6 +153,7 @@ function setOnline(isOnline, reason) {
         await send('get_settings', {}, { quiet: true });
         await send('get_deploy', {}, { quiet: true });
         await send('get_discord', {}, { quiet: true });
+        await send('get_ai', {}, { quiet: true });
         for (const list of BUILDING_LISTS) await send('get_buildings', { list }, { quiet: true });
       }, 0);
     }
@@ -187,6 +190,7 @@ function handleResult(result, quiet = false) {
   if (!result.ok || !result.data) return;
   if (result.code === 'stats_loaded') { stats.load(result.data); if (result.data.period === 'run') discord.stats(result.data); }
   else if (['discord_loaded','discord_saved','discord_tested'].includes(result.code)) { discord.load(result.data, result.code); refreshSelects(); }
+  else if (['ai_loaded','ai_saved','ai_tested'].includes(result.code)) { ai.load(result.data, result.code); refreshSelects(); }
   else if (result.code === 'deploy_loaded') editor.load(result.data);
   else if (['buildings_scanned', 'buildings_loaded'].includes(result.code)) buildings.load(result.data);
   else if (result.code === 'setup_checked') settings.checkedSetup(result.data);
@@ -468,7 +472,8 @@ function setBusy(busy) {
   for (const button of document.querySelectorAll('#options button, #deploy-load, #deploy-save, .settings button')) button.disabled = busy;
   settings?.busy(busy);
   refreshSelects();
-  if (!LOCAL) for (const b of document.querySelectorAll('#discord-form button')) b.disabled=true;
+  if (!LOCAL) for (const b of document.querySelectorAll('#discord-form button, #ai-form button')) b.disabled=true;
+  if (ai?.saved) $('ai-test').disabled=!LOCAL||!ai.saved.key_set||!ai.saved.base_url||!ai.saved.model||ai.dirty;
   if (discord?.saved) { $('discord-test').disabled=!LOCAL||!discord.saved.configured||discord.dirty; $('discord-remove').disabled=!LOCAL||!discord.saved.configured; }
 }
 
@@ -532,6 +537,7 @@ function changeLanguage(language) {
   applyLanguage(language);
   stats?.localize();
   discord?.localize();
+  ai?.localize();
   $('mode').textContent = t(LOCAL ? 'mode_local' : 'mode_online');
   const badge = $('online');
   badge.textContent = t(online ? 'online' : 'offline');
@@ -575,6 +581,7 @@ function init() {
   stats = new StatsPanel(period => send('get_stats', {period}, {quiet:true}),
     () => online && link !== null && !document.hidden && screenPageActive && activeView === 'stats' && !$('dashboard').hidden);
   discord = new DiscordPanel(send, {local: LOCAL, preview: DEMO});
+  ai = new AiPanel(send, {local: LOCAL});
   setupSelects();
   editor = new DeployEditor((screen, deploy, points) => send('set_deploy', { screen, deploy, points }));
   settings = new SettingsPanel(send);
@@ -689,7 +696,7 @@ function switchView(view) {
   screenPoller.sync();
   upgradePoller.sync();
   stats?.sync();
-  if (view === 'settings' && online && link) send('get_discord', {}, {quiet:true});
+  if (view === 'settings' && online && link) { send('get_discord', {}, {quiet:true}); send('get_ai', {}, {quiet:true}); }
   if (view === 'buildings' && online && link && !buildings.rows) send('get_buildings', {list: buildings.list}, {quiet:true});
 }
 function updateRunMetrics() {
@@ -842,6 +849,7 @@ class DemoLink {
     this.picks = {buildings:{targets:[{id:'archer_tower',name:'Archer Tower',level:8},{id:'spring_trap',name:'Spring Trap',level:null}],keep_builders:1},
       lab:{targets:[{id:'giant',name:'Giant',level:null}]}, pets:{targets:[]}};
     this.discord = {configured:false,enabled:false,ping_id:'',events:['ended','recovery','summary'],interval:30,status:'Not connected'};
+    this.ai = {enabled:false,base_url:'',model:'',goal:'loot',hint:'',timeout:20,max_tokens:8000,reasoning_effort:'',probe_points:6,probe_max:12,t_max:150,key_set:false};
   }
   async send(body) {
     const {action,args} = JSON.parse(body);
@@ -850,6 +858,9 @@ class DemoLink {
     else if (action === 'get_discord') {code='discord_loaded';data=this.discord;}
     else if (action === 'set_discord') {this.discord={...this.discord,...args,configured:args.remove?false:Boolean(args.url||this.discord.configured)};delete this.discord.url;code='discord_saved';data=this.discord;}
     else if (action === 'test_discord') {code='discord_tested';data=this.discord;}
+    else if (action === 'get_ai') {code='ai_loaded';data=this.ai;}
+    else if (action === 'set_ai') {const {api_key,...rest}=args;this.ai={...this.ai,...rest,key_set:Boolean(api_key||this.ai.key_set)};code='ai_saved';data=this.ai;}
+    else if (action === 'test_ai') {code='ai_tested';data={...this.ai,tested_seconds:1.2};}
     else if (action === 'start') {this.state = {...this.state,state:'running',args:previewArgs(args),since:Date.now()/1000};code='started';addLines(['REMOTE: Run started.']);}
     else if (action === 'stop') {this.state.state='idle';code='stopped';addLines(['REMOTE: Run stopped.']);}
     else if (action === 'restart') {this.state.state='running';this.state.since=Date.now()/1000;code='restarted';}

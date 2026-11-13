@@ -9,6 +9,7 @@ from .paths import (
     config_root,
     captures_dir,
     bundled_ocr,
+    runtime_dir,
     user_home,
     ocr_process_options,
 )
@@ -41,8 +42,10 @@ if sys.version_info < (3, 10):
 import cv2
 import numpy as np
 
+from . import ai_deploy
 from . import game_update
 from . import ldplayer
+from .ai_deploy import AIPlanError
 from . import popup_close
 
 RESOURCES = ('gold', 'elixir', 'dark')
@@ -93,6 +96,14 @@ TOUCH_DEVICE = re.compile(r'/dev/input/event\d{1,2}')
 PINCH_STEPS = 10
 PINCH_STEP_SECONDS = 0.02
 ZOOM_SETTLE_SECONDS = 1.5
+PROBE_SETTLE_SECONDS = 0.4   # after a probe drop, before the card count is read
+PROBE_RESERVE = 4            # units the probe card must hold beyond the most probes it may spend
+PROBE_COUNT_SHIFTS = (4, 6, 0, 2, -2, -4, 8)   # a selected card is wider: its count label sits a few px to the right
+PROBE_COUNT_DROP = 2         # a probe drop lowers the count by 1; a read this far or less below the old count is believed
+BATTLE_SECONDS = 180         # a battle lasts this long from the first drop
+PLAN_MARGIN = 15             # seconds kept free at the end of the battle for the AI plan's last action
+DAMAGE_READ_SECONDS = 1.5    # the AI outcome log reads the battle's damage percent at most this often
+RUN_SLICE_SECONDS = 2.0      # while a timeline step waits for its time, the screen is checked this often
 # A pinch on a map already zoomed out moves nothing but the animations, which stay well under this.
 ZOOM_UNCHANGED_DIFF = 5
 STILL_DIFF = 1.5
@@ -1637,6 +1648,17 @@ def card_count(image: np.ndarray, bar: list, card: tuple, templates: dict, insid
     return int(''.join(digits))
 
 
+def read_bar(image: np.ndarray, auto: dict) -> tuple[list, int]:
+    """Every card in the bar as (card, kind, group), left to right, and the last counted group. Counted cards are
+    troops in the first group and spells in the last counted group after it, with or without heroes and siege
+    machines between them; a counted card in a group between those is a siege machine."""
+    region = auto['bar']
+    found = bar_cards(image, region, auto.get('colour', BAR_CARD_COLOUR))
+    cards = [(card, card_kind(image, region, card), group) for card, group in zip(found, card_groups(found))]
+    last = max((group for _, kind, group in cards if kind == 'counted'), default=0)
+    return cards, last
+
+
 def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = False,
               templates: dict | None = None, stack: bool = False) -> list:
     """Deploy order for the cards on screen: every troop held at the deploy point until empty, the siege machine,
@@ -1649,11 +1671,7 @@ def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = F
         return camp_plan(image, auto, stack, templates)
     region = auto['bar']
     middle = region[1] + region[3] // 2
-    found = bar_cards(image, region, auto.get('colour', BAR_CARD_COLOUR))
-    cards = [(card, card_kind(image, region, card), group) for card, group in zip(found, card_groups(found))]
-    # Counted cards are troops in the first group and spells in the last counted group after it, with or without
-    # heroes and siege machines between them; a counted card in a group between those is a siege machine.
-    last = max((group for _, kind, group in cards if kind == 'counted'), default=0)
+    cards, last = read_bar(image, auto)
     troops, siege, heroes, spells = [], [], [], []
     for card, kind, group in cards:
         slot = [(card[0] + card[1]) // 2, middle]
@@ -1694,6 +1712,17 @@ def auto_plan(image: np.ndarray, auto: dict, ring: bool = False, quake: bool = F
                     'burst': RING_BURST if count else 1, 'fingers': RING_FINGERS, 'spaced': True}
                    for slot, count in troops]
     return ([{'slots': heroes, 'abilities': True}] if heroes else []) + siege_steps + spell_steps + troop_steps
+
+
+def read_card_count(image: np.ndarray, bar: list, card: tuple, templates: dict, expected: int) -> int | None:
+    """The count of a card that may be selected, whose label is wider and shifted right a few pixels: the count read at
+    the first horizontal shift that gives a believable number (the expected count, or up to PROBE_COUNT_DROP below
+    it), else None. A wrong shift can read a different number, so an implausible one is never accepted."""
+    for shift in PROBE_COUNT_SHIFTS:
+        value = card_count(image, bar, (card[0] + shift, card[1] + shift), templates)
+        if value is not None and expected - PROBE_COUNT_DROP <= value <= expected:
+            return value
+    return None
 
 
 def card_empty(image: np.ndarray, slot: list) -> bool:
@@ -1799,8 +1828,17 @@ class Bot:
                  surrender_after: float = SURRENDER_DEFAULT_SECONDS, surrender_at: int = 0, ring: bool = False,
                  quake: bool = False, surrender_stars: int = 0, builder_stack: bool = False,
                  trophy_floor: int = 0, bulk_walls: bool = False, wall_every: int = 0,
-                 wall_resources: tuple = WALL_RESOURCES) -> None:
+                 wall_resources: tuple = WALL_RESOURCES, ai: object | None = None, ai_goal: str = 'loot',
+                 ai_hint: str = '', ai_probe_points: int = 6, ai_probe_max: int = 12,
+                 ai_t_max: float = 150.0) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
+        # ai: an ai_deploy.ChatClient; the Home Village plan comes from the model, the built-in plan is the fallback.
+        self.ai, self.ai_goal, self.ai_hint = ai, ai_goal, ai_hint
+        # The AI first drops single probe units to learn which points the game accepts (up to ai_probe_max drops, until
+        # ai_probe_points are verified), then runs one timeline of at most ai_t_max seconds.
+        self.ai_probe_points, self.ai_probe_max, self.ai_t_max = ai_probe_points, ai_probe_max, ai_t_max
+        # The battle being logged: {'record', 'damage': {'last', 'max'}, 'started', 'read_at'}; None outside an AI battle.
+        self.ai_outcome: dict | None = None
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.battle_deadline: float | None = None
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
@@ -1875,6 +1913,7 @@ class Bot:
                 time.sleep(self.poll)
                 continue
             unknown_since = None
+            self.note_battle(state, image)
             if state in targets or (give_up and give_up(state, image)):
                 return state
             if state == 'maintenance':
@@ -2258,6 +2297,8 @@ class Bot:
             if state in terminal:
                 return state
         self.keep_deploy_frame(screen_name, image)
+        if self.ai is not None and screen_name == 'home_scout' and 'auto' in screen:
+            return self.deploy_ai(screen, allowed, terminal, image)
         if 'auto' in screen:
             # Read the card bar before any card is used; the plan follows the army that is trained. The home cards
             # stand still, so the frame in hand is read; Builder Base stage 2 waits for its cards to slide in.
@@ -2290,6 +2331,219 @@ class Bot:
             if state in terminal:
                 return state
         return None
+
+    def ai_cards(self, image: np.ndarray, auto: dict) -> dict:
+        """The card bar as the AI sees it: id -> slot, kind and count (None when the count does not read).
+        Ids: T troops (every counted card before the spells), S spells (the last counted group), G siege machines
+        (cyan cards), H heroes. Unlike auto_plan, a counted card in a middle group is a troop, not a siege machine."""
+        region = auto['bar']
+        middle = region[1] + region[3] // 2
+        found, last = read_bar(image, auto)
+        templates = self.digits()
+        cards, numbers = {}, {'T': 0, 'S': 0, 'G': 0, 'H': 0}
+        for card, kind, group in found:
+            if kind == 'counted' and group == 0:
+                prefix, role = 'T', 'troop'
+            elif kind == 'counted' and group == last:
+                prefix, role = 'S', 'spell'
+            elif kind == 'counted':
+                # Counted cards between the first group and the spells are troops too: the bar spaces a big army in
+                # several groups (a 25-wizard card landed here and was told to the model as a siege machine).
+                prefix, role = 'T', 'troop'
+            elif kind == 'siege':
+                prefix, role = 'G', 'siege'
+            else:
+                prefix, role = 'H', 'hero'
+            numbers[prefix] += 1
+            count = card_count(image, region, card, templates) if kind == 'counted' and templates else None
+            cards[f'{prefix}{numbers[prefix]}'] = {'slot': [(card[0] + card[1]) // 2, middle], 'kind': role,
+                                                   'count': count}
+        return cards
+
+    def pick_probe_card(self, cards: dict, needed: int) -> str | None:
+        """Id of the probe troop: the troop card with the highest known count, the cheapest stack to spend from.
+        None when no troop count is known or the best one holds fewer than needed units."""
+        troops = [(card['count'], cid) for cid, card in cards.items()
+                  if card['kind'] == 'troop' and card['count'] is not None]
+        if not troops:
+            return None
+        count, cid = max(troops, key=lambda item: item[0])
+        return cid if count >= needed else None
+
+    def probe_drop_points(self, image: np.ndarray, auto: dict, candidates: list, card: dict, target: int,
+                          max_tries: int, allowed: set, terminal: set) -> dict:
+        """Ask the game which candidate points are deployable: drop one unit of the probe card on a point and read its
+        count. A point is verified when the count falls, which is the game's own answer, and failed when it does not.
+        Stops at target verified points or max_tries drops (every drop spends at most one unit). Not live, nothing is
+        tapped and the first candidates are returned as assumed, so a dry run can still show a plan.
+
+        card: {'slot': [x, y], 'count': int}. Returns {'verified', 'failed', 'tried', 'spent', 'seconds', 'assumed',
+        'state'}, state being the screen after the last probe."""
+        started = time.monotonic()
+        found, _ = read_bar(image, auto)
+        box = next((cell for cell, _kind, _group in found if abs((cell[0] + cell[1]) // 2 - card['slot'][0]) <= 12), None)
+        verified, failed, tried, spent, state = [], [], 0, 0, None
+        templates, count, first = self.digits(), card['count'], True
+        for point in candidates:
+            if len(verified) >= target or tried >= max_tries:
+                break
+            tried += 1
+            if not self.live:
+                verified.append(list(point))
+                continue
+            if box is None or not templates:
+                LOG.warning('Uji titik deploy dihentikan: jumlah kartu tidak terbaca')
+                break
+            self.device.tap_many([card['slot'], list(point)] if first else [list(point)])
+            first = False
+            if self.poll:
+                time.sleep(PROBE_SETTLE_SECONDS)
+            state, frame = self.checked_state(allowed, terminal)
+            if state in terminal:
+                break
+            now = read_card_count(frame, auto['bar'], box, templates, count)
+            if now is None:
+                LOG.warning('Uji titik deploy dihentikan: jumlah kartu tidak terbaca')
+                break
+            if now < count:
+                verified.append(list(point))
+                spent += count - now
+                count = now
+            else:
+                failed.append(list(point))
+        return {'verified': verified, 'failed': failed, 'tried': tried, 'spent': spent, 'assumed': not self.live,
+                'seconds': round(time.monotonic() - started, 1), 'state': state}
+
+    def deploy_ai(self, screen: dict, allowed: set, terminal: set, image: np.ndarray) -> str | None:
+        """Home Village deploy by the AI, open loop. 1) Propose points around the base. 2) Drop single units of the troop
+        card with the most units on them: the game accepts or refuses each drop, which is how the verified points are
+        found. 3) One model call with the verified points, the cards left and the battle seconds left returns a timeline,
+        spells included. 4) Run it on the clock without looking back. Anything that fails (no probe troop, fewer than 2
+        verified points, no usable reply) stops the dropping and leaves the battle."""
+        auto, bar_top = screen['auto'], screen['auto']['bar'][1]
+        self.hero_slots = []
+        record = {'candidates': [], 'probe': None, 'points': [], 'cards': None, 'info': None, 'steps': [], 'ran': [],
+                  'stopped': None}
+        self.ai_outcome = {'record': record, 'damage': {}, 'started': time.monotonic(), 'read_at': float('-inf')}
+        cards = self.ai_cards(image, auto)
+        probe_id = self.pick_probe_card(cards, self.ai_probe_max + PROBE_RESERVE)
+        if probe_id is None:
+            return self.ai_stop(record, 'tidak ada kartu pasukan untuk uji titik deploy')
+        zone, _how = ai_deploy.droppable(image, bar_top)
+        centre = ai_deploy.base_centre(image, bar_top)
+        if zone is None or centre is None:
+            return self.ai_stop(record, 'zona deploy tidak terbaca')
+        candidates, centre = ai_deploy.candidate_points(zone, 2 * self.ai_probe_max, centre)
+        record['candidates'] = candidates
+        if len(candidates) < 2:
+            return self.ai_stop(record, 'titik uji tidak cukup')
+        battle_start = time.monotonic()
+        probe = self.probe_drop_points(image, auto, candidates, cards[probe_id], self.ai_probe_points,
+                                       self.ai_probe_max, allowed, terminal)
+        record['probe'] = {key: value for key, value in probe.items() if key != 'state'}
+        LOG.info('Uji titik deploy: %s dari %s titik valid, %s unit terpakai, %s detik', len(probe['verified']),
+                 probe['tried'], probe['spent'], probe['seconds'])
+        if probe['state'] in terminal:
+            self.keep_ai_run(record)
+            return probe['state']
+        if len(probe['verified']) < 2:
+            return self.ai_stop(record, 'titik deploy terverifikasi kurang dari 2')
+        state, frame = self.checked_state(allowed, terminal)
+        if state in terminal:
+            self.keep_ai_run(record)
+            return state
+        cards = self.ai_cards(frame, auto)
+        points = [{'id': f'P{index + 1}', 'at': point, 'side': ai_deploy.side_label(point, centre)}
+                  for index, point in enumerate(probe['verified'])]
+        record.update(points=points, cards=cards)
+        spent = time.monotonic() - battle_start if self.live else 0.0
+        t_left = min(self.ai_t_max, BATTLE_SECONDS - PLAN_MARGIN - spent)
+        if t_left < 20:
+            return self.ai_stop(record, 'waktu battle tidak cukup')
+        asked = time.monotonic()
+        try:
+            steps, stats, info = ai_deploy.plan_timeline(
+                self.ai, self.ai_goal, self.ai_hint, frame, cards, points, (frame.shape[1], bar_top), t_left,
+                probe={'card': probe_id}, units=ai_deploy.load_units(),
+                deadline=battle_start + BATTLE_SECONDS - PLAN_MARGIN)
+        except AIPlanError as exc:
+            record['failure'] = getattr(exc, 'attempts', None)
+            return self.ai_stop(record, str(exc))
+        record.update(info=info, steps=steps, stats=stats, model_seconds=round(time.monotonic() - asked, 1))
+        LOG.info('Rencana AI: %s langkah, %s dibuang, model %s detik', len(steps), stats['dropped'],
+                 record['model_seconds'])
+        self.keep_ai_run(record)
+        state = self.run_timeline(screen, steps, allowed, terminal, time.monotonic(), record)
+        self.keep_ai_run(record)
+        return state if state in terminal else None
+
+    def run_timeline(self, screen: dict, steps: list, allowed: set, terminal: set, started: float,
+                     record: dict) -> str | None:
+        """Run the steps at their 'at' seconds after started, open loop: only the screen is watched, so a result or
+        surrender screen ends the run. A step already late runs at once. Each step's real time is kept in record."""
+        for step in steps:
+            while self.live:
+                remaining = started + step['at'] - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(min(remaining, RUN_SLICE_SECONDS))
+                state = self.checked_state(allowed, terminal)[0]
+                if state in terminal:
+                    return state
+            state = self.deploy_card(screen, step, allowed, terminal)
+            record['ran'].append({'at': step['at'], 'actual': round(time.monotonic() - started, 1),
+                                  'slot': step['slot'][0]})
+            if state in terminal:
+                return state
+        return None
+
+    def ai_stop(self, record: dict, reason: str) -> None:
+        """No plan to run: say why, keep the record and leave the battle, so nothing more is spent."""
+        LOG.warning('Deploy AI dihentikan: %s', messages.translate(reason))
+        record['stopped'] = reason
+        self.keep_ai_run(record)
+        self.battle_deadline = None
+        if self.live:
+            try:
+                self.leave_home_search()
+            except BotError as exc:
+                LOG.warning('Keluar dari battle gagal: %s', exc)
+
+    def note_battle(self, state: str, image: np.ndarray) -> None:
+        """While an AI battle is logged, keep the latest and highest damage percent read from the battle screen. Reads
+        are spaced DAMAGE_READ_SECONDS apart; a number that does not read is skipped, never guessed."""
+        outcome = self.ai_outcome
+        if outcome is None or state != 'home_battle':
+            return
+        now = time.monotonic()
+        if now - outcome['read_at'] < DAMAGE_READ_SECONDS:
+            return
+        outcome['read_at'] = now
+        damage = self.read_damage(image)
+        if damage is not None:
+            outcome['damage'] = {'last': damage, 'max': max(damage, outcome['damage'].get('max') or 0)}
+
+    def finish_ai_outcome(self) -> None:
+        """Write the finished AI battle to the outcome log (one JSON line) and stop watching the damage. Never fails the run."""
+        outcome, self.ai_outcome = self.ai_outcome, None
+        if outcome is None:
+            return
+        try:
+            entry = ai_deploy.history_entry(outcome['record'], getattr(self.ai, 'model', ''), self.ai_goal,
+                                            outcome['damage'], round(time.monotonic() - outcome['started'], 1))
+            ai_deploy.append_history(runtime_dir(root=self.root) / ai_deploy.HISTORY_FILE, entry)
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            LOG.warning('Riwayat AI tidak tersimpan: %s', exc)
+
+    def keep_ai_run(self, record: dict) -> None:
+        """What the AI deploy did, as JSON in captures: candidates, probe result, points, model reply, steps and the
+        real time of each step."""
+        folder = captures_dir(self.root)
+        try:
+            folder.mkdir(exist_ok=True)
+            (folder / 'ai-plan.json').write_text(json.dumps(record, indent=1, default=str), encoding='utf-8')
+        except OSError as exc:
+            LOG.warning('Rencana AI tidak tersimpan: %s', exc)
 
     def bar_plan(self, auto: dict, allowed: set, image: np.ndarray | None = None) -> list:
         """Deploy plan from the card bar of the given frame, or once two frames in a row show the same cards; at
@@ -2361,6 +2615,7 @@ class Bot:
         if (state in SURRENDER_STATES['builder'] and self.surrender_stars and not self.climbing
                 and self.stars_reached(image)):
             raise SurrenderReached(f'{self.surrender_stars} bintang saat deploy; sisa pasukan tidak dikerahkan')
+        self.note_battle(state, image)
         return state, image
 
     def deploy_card(self, screen: dict, troop: dict, allowed: set, terminal: set) -> str:
@@ -2629,6 +2884,7 @@ class Bot:
                     LOG.warning('Battle berakhir tanpa layar hasil (game memuat ulang?); lanjut')
                 else:
                     self.tap_until('home_result', 'return', {'home'}, 30)
+                self.finish_ai_outcome()
                 self.count_broke_attack(broke and not passes)
                 return
             try:
@@ -3968,6 +4224,9 @@ def main() -> int:
     parser.add_argument('--quake', action='store_true',
                         help=messages.translate('Desa asal: spell (gempa) 4 per titik di titik gempa atas, kanan, bawah, kiri base '
                              '(editor deploy), bukan disebar'))
+    parser.add_argument('--ai', action='store_true',
+                        help=messages.translate('Desa asal: rencana deploy dari model AI (pengaturan AI harus menyala); '
+                             'gagal atau tidak valid = pakai rencana bawaan'))
     parser.add_argument('--live', action='store_true', help=messages.translate('Izinkan input akun; risiko ban dan resource terpakai'))
     parser.add_argument('--agent', action='store_true',
                         help=messages.translate('Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard'))
@@ -4085,7 +4344,18 @@ def main() -> int:
         emulator = Emulator(executable(config['ldconsole'], 'ldconsole'), config.get('ld_index', 0))             if config.get('ldconsole') else None
         if emulator and args.live:
             check_adb_debugging(emulator.console, emulator.index)
+        ai_client, ai_settings = None, None
+        if args.ai:
+            ai_settings = ai_deploy.load_settings(runtime_dir(root=config_root(args.config)) / ai_deploy.SETTINGS_FILE)
+            ai_client = ai_deploy.client_from_settings(ai_settings)
+            if ai_client is None:
+                raise BotError('--ai butuh pengaturan AI yang menyala di dashboard')
         runner = Bot(config, config_root(args.config), device, live=args.live, emulator=emulator, goals=goals, walls=walls,
+                     ai=ai_client, ai_goal=ai_settings['goal'] if ai_settings else 'loot',
+                     ai_hint=ai_settings['hint'] if ai_settings else '',
+                     ai_probe_points=ai_settings['probe_points'] if ai_settings else 6,
+                     ai_probe_max=ai_settings['probe_max'] if ai_settings else 12,
+                     ai_t_max=ai_settings['t_max'] if ai_settings else 150.0,
                      minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
                      surrender_after=surrender_after, surrender_at=surrender_at, ring='home' in ring, quake=args.quake,
                      surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor,

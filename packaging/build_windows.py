@@ -73,6 +73,8 @@ def build(version):
         "config.local.json",
         "device.json",
         "discord.json",
+        "ai.json",
+        "ai-history.jsonl",
         "stats.sqlite3",
         "application.log",
     }

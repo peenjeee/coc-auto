@@ -1,0 +1,33 @@
+{
+ "note": "Rough reference for the AI's battle timing. Approximate, edit freely; the model only uses it to order and time actions. speed = in-game movement speed stat (higher is faster); range and radius in tiles; durations in seconds.",
+ "troops": {
+  "Barbarian": {"speed": 16, "range": 0.4, "targets": "any"},
+  "Archer": {"speed": 24, "range": 3.5, "targets": "any"},
+  "Giant": {"speed": 12, "range": 1, "targets": "defenses first"},
+  "Goblin": {"speed": 32, "range": 0.5, "targets": "resources first"},
+  "Wall Breaker": {"speed": 24, "range": 1, "targets": "walls"},
+  "Balloon": {"speed": 10, "range": 1, "targets": "defenses first, air"},
+  "Wizard": {"speed": 16, "range": 3, "targets": "any"},
+  "Healer": {"speed": 16, "range": 5, "targets": "heals troops, air"},
+  "Dragon": {"speed": 20, "range": 3, "targets": "any, air"},
+  "P.E.K.K.A": {"speed": 16, "range": 1, "targets": "any"},
+  "Valkyrie": {"speed": 24, "range": 1, "targets": "any, spins on groups"},
+  "Miner": {"speed": 24, "range": 1, "targets": "any, travels underground"},
+  "Hog Rider": {"speed": 24, "range": 1, "targets": "defenses first, jumps walls"}
+ },
+ "heroes": {
+  "Barbarian King": {"speed": 16, "range": 1, "ability": "Iron Fist: faster and stronger for a few seconds, summons barbarians"},
+  "Archer Queen": {"speed": 24, "range": 5, "ability": "Royal Cloak: invisible and stronger for a few seconds"},
+  "Grand Warden": {"speed": 16, "range": 7, "ability": "Eternal Tome: invulnerability aura for the army for a few seconds"},
+  "Royal Champion": {"speed": 24, "range": 1, "ability": "Seeking Shield, then Royal Charge"}
+ },
+ "spells": {
+  "Lightning": {"duration": 0, "radius": 3.5, "use": "defenses or storages, instant"},
+  "Earthquake": {"duration": 0, "radius": 4, "use": "walls, instant"},
+  "Heal": {"duration": 12, "radius": 5, "use": "on the tanking group while it fights"},
+  "Rage": {"duration": 18, "radius": 5, "use": "on the army while it reaches defenses"},
+  "Jump": {"duration": 20, "radius": 3, "use": "on a wall the army must cross"},
+  "Freeze": {"duration": 5, "radius": 5, "use": "on the defenses the army is facing"},
+  "Poison": {"duration": 15, "radius": 4, "use": "on defending clan castle troops"}
+ }
+}
