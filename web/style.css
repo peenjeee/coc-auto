@@ -1038,3 +1038,5 @@ summary::-webkit-details-marker { display: none; }
 .setup-advanced {margin:12px 0}.setup-advanced summary {cursor:pointer;font-weight:600;padding:10px 0}
 #setup-instances {display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 #setup-instances [aria-checked="true"] {outline:2px solid var(--gold, #eab956);outline-offset:2px}
+
+.ai-form{padding:24px;max-width:680px}.ai-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 18px}.ai-form .discord-field>input,.ai-form .discord-field>select,.ai-form .discord-field>textarea{width:100%;box-sizing:border-box}.ai-form textarea{font-family:inherit;font-size:12px;resize:vertical;min-height:54px}@media(max-width:640px){.ai-form{padding:16px}.ai-grid{grid-template-columns:1fr}}

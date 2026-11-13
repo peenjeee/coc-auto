@@ -43,7 +43,7 @@ STOP_SECONDS = 20
 STREAM_PING_SECONDS = 15
 MAX_COMMAND_BYTES = 64 * 1024
 STATIC_FILES = {'/icons/stats/attacks.png': 'icons/stats/attacks.png',
-                '/icons/stats/walls.webp': 'icons/stats/walls.webp', '/stats.js': 'stats.js', '/discord.js': 'discord.js', '/buildings.js': 'buildings.js', '/visible-poller.js': 'visible-poller.js', '/select.js': 'select.js', '/icons/resources/elixir_cart.png': 'icons/resources/elixir_cart.png',
+                '/icons/stats/walls.webp': 'icons/stats/walls.webp', '/stats.js': 'stats.js', '/discord.js': 'discord.js', '/ai.js': 'ai.js', '/buildings.js': 'buildings.js', '/visible-poller.js': 'visible-poller.js', '/select.js': 'select.js', '/icons/resources/elixir_cart.png': 'icons/resources/elixir_cart.png',
                 '/icons/resources/builder_gold.webp': 'icons/resources/builder_gold.webp',
                 '/icons/resources/builder_elixir.webp': 'icons/resources/builder_elixir.webp',
                 '/icons/resources/gold.png': 'icons/resources/gold.png',
@@ -685,7 +685,8 @@ class Supervisor:
             seconds = ai_deploy.test_model(settings)
         except ai_deploy.AIPlanError as exc:
             raise CommandRefused(str(exc)) from exc
-        return 'ai_tested', 'Tes model AI berhasil ({} detik)'.format(seconds), ai_deploy.public_settings(settings)
+        return ('ai_tested', 'Tes model AI berhasil ({} detik)'.format(seconds),
+                ai_deploy.public_settings(settings) | {'tested_seconds': seconds})
 
     def carry_out(self, action: str, options: dict) -> tuple[str, str, dict | None]:
         if action == 'get_stats':

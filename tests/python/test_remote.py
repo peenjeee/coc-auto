@@ -753,7 +753,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_upgrade_modules_and_bundled_portraits_are_served(self):
         web = Path(self.temp.name) / 'web'
-        for name in ('upgrade-icons.js', 'upgrade-portrait.js', 'upgrade-availability.js', 'upgrade-max-levels.js', 'upgrade-sprites.js', 'upgrade-times.js', 'upgrade-progress.js'):
+        for name in ('ai.js', 'upgrade-icons.js', 'upgrade-portrait.js', 'upgrade-availability.js', 'upgrade-max-levels.js', 'upgrade-sprites.js', 'upgrade-times.js', 'upgrade-progress.js'):
             (web / name).write_text('export const example = 1;', encoding='utf-8')
             self.assertEqual(self.request('GET', '/' + name)[0], 200)
             self.assertEqual(self.last_headers['Content-Type'], 'text/javascript; charset=utf-8')
