@@ -829,5 +829,16 @@
  "Tidak bisa terhubung ke model AI": "Cannot connect to the AI model",
  "Format balasan model tidak dikenal": "Model reply format is not recognised",
  "Gambar untuk model tidak bisa dikodekan": "Image for the model cannot be encoded",
- "Model menolak permintaan (HTTP {})": "Model refused the request (HTTP {})"
+ "Model menolak permintaan (HTTP {})": "Model refused the request (HTTP {})",
+ "--ai butuh pengaturan AI yang menyala di dashboard": "--ai needs the AI settings switched on in the dashboard",
+ "AI dilewati: tidak ada kartu terbaca di bar": "AI skipped: no cards read in the bar",
+ "Desa asal: rencana deploy dari model AI (pengaturan AI harus menyala); gagal atau tidak valid = pakai rencana bawaan": "Home Village: deploy plan from the AI model (AI settings must be on); if it fails or is invalid, the built-in plan is used",
+ "Pengaturan AI tidak valid": "AI settings are not valid",
+ "Pilihan nyala/mati AI tidak valid": "AI on/off choice is not valid",
+ "Pilihan tujuan AI tidak dikenal": "AI goal choice is not recognised",
+ "Rencana AI gagal (%s); pakai rencana bawaan": "AI plan failed (%s); using the built-in plan",
+ "Rencana AI tidak tersimpan: %s": "AI plan was not saved: %s",
+ "Catatan AI terlalu panjang": "AI note is too long",
+ "Isi base URL, nama model, dan API key sebelum menyalakan AI": "Fill in the base URL, model name and API key before switching the AI on",
+ "Rencana AI: %s langkah, %s titik digeser ke zona deploy, %s dibuang": "AI plan: %s steps, %s points moved into the deploy zone, %s dropped"
 }

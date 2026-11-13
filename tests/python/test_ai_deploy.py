@@ -1,4 +1,5 @@
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -243,3 +244,103 @@ class MessagesTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class BotHookTest(unittest.TestCase):
+    """Bot.ai_cards / ai_plan on the real card-bar fixture, with the model replaced by a fake transport."""
+
+    def setUp(self):
+        import types
+        from coc_auto import bot as bot_module
+        self.bot_module = bot_module
+        from coc_auto.paths import RESOURCE_ROOT
+        self.config = json.loads((RESOURCE_ROOT / 'config.json').read_text(encoding='utf-8'))
+        self.auto = self.config['screens']['home_scout']['auto']
+        self.image = load('zone-selected.png')
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.stub = types.SimpleNamespace(digits=lambda: None, root=self.root)
+        self.stub.ai_cards = lambda image, auto: bot_module.Bot.ai_cards(self.stub, image, auto)
+        self.stub.keep_ai_plan = lambda *args: bot_module.Bot.keep_ai_plan(self.stub, *args)
+
+    def test_card_inventory_has_troops_spells_and_hero(self):
+        cards = self.bot_module.Bot.ai_cards(self.stub, self.image, self.auto)
+        kinds = {cid: card['kind'] for cid, card in cards.items()}
+        self.assertEqual(kinds['T1'], 'troop')
+        self.assertEqual(kinds['H1'], 'hero')
+        self.assertTrue(any(kind == 'spell' for kind in kinds.values()))
+        self.assertEqual(len(cards), len(set(cards)))
+        for card in cards.values():
+            self.assertEqual(card['slot'][1], self.auto['bar'][1] + self.auto['bar'][3] // 2)
+
+    def test_plan_from_model_replaces_builtin_plan(self):
+        reply = {'analysis': 'funnel left', 'stages': [
+            {'name': 'funnel', 'wait_before': 0, 'actions': [
+                {'card': 'T1', 'place': [{'at': [300, 300], 'count': 3}]}]},
+            {'name': 'heroes', 'wait_before': 2, 'actions': [
+                {'card': 'H1', 'place': [{'at': [640, 300], 'count': 1}], 'ability_after': 5}]}]}
+
+        def transport(url, payload, headers, timeout):
+            return json.dumps({'choices': [{'message': {'content': json.dumps(reply)}}]}).encode()
+
+        self.stub.ai = ai_deploy.ChatClient('https://example.test/v1', 'k', 'm', transport=transport)
+        self.stub.ai_goal, self.stub.ai_hint = 'loot', ''
+        steps = self.bot_module.Bot.ai_plan(self.stub, self.image, self.auto)
+        self.assertIsNotNone(steps)
+        self.assertEqual(steps[0]['slot'], [142, 651])
+        self.assertEqual(steps[0].get('wait', 0), 0)
+        self.assertTrue(any(step.get('tap_only') and step.get('wait') == 5 for step in steps))
+        record = json.loads((self.root / 'captures' / 'ai-plan.json').read_text(encoding='utf-8'))
+        self.assertEqual(record['analysis'], 'funnel left')
+
+    def test_model_failure_falls_back_to_none(self):
+        def transport(url, payload, headers, timeout):
+            raise ai_deploy.AIPlanError('Tidak bisa terhubung ke model AI')
+
+        self.stub.ai = ai_deploy.ChatClient('https://example.test/v1', 'k', 'm', transport=transport)
+        self.stub.ai_goal, self.stub.ai_hint = 'loot', ''
+        self.assertIsNone(self.bot_module.Bot.ai_plan(self.stub, self.image, self.auto))
+
+
+class SettingsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / 'ai.json'
+
+    def valid(self, **extra):
+        return {'enabled': True, 'base_url': 'http://127.0.0.1:1234/v1', 'api_key': 'sk-live-999',
+                'model': 'qwen-vl', 'goal': 'trophy', 'hint': 'two dragons only', **extra}
+
+    def test_save_then_load_round_trip_hides_key(self):
+        shown = ai_deploy.save_settings(self.path, self.valid())
+        self.assertNotIn('api_key', shown)
+        self.assertTrue(shown['key_set'])
+        loaded = ai_deploy.load_settings(self.path)
+        self.assertEqual(loaded['api_key'], 'sk-live-999')
+        self.assertEqual(loaded['goal'], 'trophy')
+        self.assertNotIn('sk-live-999', json.dumps(ai_deploy.public_settings(loaded)))
+
+    def test_key_kept_when_not_resent(self):
+        ai_deploy.save_settings(self.path, self.valid())
+        ai_deploy.save_settings(self.path, {'goal': 'stars'})
+        self.assertEqual(ai_deploy.load_settings(self.path)['api_key'], 'sk-live-999')
+
+    def test_rejects_bad_values(self):
+        for bad in ({'goal': 'chaos'}, {'base_url': 'ftp://x'}, {'hint': 'x' * 600},
+                    {'enabled': True, 'api_key': ''}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ai_deploy.AIPlanError):
+                    ai_deploy.save_settings(self.path, {**self.valid(), **bad})
+
+    def test_missing_file_gives_defaults_and_no_client(self):
+        settings = ai_deploy.load_settings(self.path)
+        self.assertFalse(settings['enabled'])
+        self.assertIsNone(ai_deploy.client_from_settings(settings))
+
+    def test_enabled_settings_build_client(self):
+        ai_deploy.save_settings(self.path, self.valid())
+        self.assertIsInstance(ai_deploy.client_from_settings(ai_deploy.load_settings(self.path)), ai_deploy.ChatClient)
+
+

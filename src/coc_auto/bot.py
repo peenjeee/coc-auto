@@ -9,6 +9,7 @@ from .paths import (
     config_root,
     captures_dir,
     bundled_ocr,
+    runtime_dir,
     user_home,
     ocr_process_options,
 )
@@ -41,8 +42,10 @@ if sys.version_info < (3, 10):
 import cv2
 import numpy as np
 
+from . import ai_deploy
 from . import game_update
 from . import ldplayer
+from .ai_deploy import AIPlanError
 from . import popup_close
 
 RESOURCES = ('gold', 'elixir', 'dark')
@@ -1806,8 +1809,11 @@ class Bot:
                  surrender_after: float = SURRENDER_DEFAULT_SECONDS, surrender_at: int = 0, ring: bool = False,
                  quake: bool = False, surrender_stars: int = 0, builder_stack: bool = False,
                  trophy_floor: int = 0, bulk_walls: bool = False, wall_every: int = 0,
-                 wall_resources: tuple = WALL_RESOURCES) -> None:
+                 wall_resources: tuple = WALL_RESOURCES, ai: object | None = None, ai_goal: str = 'loot',
+                 ai_hint: str = '') -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
+        # ai: an ai_deploy.ChatClient; the Home Village plan comes from the model, the built-in plan is the fallback.
+        self.ai, self.ai_goal, self.ai_hint = ai, ai_goal, ai_hint
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.battle_deadline: float | None = None
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
@@ -2268,7 +2274,11 @@ class Bot:
         if 'auto' in screen:
             # Read the card bar before any card is used; the plan follows the army that is trained. The home cards
             # stand still, so the frame in hand is read; Builder Base stage 2 waits for its cards to slide in.
-            plan = self.bar_plan(screen['auto'], allowed, image if screen_name == 'home_scout' else None)
+            plan = None
+            if self.ai is not None and screen_name == 'home_scout' and image is not None:
+                plan = self.ai_plan(image, screen['auto'])
+            if plan is None:
+                plan = self.bar_plan(screen['auto'], allowed, image if screen_name == 'home_scout' else None)
             cards = {tuple(slot) for troop in plan for slot in troop.get('slots') or [troop['slot']]}
             LOG.info('Rencana deploy dari bar: %s kartu', len(cards))
         else:
@@ -2297,6 +2307,56 @@ class Bot:
             if state in terminal:
                 return state
         return None
+
+    def ai_cards(self, image: np.ndarray, auto: dict) -> dict:
+        """The card bar as the AI sees it: id -> slot, kind and count (None when the count does not read).
+        Ids: T troops, S spells, G siege machines, H heroes; kinds follow auto_plan's grouping."""
+        region = auto['bar']
+        middle = region[1] + region[3] // 2
+        found, last = read_bar(image, auto)
+        templates = self.digits()
+        cards, numbers = {}, {'T': 0, 'S': 0, 'G': 0, 'H': 0}
+        for card, kind, group in found:
+            if kind == 'counted' and group == 0:
+                prefix, role = 'T', 'troop'
+            elif kind == 'counted' and group == last:
+                prefix, role = 'S', 'spell'
+            elif kind == 'counted' or kind == 'siege':
+                prefix, role = 'G', 'siege'
+            else:
+                prefix, role = 'H', 'hero'
+            numbers[prefix] += 1
+            count = card_count(image, region, card, templates) if kind == 'counted' and templates else None
+            cards[f'{prefix}{numbers[prefix]}'] = {'slot': [(card[0] + card[1]) // 2, middle], 'kind': role,
+                                                   'count': count}
+        return cards
+
+    def ai_plan(self, image: np.ndarray, auto: dict) -> list | None:
+        """Staged plan from the model for this frame, or None (with a log line) so the built-in plan is used."""
+        cards = self.ai_cards(image, auto)
+        if not cards:
+            LOG.warning('AI dilewati: tidak ada kartu terbaca di bar')
+            return None
+        bounds = (image.shape[1], auto['bar'][1])
+        try:
+            steps, stats, analysis = ai_deploy.plan(self.ai, self.ai_goal, self.ai_hint, image, cards, bounds)
+        except AIPlanError as exc:
+            LOG.warning('Rencana AI gagal (%s); pakai rencana bawaan', exc)
+            return None
+        LOG.info('Rencana AI: %s langkah, %s titik digeser ke zona deploy, %s dibuang',
+                 len(steps), stats['snapped'], stats['dropped'])
+        self.keep_ai_plan(steps, stats, analysis, cards)
+        return steps
+
+    def keep_ai_plan(self, steps: list, stats: dict, analysis: str, cards: dict) -> None:
+        """The plan and its validation as JSON in captures, for review after the battle."""
+        folder = captures_dir(self.root)
+        try:
+            folder.mkdir(exist_ok=True)
+            record = {'analysis': analysis, 'stats': stats, 'cards': cards, 'steps': steps}
+            (folder / 'ai-plan.json').write_text(json.dumps(record, indent=1, default=str), encoding='utf-8')
+        except OSError as exc:
+            LOG.warning('Rencana AI tidak tersimpan: %s', exc)
 
     def bar_plan(self, auto: dict, allowed: set, image: np.ndarray | None = None) -> list:
         """Deploy plan from the card bar of the given frame, or once two frames in a row show the same cards; at
@@ -3975,6 +4035,9 @@ def main() -> int:
     parser.add_argument('--quake', action='store_true',
                         help=messages.translate('Desa asal: spell (gempa) 4 per titik di titik gempa atas, kanan, bawah, kiri base '
                              '(editor deploy), bukan disebar'))
+    parser.add_argument('--ai', action='store_true',
+                        help=messages.translate('Desa asal: rencana deploy dari model AI (pengaturan AI harus menyala); '
+                             'gagal atau tidak valid = pakai rencana bawaan'))
     parser.add_argument('--live', action='store_true', help=messages.translate('Izinkan input akun; risiko ban dan resource terpakai'))
     parser.add_argument('--agent', action='store_true',
                         help=messages.translate('Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard'))
@@ -4092,7 +4155,15 @@ def main() -> int:
         emulator = Emulator(executable(config['ldconsole'], 'ldconsole'), config.get('ld_index', 0))             if config.get('ldconsole') else None
         if emulator and args.live:
             check_adb_debugging(emulator.console, emulator.index)
+        ai_client, ai_settings = None, None
+        if args.ai:
+            ai_settings = ai_deploy.load_settings(runtime_dir(root=config_root(args.config)) / ai_deploy.SETTINGS_FILE)
+            ai_client = ai_deploy.client_from_settings(ai_settings)
+            if ai_client is None:
+                raise BotError('--ai butuh pengaturan AI yang menyala di dashboard')
         runner = Bot(config, config_root(args.config), device, live=args.live, emulator=emulator, goals=goals, walls=walls,
+                     ai=ai_client, ai_goal=ai_settings['goal'] if ai_settings else 'loot',
+                     ai_hint=ai_settings['hint'] if ai_settings else '',
                      minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
                      surrender_after=surrender_after, surrender_at=surrender_at, ring='home' in ring, quake=args.quake,
                      surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor,

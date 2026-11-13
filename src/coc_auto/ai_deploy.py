@@ -295,3 +295,63 @@ def plan(client: ChatClient, goal: str, hint: str, image: np.ndarray, cards: dic
     steps, stats = compile_plan(raw, cards, bounds, zone)
     stats['zone'] = zone is not None
     return steps, stats, str(raw.get('analysis', ''))[:300]
+
+
+SETTINGS_FILE = 'ai.json'
+SETTINGS_DEFAULTS = {'enabled': False, 'base_url': '', 'api_key': '', 'model': '', 'goal': 'loot', 'hint': '',
+                     'timeout': 20.0}
+MAX_HINT = 500
+
+
+def load_settings(path) -> dict:
+    """Saved AI settings merged over the defaults; a missing or unreadable file gives the defaults."""
+    settings = dict(SETTINGS_DEFAULTS)
+    try:
+        saved = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return settings
+    if isinstance(saved, dict):
+        settings.update({key: saved[key] for key in SETTINGS_DEFAULTS if key in saved})
+    return settings
+
+
+def public_settings(settings: dict) -> dict:
+    """What the dashboard may show: everything but the key, plus whether a key is saved."""
+    return {key: value for key, value in settings.items() if key != 'api_key'} | {'key_set': bool(settings['api_key'])}
+
+
+def save_settings(path, value: dict) -> dict:
+    """Validate and store the settings. The key is kept unless a new one is given; the file is written 0600."""
+    import os
+    if not isinstance(value, dict):
+        raise AIPlanError('Pengaturan AI tidak valid')
+    current = load_settings(path)
+    merged = {**current, **{key: value[key] for key in SETTINGS_DEFAULTS if key in value}}
+    if value.get('api_key'):
+        merged['api_key'] = str(value['api_key']).strip()
+    if merged['base_url'] and not str(merged['base_url']).startswith(('http://', 'https://')):
+        raise AIPlanError('Base URL model harus diawali http:// atau https://')
+    if merged['goal'] not in GOALS:
+        raise AIPlanError('Pilihan tujuan AI tidak dikenal')
+    if not isinstance(merged['hint'], str) or len(merged['hint']) > MAX_HINT:
+        raise AIPlanError('Catatan AI terlalu panjang')
+    if not isinstance(merged['enabled'], bool):
+        raise AIPlanError('Pilihan nyala/mati AI tidak valid')
+    if merged['enabled'] and not (merged['base_url'] and merged['model'] and merged['api_key']):
+        raise AIPlanError('Isi base URL, nama model, dan API key sebelum menyalakan AI')
+    merged['timeout'] = min(max(float(merged['timeout']), 1.0), MAX_TIMEOUT)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix('.tmp')
+    with open(temporary, 'w', encoding='utf-8', opener=lambda p, f: os.open(p, f, 0o600)) as handle:
+        json.dump(merged, handle)
+    os.chmod(temporary, 0o600)
+    temporary.replace(path)
+    return public_settings(merged)
+
+
+def client_from_settings(settings: dict, transport=None) -> ChatClient | None:
+    """A client when the AI is switched on in settings, else None (the built-in plan is used)."""
+    if not settings.get('enabled'):
+        return None
+    return ChatClient(settings['base_url'], settings['api_key'], settings['model'], timeout=settings['timeout'],
+                      transport=transport)
