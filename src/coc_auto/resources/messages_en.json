@@ -857,5 +857,9 @@
  "waktu battle tidak cukup": "not enough battle time left",
  "zona deploy tidak terbaca": "deploy zone could not be read",
  "titik deploy terverifikasi kurang dari 2": "fewer than 2 verified drop points",
- "Riwayat AI tidak tersimpan: %s": "AI history was not saved: %s"
+ "Riwayat AI tidak tersimpan: %s": "AI history was not saved: %s",
+ "Atur AI dari dashboard lokal": "Set up the AI from the local dashboard",
+ "Folder data perangkat tidak tersedia": "The device data folder is not available",
+ "Setelan AI disimpan": "AI settings saved",
+ "Tes model AI berhasil ({} detik)": "AI model test passed ({} s)"
 }

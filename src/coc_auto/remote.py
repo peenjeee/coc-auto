@@ -27,6 +27,7 @@ from typing import Callable
 from urllib.parse import parse_qs, urlsplit
 
 from .device_control import DeviceActions, SettingRefused
+from . import ai_deploy
 from . import ldplayer
 from . import messages
 from .dashboard_metrics import Statistics
@@ -80,10 +81,13 @@ COMMAND_MAX_AGE_SECONDS = 120
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected', 'check_setup': 'setup_checked',
                     'set_setup': 'setup_saved', 'set_language': 'language_saved', 'set_buildings': 'buildings_saved',
                     'set_goblin': 'goblin_saved'}
-ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
+ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_ai', 'set_ai', 'test_ai', 'get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
            'fit_display', 'restore_display', 'scan_buildings', 'get_buildings', *SETTINGS_ACTIONS)
 # Reads that run outside the control lock (a slow one must not hold up Stop) and stay out of the log.
-READ_ONLY = ('get_screen', 'get_stats', 'get_discord', 'get_buildings')
+READ_ONLY = ('get_screen', 'get_stats', 'get_discord', 'get_ai', 'get_buildings')
+# Changing the AI model settings (an endpoint and its key) is for the local dashboard only, like the Discord webhook.
+LOCAL_ONLY = {'set_discord': 'Atur Discord dari dashboard lokal', 'test_discord': 'Atur Discord dari dashboard lokal',
+              'set_ai': 'Atur AI dari dashboard lokal', 'test_ai': 'Atur AI dari dashboard lokal'}
 VILLAGE_CHOICES = ('home', 'builder', 'both')
 # The builder list's tabs a scan reads (buildings.LISTS) and their village; each keeps its own last scan and its own
 # pick.
@@ -101,6 +105,7 @@ LIMITS = (('searches', '--searches', 0, 1_000_000), ('hours', '--hours', 0, 1000
 ATTACK_OPTIONS = ('surrender', 'surrender_after', 'surrender_at', 'home_style', 'builder_style', 'quake',
                   'surrender_stars', 'trophy_floor')
 STYLES = ('ring', 'stack')
+HOME_STYLES = (*STYLES, 'ai')   # the Home Village can also be attacked by the AI (--ai)
 TASK_OPTIONS = {
     'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'bulk_walls', 'wall_every',
               'wall_resource', 'max_recoveries', *ATTACK_OPTIONS},
@@ -285,12 +290,14 @@ def build_args(options: dict) -> list[str]:
     elif 'surrender_after' in options:
         raise CommandRefused('Pilihan surrender_after hanya bersama surrender')
     # Each village's style (troops spread round the base, or on one point) as --ring/--stack with its villages.
-    styles = {village: choice(options, f'{village}_style', STYLES) for village in ('home', 'builder')
-              if f'{village}_style' in options}
+    styles = {village: choice(options, f'{village}_style', HOME_STYLES if village == 'home' else STYLES)
+              for village in ('home', 'builder') if f'{village}_style' in options}
     for style in STYLES:
         villages = [village for village, chosen in styles.items() if chosen == style]
         if villages:
             args += [f'--{style}', 'both' if len(villages) == 2 else villages[0]]
+    if styles.get('home') == 'ai':
+        args.append('--ai')
     quake = options.get('quake', False)
     if not isinstance(quake, bool):
         raise CommandRefused('Pilihan quake harus ya/tidak')
@@ -536,6 +543,7 @@ class Supervisor:
         data_dir = runtime_dir(Path(local_path)) if local_path else None
         self.statistics = Statistics(data_dir / 'stats.sqlite3' if data_dir else None)
         self.discord = DiscordHooks(data_dir / 'discord.json' if data_dir else None)
+        self.ai_path = data_dir / ai_deploy.SETTINGS_FILE if data_dir else None
         self.stats_run = None
         self.control = threading.RLock()  # one command at a time, from any dashboard
 
@@ -633,8 +641,8 @@ class Supervisor:
         try:
             with self.nonce_lock:
                 command = open_command(self.key, body, sig, self.seen, self.started)
-            if command['action'] in ('set_discord', 'test_discord') and not local:
-                raise CommandRefused('Atur Discord dari dashboard lokal')
+            if command['action'] in LOCAL_ONLY and not local:
+                raise CommandRefused(LOCAL_ONLY[command['action']])
             if command['action'] in READ_ONLY:
                 code, message, data = self.carry_out(command['action'], command['args'])
             else:
@@ -658,6 +666,27 @@ class Supervisor:
         result["message"] = messages.translate(result["message"])
         return result
 
+    def carry_out_ai(self, action: str, options: dict) -> tuple[str, str, dict | None]:
+        """The AI deploy settings: read them (never the key), save them, or test the model with a tiny request."""
+        path = self.ai_path
+        if action == 'get_ai':
+            settings = ai_deploy.load_settings(path) if path else dict(ai_deploy.SETTINGS_DEFAULTS)
+            return 'ai_loaded', '', ai_deploy.public_settings(settings)
+        if path is None:
+            raise CommandRefused('Folder data perangkat tidak tersedia')
+        if action == 'set_ai':
+            try:
+                data = ai_deploy.save_settings(path, options)
+            except ai_deploy.AIPlanError as exc:
+                raise CommandRefused(str(exc)) from exc
+            return 'ai_saved', 'Setelan AI disimpan', data
+        settings = ai_deploy.load_settings(path)
+        try:
+            seconds = ai_deploy.test_model(settings)
+        except ai_deploy.AIPlanError as exc:
+            raise CommandRefused(str(exc)) from exc
+        return 'ai_tested', 'Tes model AI berhasil ({} detik)'.format(seconds), ai_deploy.public_settings(settings)
+
     def carry_out(self, action: str, options: dict) -> tuple[str, str, dict | None]:
         if action == 'get_stats':
             return 'stats_loaded', '', self.statistics.snapshot(options.get('period', 'run'))
@@ -674,6 +703,8 @@ class Supervisor:
             if not self.discord.notify('test', self.statistics.snapshot(), force=True):
                 raise CommandRefused('Simpan URL webhook dulu')
             return 'discord_tested', 'Pesan tes diantrekan', self.discord.public()
+        if action in ('get_ai', 'set_ai', 'test_ai'):
+            return self.carry_out_ai(action, options)
         if action == 'get_screen':
             import cv2
             frame = self.device.adb().capture()

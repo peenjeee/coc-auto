@@ -595,6 +595,22 @@ def save_settings(path, value: dict) -> dict:
     return public_settings(merged)
 
 
+def test_model(settings: dict, transport=None) -> float:
+    """Seconds one tiny request with a small image took, to check the endpoint, key, model and image support from the
+    saved settings (the AI does not have to be switched on). Raises AIPlanError with a reason that never holds the key."""
+    if not (settings.get('base_url') and settings.get('model') and settings.get('api_key')):
+        raise AIPlanError('Isi base URL, nama model, dan API key sebelum menyalakan AI')
+    client = ChatClient(settings['base_url'], settings['api_key'], settings['model'],
+                        timeout=min(float(settings.get('timeout', 20.0)), 20.0), max_tokens=64, transport=transport)
+    jpeg = encode_jpeg(np.full((64, 64, 3), 128, np.uint8))
+    url = 'data:image/jpeg;base64,' + base64.b64encode(jpeg).decode('ascii')
+    content = [{'type': 'text', 'text': 'Reply with the single word ok.'},
+               {'type': 'image_url', 'image_url': {'url': url}}]
+    started = time.monotonic()
+    client.complete([{'role': 'user', 'content': content}])
+    return round(time.monotonic() - started, 1)
+
+
 def client_from_settings(settings: dict, transport=None) -> ChatClient | None:
     """A client when the AI is switched on in settings, else None (the built-in plan is used)."""
     if not settings.get('enabled'):

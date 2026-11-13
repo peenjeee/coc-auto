@@ -823,3 +823,126 @@ class BattleOutcomeTest(unittest.TestCase):
         self.assertEqual((entries[0]['damage_last'], entries[0]['model'], entries[0]['battle_seconds']), (62, 'm', 50.0))
         self.bot_module.Bot.finish_ai_outcome(self.stub)     # a second call writes nothing more
         self.assertEqual(len(ai_deploy.load_history(Path(self.tmp.name) / '.coc-auto' / ai_deploy.HISTORY_FILE)), 1)
+
+
+class AiDashboardTest(unittest.TestCase):
+    """The AI settings actions of the dashboard server: the key stays on the device and only the local dashboard writes."""
+
+    KEY = 'coc_test_dashboard_0123456789abcdefghijklmnop'
+    SECRET = 'sk-or-secret-1234567890'
+
+    def setUp(self):
+        from unittest.mock import Mock
+        from coc_auto import remote
+        self.remote = remote
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.supervisor = remote.Supervisor(self.KEY, [], Mock())
+        self.supervisor.ai_path = Path(self.tmp.name) / 'ai.json'
+        self.count = 0
+
+    def ask(self, action, args=None, local=True):
+        import time
+        self.count += 1
+        body = json.dumps({'action': action, 'args': args or {}, 'ts': time.time(), 'nonce': f'ai-{self.count}'})
+        return self.supervisor.command(body, self.remote.sign(self.KEY, body), local=local)
+
+    def settings(self, **extra):
+        return {'enabled': True, 'base_url': 'https://openrouter.ai/api/v1', 'api_key': self.SECRET,
+                'model': 'some/model', 'goal': 'stars', 'hint': 'no healers', **extra}
+
+    def test_get_gives_defaults_without_a_key(self):
+        result = self.ask('get_ai', local=False)           # reading is allowed from anywhere
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['code'], 'ai_loaded')
+        self.assertNotIn('api_key', result['data'])
+        self.assertFalse(result['data']['key_set'])
+        self.assertEqual((result['data']['probe_points'], result['data']['probe_max']), (6, 12))
+
+    def test_a_remote_channel_cannot_change_or_test_the_settings(self):
+        for action in ('set_ai', 'test_ai'):
+            with self.subTest(action=action):
+                result = self.ask(action, self.settings(), local=False)
+                self.assertFalse(result['ok'])
+                self.assertEqual(result['code'], 'refused')
+        self.assertFalse(self.supervisor.ai_path.exists())
+
+    def test_local_save_never_echoes_the_key_and_get_reports_it_as_set(self):
+        saved = self.ask('set_ai', self.settings())
+        self.assertTrue(saved['ok'])
+        self.assertEqual(saved['code'], 'ai_saved')
+        self.assertNotIn(self.SECRET, json.dumps(saved))
+        self.assertTrue(saved['data']['key_set'])
+        loaded = self.ask('get_ai', local=False)
+        self.assertNotIn(self.SECRET, json.dumps(loaded))
+        self.assertEqual((loaded['data']['goal'], loaded['data']['model']), ('stars', 'some/model'))
+        self.assertEqual(ai_deploy.load_settings(self.supervisor.ai_path)['api_key'], self.SECRET)
+
+    def test_a_save_without_a_new_key_keeps_the_old_one(self):
+        self.ask('set_ai', self.settings())
+        again = self.ask('set_ai', {'goal': 'trophy', 'probe_points': 4})
+        self.assertTrue(again['ok'])
+        stored = ai_deploy.load_settings(self.supervisor.ai_path)
+        self.assertEqual((stored['api_key'], stored['goal'], stored['probe_points']), (self.SECRET, 'trophy', 4))
+
+    def test_bad_values_are_refused_with_a_reason(self):
+        for bad in ({'goal': 'chaos'}, {'probe_points': 1}, {'base_url': 'ftp://x'}, {'enabled': True, 'base_url': '', 'api_key': ''}):
+            with self.subTest(bad=bad):
+                result = self.ask('set_ai', {**self.settings(), **bad})
+                self.assertFalse(result['ok'])
+                self.assertEqual(result['code'], 'refused')
+                self.assertNotIn(self.SECRET, json.dumps(result))
+
+    def test_test_ai_reports_the_seconds_and_hides_the_key(self):
+        from unittest import mock
+        self.ask('set_ai', self.settings())
+        with mock.patch.object(ai_deploy, 'test_model', lambda settings, transport=None: 1.4):
+            result = self.ask('test_ai')
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['code'], 'ai_tested')
+        self.assertIn('1.4', result['message'])
+        self.assertNotIn(self.SECRET, json.dumps(result))
+
+    def test_a_failed_model_test_is_refused_without_the_key(self):
+        from unittest import mock
+
+        def fail(settings, transport=None):
+            raise AIPlanError('Model menolak permintaan (HTTP 400)')
+
+        self.ask('set_ai', self.settings())
+        with mock.patch.object(ai_deploy, 'test_model', fail):
+            result = self.ask('test_ai')
+        self.assertFalse(result['ok'])
+        self.assertIn('400', result['message'])
+        self.assertNotIn(self.SECRET, json.dumps(result))
+
+    def test_the_model_test_sends_one_tiny_image_request_with_the_saved_settings(self):
+        seen = {}
+
+        def transport(url, payload, headers, timeout):
+            seen.update(url=url, headers=headers, body=json.loads(payload))
+            return json.dumps({'choices': [{'message': {'content': 'ok'}}]}).encode()
+
+        seconds = ai_deploy.test_model(self.settings(), transport=transport)
+        self.assertGreaterEqual(seconds, 0.0)
+        self.assertEqual(seen['url'], 'https://openrouter.ai/api/v1/chat/completions')
+        self.assertEqual(seen['headers']['Authorization'], 'Bearer ' + self.SECRET)
+        parts = seen['body']['messages'][0]['content']
+        self.assertEqual([part['type'] for part in parts], ['text', 'image_url'])
+        self.assertLessEqual(seen['body']['max_tokens'], 64)
+
+    def test_the_model_test_needs_a_complete_setup(self):
+        with self.assertRaises(AIPlanError):
+            ai_deploy.test_model({'base_url': '', 'model': '', 'api_key': ''})
+
+    def test_the_home_style_ai_becomes_the_ai_flag(self):
+        args = self.remote.build_args({'task': 'attack', 'village': 'home', 'home_style': 'ai'})
+        self.assertIn('--ai', args)
+        self.assertNotIn('--ring', args)
+        both = self.remote.build_args({'task': 'attack', 'village': 'both', 'home_style': 'ai', 'builder_style': 'stack'})
+        self.assertIn('--ai', both)
+        self.assertEqual(both[both.index('--stack') + 1], 'builder')
+
+    def test_the_builder_village_cannot_use_the_ai(self):
+        with self.assertRaises(self.remote.CommandRefused):
+            self.remote.build_args({'task': 'attack', 'village': 'both', 'builder_style': 'ai'})
