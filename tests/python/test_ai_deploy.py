@@ -394,3 +394,223 @@ class SettingsTest(unittest.TestCase):
         self.assertIsInstance(ai_deploy.client_from_settings(ai_deploy.load_settings(self.path)), ai_deploy.ChatClient)
 
 
+
+
+TL_CARDS = {
+    'T1': {'slot': [143, 651], 'kind': 'troop', 'count': 12},
+    'T2': {'slot': [237, 651], 'kind': 'troop', 'count': 5},
+    'H1': {'slot': [637, 651], 'kind': 'hero', 'count': None},
+    'S1': {'slot': [746, 651], 'kind': 'spell', 'count': 2},
+}
+TL_POINTS = {'P1': [200, 400], 'P2': [300, 500]}
+
+
+def entry(moment, do, card, **extra):
+    return {'t': moment, 'do': do, 'card': card, **extra}
+
+
+def timeline(*entries):
+    return {'analysis': 'x', 'timeline': list(entries)}
+
+
+class CompileTimelineTest(unittest.TestCase):
+    def compile(self, *entries, **kwargs):
+        return ai_deploy.compile_timeline(timeline(*entries), TL_CARDS, TL_POINTS, BOUNDS, **kwargs)
+
+    def test_drops_use_the_verified_point_and_carry_their_time(self):
+        steps, stats = self.compile(entry(0, 'drop', 'T1', point='P1', count=4))
+        self.assertEqual(steps, [{'slot': [143, 651], 'count': 4, 'points': [[200, 400]] * 4, 'burst': 4, 'at': 0.0}])
+        self.assertEqual(stats, {'clamped': 0, 'dropped': 0, 'truncated': 0})
+
+    def test_unknown_point_or_card_is_dropped(self):
+        steps, stats = self.compile(entry(0, 'drop', 'T1', point='P9', count=2), entry(0, 'drop', 'T9', point='P1', count=2),
+                                    entry(1, 'drop', 'T2', point='P2', count=2))
+        self.assertEqual([s['slot'][0] for s in steps], [237])
+        self.assertEqual(stats['dropped'], 2)
+
+    def test_a_troop_cannot_be_dropped_by_coordinates(self):
+        with self.assertRaises(AIPlanError):
+            self.compile(entry(0, 'drop', 'T1', at=[300, 300], count=2))
+
+    def test_steps_are_sorted_by_time_and_equal_times_keep_order(self):
+        steps, _ = self.compile(entry(9, 'drop', 'T2', point='P2', count=1), entry(2, 'drop', 'T1', point='P1', count=1),
+                                entry(2, 'drop', 'T2', point='P1', count=1))
+        self.assertEqual([(s['at'], s['slot'][0]) for s in steps], [(2.0, 143), (2.0, 237), (9.0, 237)])
+
+    def test_counts_are_capped_by_what_is_left_across_entries(self):
+        steps, _ = self.compile(entry(0, 'drop', 'T2', point='P1', count=4), entry(5, 'drop', 'T2', point='P2', count=4))
+        self.assertEqual([s['count'] for s in steps], [4, 1])
+
+    def test_hero_is_dropped_once_and_fires_its_ability(self):
+        steps, _ = self.compile(entry(0, 'drop', 'H1', point='P1', count=9), entry(8, 'ability', 'H1'))
+        self.assertEqual(steps[0]['count'], 1)
+        self.assertEqual(steps[1], {'slot': [637, 651], 'count': 1, 'tap_only': True, 'at': 8.0})
+
+    def test_ability_needs_a_hero(self):
+        steps, stats = self.compile(entry(0, 'drop', 'T1', point='P1', count=1), entry(3, 'ability', 'T1'))
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(stats['dropped'], 1)
+
+    def test_spells_keep_their_coordinates_even_over_the_base(self):
+        steps, _ = self.compile(entry(14, 'spell', 'S1', at=[640, 334], count=1))
+        self.assertEqual(steps[0]['points'], [[640, 334]])
+
+    def test_spell_coordinates_are_clamped_to_the_frame_above_the_bar(self):
+        steps, stats = self.compile(entry(14, 'spell', 'S1', at=[2000, 900], count=1))
+        self.assertEqual(steps[0]['points'], [[1279, 650]])
+        self.assertEqual(stats['clamped'], 1)
+
+    def test_spell_by_point_id_or_troop_as_spell_is_dropped(self):
+        steps, stats = self.compile(entry(0, 'spell', 'S1', point='P1'), entry(0, 'spell', 'T1', at=[1, 1]),
+                                    entry(1, 'drop', 'S1', point='P1', count=1), entry(2, 'drop', 'T1', point='P1', count=1))
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(stats['dropped'], 3)
+
+    def test_times_are_capped_and_bad_times_dropped(self):
+        steps, stats = self.compile(entry(900, 'drop', 'T1', point='P1', count=1), entry('soon', 'drop', 'T2', point='P1', count=1),
+                                    entry(-4, 'drop', 'T2', point='P1', count=1), t_max=100.0)
+        self.assertEqual([s['at'] for s in steps], [0.0, 100.0])
+        self.assertEqual(stats['dropped'], 1)
+
+    def test_hold_mode_for_a_troop(self):
+        steps, _ = self.compile(entry(0, 'drop', 'T1', point='P1', count=12, mode='hold', seconds=99))
+        self.assertEqual(steps[0]['hold'], ai_deploy.MAX_HOLD)
+        self.assertTrue(steps[0]['until_empty'])
+        self.assertEqual(steps[0]['points'], [[200, 400]])
+
+    def test_step_cap_truncates(self):
+        entries = [entry(i, 'spell', 'S1', at=[10, 10], count=1) for i in range(ai_deploy.MAX_STEPS + 3)]
+        cards = {'S1': {**TL_CARDS['S1'], 'count': None}}
+        steps, stats = ai_deploy.compile_timeline(timeline(*entries), cards, TL_POINTS, BOUNDS, t_max=500.0)
+        self.assertEqual(len(steps), ai_deploy.MAX_STEPS)
+        self.assertEqual(stats['truncated'], 3)
+
+    def test_empty_or_missing_timeline_raises(self):
+        for raw in ({'timeline': []}, {'stages': []}, {'timeline': [entry(0, 'drop', 'T9', point='P1', count=1)]}):
+            with self.subTest(raw=raw):
+                with self.assertRaises(AIPlanError):
+                    ai_deploy.compile_timeline(raw, TL_CARDS, TL_POINTS, BOUNDS)
+
+
+class PlanTimelineTest(unittest.TestCase):
+    POINTS = [{'id': 'P1', 'at': [200, 400], 'side': 'west'}, {'id': 'P2', 'at': [300, 500], 'side': 'south-west'}]
+    IMAGE = np.zeros((720, 1280, 3), np.uint8)
+
+    def reply(self, content):
+        return json.dumps({'choices': [{'message': {'content': content}}]}).encode()
+
+    def good(self):
+        return json.dumps({'analysis': 'push west', 'estimate': [{'t': 0, 'note': 'giants land'}, {'t': 14, 'note': 'wall', 'x': 1}, 'junk'],
+                           'timeline': [entry(0, 'drop', 'T1', point='P1', count=3)]})
+
+    def call(self, transport, deadline=None):
+        client = ChatClient('https://example.test/v1', 'k', 'm', transport=transport)
+        return ai_deploy.plan_timeline(client, 'loot', 'note', self.IMAGE, TL_CARDS, self.POINTS, BOUNDS, 150.0,
+                                       probe={'card': 'T2'}, units={'troops': {'Giant': {'speed': 12}}}, deadline=deadline)
+
+    def test_success_returns_steps_and_the_logged_estimate(self):
+        seen = {}
+
+        def transport(url, payload, headers, timeout):
+            seen['text'] = json.loads(payload)['messages'][1]['content'][0]['text']
+            seen['system'] = json.loads(payload)['messages'][0]['content']
+            return self.reply(self.good())
+
+        steps, stats, info = self.call(transport)
+        self.assertEqual(steps[0]['points'], [[200, 400]] * 3)
+        self.assertEqual(info['analysis'], 'push west')
+        self.assertEqual(info['estimate'], [{'t': 0.0, 'note': 'giants land'}, {'t': 14.0, 'note': 'wall'}])
+        self.assertEqual(info['attempts'], 1)
+        self.assertEqual(seen['system'], ai_deploy.TIMELINE_PROMPT)
+        for part in ('Time budget: 150', '"id": "P1"', 'T2', 'Giant', 'Cards left'):
+            self.assertIn(part, seen['text'])
+
+    def test_invalid_json_is_asked_for_once_more(self):
+        replies = [self.reply('no json here'), self.reply(self.good())]
+        steps, _, info = self.call(lambda *a: replies.pop(0))
+        self.assertEqual(info['attempts'], 2)
+        self.assertEqual(len(steps), 1)
+
+    def test_no_retry_after_the_deadline(self):
+        calls = []
+
+        def transport(*args):
+            calls.append(1)
+            return self.reply('no json here')
+
+        with self.assertRaises(AIPlanError):
+            self.call(transport, deadline=0.0)
+        self.assertEqual(len(calls), 1)
+
+    def test_connection_failure_is_not_retried(self):
+        calls = []
+
+        def transport(*args):
+            calls.append(1)
+            raise AIPlanError('Tidak bisa terhubung ke model AI')
+
+        with self.assertRaises(AIPlanError):
+            self.call(transport)
+        self.assertEqual(len(calls), 1)
+
+
+class CandidatePointsTest(unittest.TestCase):
+    def test_compass_sides(self):
+        centre = (500.0, 400.0)
+        self.assertEqual(ai_deploy.side_label([700, 400], centre), 'east')
+        self.assertEqual(ai_deploy.side_label([500, 200], centre), 'north')
+        self.assertEqual(ai_deploy.side_label([300, 400], centre), 'west')
+        self.assertEqual(ai_deploy.side_label([500, 600], centre), 'south')
+        self.assertEqual(ai_deploy.side_label([700, 200], centre), 'north-east')
+
+    def test_candidates_on_real_frames_are_spread_and_on_droppable_ground(self):
+        for name in ('scout-oracle.png', 'scout-clean.png', 'scout-sprawl.png'):
+            with self.subTest(name=name):
+                image = load(name)
+                zone, _ = ai_deploy.droppable(image, BAR_TOP)
+                centre = ai_deploy.base_centre(image, BAR_TOP)
+                points, used = ai_deploy.candidate_points(zone, 24, centre)
+                self.assertEqual(used, centre)
+                self.assertGreaterEqual(len(points), 6)
+                for x, y in points:
+                    self.assertTrue(zone[y, x])
+                for index, a in enumerate(points):
+                    for b in points[index + 1:]:
+                        self.assertGreaterEqual(((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5, 70.0)
+                self.assertGreaterEqual(len({ai_deploy.side_label(p, centre) for p in points}), 4)
+
+    def test_first_candidates_are_on_different_sides(self):
+        image = load('scout-clean.png')
+        zone, _ = ai_deploy.droppable(image, BAR_TOP)
+        centre = ai_deploy.base_centre(image, BAR_TOP)
+        points, _ = ai_deploy.candidate_points(zone, 24, centre)
+        self.assertGreaterEqual(len({ai_deploy.side_label(p, centre) for p in points[:3]}), 2)
+
+    def test_empty_ground_gives_no_candidates(self):
+        self.assertEqual(ai_deploy.candidate_points(np.zeros((720, 1280), bool), 12), ([], None))
+
+    def test_base_centre_is_inside_the_playable_frame(self):
+        for name in ('scout-oracle.png', 'scout-clean.png', 'scout-sprawl.png'):
+            x, y = ai_deploy.base_centre(load(name), BAR_TOP)
+            self.assertTrue(200 < x < 1100 and 150 < y < BAR_TOP, (name, x, y))
+
+
+class UnitsAndProbeSettingsTest(unittest.TestCase):
+    def test_units_reference_loads(self):
+        units = ai_deploy.load_units()
+        self.assertIn('Giant', units['troops'])
+        self.assertIn('Rage', units['spells'])
+
+    def test_missing_units_file_gives_empty(self):
+        self.assertEqual(ai_deploy.load_units(Path('nowhere.json')), {})
+
+    def test_probe_settings_defaults_and_validation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ai.json'
+            settings = ai_deploy.load_settings(path)
+            self.assertEqual((settings['probe_points'], settings['probe_max'], settings['t_max']), (6, 12, 150.0))
+            self.assertEqual(ai_deploy.save_settings(path, {'t_max': 999})['t_max'], 170.0)
+            for bad in ({'probe_points': 1}, {'probe_points': 13}, {'probe_max': 30}, {'probe_points': 8, 'probe_max': 4}):
+                with self.subTest(bad=bad):
+                    with self.assertRaises(AIPlanError):
+                        ai_deploy.save_settings(path, bad)

@@ -4,10 +4,14 @@ through an injectable transport so tests run offline."""
 
 import base64
 import json
+import math
+import time
 from urllib import error, request
 
 import cv2
 import numpy as np
+
+from .paths import RESOURCE_ROOT
 
 MAX_STAGES = 8
 MAX_STEPS = 40
@@ -297,6 +301,227 @@ def _action_steps(action: object, cards: dict, bounds: tuple, used: dict, stats:
     return [{'slot': slot, 'count': len(points), 'points': points, 'burst': len(points)}]
 
 
+T_MAX = 150.0             # latest second of the plan (the battle lasts 180 s from the first drop)
+COMPASS = ('east', 'north-east', 'north', 'north-west', 'west', 'south-west', 'south', 'south-east')
+TIMELINE_PROMPT = (
+    'You plan a Clash of Clans attack as ONE timeline that is run open loop: nobody looks at the battle again, so '
+    'estimate how it will unfold (where each troop group is and when it reaches the defences) and time every action '
+    'to that estimate. Reply with JSON only, no prose: {"analysis": "<short>", "estimate": [{"t": <seconds>, '
+    '"note": "<where the army is>"}], "timeline": [{"t": <seconds>, "do": "drop", "card": "<id>", "point": '
+    '"<point id>", "count": <int>, "mode": "tap" or "hold", "seconds": <hold seconds>}, {"t": <seconds>, "do": '
+    '"ability", "card": "<hero id>"}, {"t": <seconds>, "do": "spell", "card": "<id>", "at": [x, y], "count": '
+    '<int>}]}. t is seconds from now; the first drop is at t=0 and no action may be later than the time budget. '
+    'Troops, siege machines and heroes may only be dropped on the verified drop points listed (each already '
+    'tested in this very battle); give the point id, never coordinates. Spells use screen coordinates of the '
+    '1280x720 frame and may land anywhere, including over the base. Use only the card ids listed and never more '
+    'than the counts shown (counts are what is left after the tests). Heroes take count 1; fire their ability '
+    'with an ability action once they are fighting. Funnel first, then the main push, then spells timed to when '
+    'the army reaches the defences, using the reference table for speeds and durations (it is approximate).'
+)
+
+
+def load_units(path=None) -> dict:
+    """The editable troop/hero/spell reference the prompt hands to the model; {} when it cannot be read."""
+    try:
+        return json.loads((path or RESOURCE_ROOT / 'ai_units.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+
+
+def side_label(point: list, centre: tuple) -> str:
+    """Compass side of a point around the base centre, as seen on screen (north is up)."""
+    angle = (math.degrees(math.atan2(-(point[1] - centre[1]), point[0] - centre[0])) + 360.0) % 360.0
+    return COMPASS[int(((angle + 22.5) % 360.0) // 45.0)]
+
+
+def _spread_order(points: list) -> list:
+    """Farthest-point order, so the first few probes sit on different sides of the base."""
+    if len(points) < 3:
+        return points
+    chosen = [points[0]]
+    rest = points[1:]
+    while rest:
+        far = max(rest, key=lambda q: min(math.hypot(q[0] - c[0], q[1] - c[1]) for c in chosen))
+        chosen.append(far)
+        rest.remove(far)
+    return chosen
+
+
+def base_centre(image: np.ndarray, bar_top: int) -> tuple | None:
+    """Centre of the enemy base on screen: the middle of its object hull, else of its line hull."""
+    for hull in (object_hull(image, bar_top), line_hull(image)):
+        if hull is not None:
+            ys, xs = np.nonzero(hull)
+            return float(xs.mean()), float(ys.mean())
+    return None
+
+
+def candidate_points(zone: np.ndarray, count: int, centre: tuple | None = None,
+                     min_gap: float = 70.0) -> tuple[list, tuple | None]:
+    """(points, centre): up to count spread-out proposals on the droppable ground, one per angular sector around the
+    base centre (the ground's own centre when none is given), taken on the base side of the ring, in a spread-out
+    order. Proposals only: the game decides which of them are valid, by accepting or refusing a probe drop."""
+    ground = cv2.erode(zone.astype(np.uint8), np.ones((13, 13), np.uint8)) > 0
+    if not ground.any():
+        ground = zone
+    ys, xs = np.nonzero(ground)
+    if len(xs) == 0 or count < 1:
+        return [], None
+    centre = centre or (float(xs.mean()), float(ys.mean()))
+    angle = np.arctan2(ys - centre[1], xs - centre[0])
+    radius = np.hypot(xs - centre[0], ys - centre[1])
+    picked = []
+    for sector in range(count):
+        low = -math.pi + 2.0 * math.pi * sector / count
+        inside = (angle >= low) & (angle < low + 2.0 * math.pi / count)
+        if not inside.any():
+            continue
+        near = np.nonzero(inside)[0]
+        index = near[int(np.argmin(np.abs(radius[near] - np.percentile(radius[near], 30))))]
+        point = [int(xs[index]), int(ys[index])]
+        if all(math.hypot(point[0] - q[0], point[1] - q[1]) >= min_gap for q in picked):
+            picked.append(point)
+    return _spread_order(picked), centre
+
+
+def _plain_point(value: object, bounds: tuple, stats: dict) -> list | None:
+    """An [x, y] pixel inside the frame above the card bar; out-of-range values are clamped, not guessed."""
+    if not isinstance(value, list) or len(value) != 2:
+        return None
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or v != v for v in value):
+        return None
+    width, bar_top = bounds
+    x, y = int(round(value[0])), int(round(value[1]))
+    clamped = [min(max(x, 0), width - 1), min(max(y, 0), bar_top - 1)]
+    if clamped != [x, y]:
+        stats['clamped'] += 1
+    return clamped
+
+
+def compile_timeline(raw: dict, cards: dict, points: dict, bounds: tuple, t_max: float = T_MAX) -> tuple[list, dict]:
+    """The model's timeline as deploy steps, each with an 'at' offset in seconds, plus counts of what was clamped,
+    dropped or truncated. No point is moved: troop drops use only the verified point ids, spells may use any
+    coordinate.
+
+    cards: id -> {'slot', 'kind', 'count'} (counts after the probe drops). points: verified id -> [x, y].
+    """
+    timeline = raw.get('timeline')
+    if not isinstance(timeline, list) or not timeline:
+        raise AIPlanError('Rencana AI harus berisi linimasa')
+    stats = {'clamped': 0, 'dropped': 0, 'truncated': 0}
+    entries = []
+    for entry in timeline:
+        moment = _number(entry.get('t'), t_max) if isinstance(entry, dict) else None
+        if moment is None:
+            stats['dropped'] += 1
+            continue
+        entries.append((moment, entry))
+    entries.sort(key=lambda item: item[0])   # stable: equal times keep the model's order
+    steps, used = [], {}
+    for moment, entry in entries:
+        card_id = entry.get('card')
+        card = cards.get(card_id) if isinstance(card_id, str) else None
+        action = entry.get('do')
+        step = None
+        if card is None:
+            pass
+        elif action == 'drop' and card['kind'] in ('troop', 'siege', 'hero', 'warden'):
+            spot = points.get(entry.get('point')) if isinstance(entry.get('point'), str) else None
+            count = 1 if card['kind'] in ('hero', 'warden') else entry.get('count')
+            if spot is not None and isinstance(count, int) and not isinstance(count, bool) and count >= 1:
+                budget = (card['count'] if card.get('count') is not None else MAX_TAPS) - used.get(card_id, 0)
+                count = min(count, MAX_TAPS, max(budget, 0))
+                if count >= 1:
+                    used[card_id] = used.get(card_id, 0) + count
+                    if entry.get('mode') == 'hold' and card['kind'] not in ('hero', 'warden'):
+                        seconds = _number(entry.get('seconds', DEFAULT_HOLD), MAX_HOLD) or DEFAULT_HOLD
+                        step = {'slot': card['slot'], 'count': 1, 'hold': seconds, 'until_empty': True,
+                                'points': [list(spot)]}
+                    else:
+                        step = {'slot': card['slot'], 'count': count, 'points': [list(spot)] * count, 'burst': count}
+        elif action == 'ability' and card['kind'] in ('hero', 'warden'):
+            step = {'slot': card['slot'], 'count': 1, 'tap_only': True}
+        elif action == 'spell' and card['kind'] == 'spell':
+            spot = _plain_point(entry.get('at'), bounds, stats)
+            count = entry.get('count', 1)
+            if spot is not None and isinstance(count, int) and not isinstance(count, bool) and count >= 1:
+                budget = (card['count'] if card.get('count') is not None else MAX_TAPS) - used.get(card_id, 0)
+                count = min(count, max(budget, 0))
+                if count >= 1:
+                    used[card_id] = used.get(card_id, 0) + count
+                    step = {'slot': card['slot'], 'count': count, 'points': [spot] * count, 'burst': count}
+        if step is None:
+            stats['dropped'] += 1
+        elif len(steps) >= MAX_STEPS:
+            stats['truncated'] += 1
+        else:
+            step['at'] = round(moment, 2)
+            steps.append(step)
+    if not steps:
+        raise AIPlanError('Rencana AI kosong setelah divalidasi')
+    return steps, stats
+
+
+def build_timeline_messages(goal: str, hint: str, cards: dict, points: list, bounds: tuple, jpegs: list,
+                            t_left: float, probe: dict | None = None, units: dict | None = None) -> list:
+    """Chat messages for the one planning call: the frame, the verified drop points, what is left in the bar."""
+    inventory = [{'id': cid, 'kind': c['kind'], 'count': c.get('count')} for cid, c in cards.items()]
+    lines = [GOALS.get(goal, GOALS['loot'])]
+    if hint and hint.strip():
+        lines.append(f'Player note: {hint.strip()}')
+    lines.append(f'Time budget: {int(t_left)} seconds from now; no action later than that.')
+    lines.append(f'Frame width {bounds[0]}; the card bar starts at y {bounds[1]}.')
+    lines.append(f'Verified drop points (troops, siege and heroes go only here): {json.dumps(points)}')
+    if probe:
+        lines.append(f'One unit of card {probe["card"]} was already dropped on each verified point as a test; '
+                     'those units are fighting.')
+    lines.append(f'Cards left: {json.dumps(inventory)}. Count null means unknown.')
+    if units:
+        lines.append(f'Reference (approximate): {json.dumps(units, separators=(",", ":"))}')
+    content = [{'type': 'text', 'text': '\n'.join(lines)}]
+    for jpeg in jpegs:
+        url = 'data:image/jpeg;base64,' + base64.b64encode(jpeg).decode('ascii')
+        content.append({'type': 'image_url', 'image_url': {'url': url}})
+    return [{'role': 'system', 'content': TIMELINE_PROMPT}, {'role': 'user', 'content': content}]
+
+
+def _estimate(raw: dict) -> list:
+    """The model's progression estimate, trimmed for the log: [{'t': seconds, 'note': text}]."""
+    items = raw.get('estimate')
+    out = []
+    for item in items[:12] if isinstance(items, list) else []:
+        if isinstance(item, dict) and isinstance(item.get('note'), str):
+            moment = _number(item.get('t'), 600.0)
+            out.append({'t': moment if moment is not None else 0.0, 'note': item['note'][:160]})
+    return out
+
+
+def plan_timeline(client: 'ChatClient', goal: str, hint: str, image: np.ndarray, cards: dict, points: list,
+                  bounds: tuple, t_left: float, probe: dict | None = None, units: dict | None = None,
+                  deadline: float | None = None) -> tuple[list, dict, dict]:
+    """(steps, stats, info) from one model call on the post-probe frame; raises AIPlanError. A reply that is not
+    valid JSON or leaves nothing after validation is asked for once more if the deadline (time.monotonic) allows;
+    a connection or HTTP failure is not retried.
+
+    points: [{'id': 'P1', 'at': [x, y], 'side': 'west'}] verified drop points."""
+    messages = build_timeline_messages(goal, hint, cards, points, bounds, [encode_jpeg(image)], t_left, probe, units)
+    spots = {item['id']: item['at'] for item in points}
+    last = None
+    for attempt in range(2):
+        if attempt and deadline is not None and time.monotonic() >= deadline:
+            break
+        reply = client.complete(messages)
+        try:
+            raw = parse_reply(reply)
+            steps, stats = compile_timeline(raw, cards, spots, bounds, min(T_MAX, float(t_left)))
+        except AIPlanError as exc:
+            last = exc
+            continue
+        return steps, stats, {'analysis': str(raw.get('analysis', ''))[:300], 'estimate': _estimate(raw),
+                              'reply': reply[:4000], 'attempts': attempt + 1}
+    raise last or AIPlanError('Rencana AI tidak diterima')
+
+
 def encode_jpeg(image: np.ndarray, max_edge: int = 1024, quality: int = 80) -> bytes:
     height, width = image.shape[:2]
     scale = min(1.0, max_edge / max(width, height))
@@ -379,7 +604,7 @@ def plan(client: ChatClient, goal: str, hint: str, image: np.ndarray, cards: dic
 
 SETTINGS_FILE = 'ai.json'
 SETTINGS_DEFAULTS = {'enabled': False, 'base_url': '', 'api_key': '', 'model': '', 'goal': 'loot', 'hint': '',
-                     'timeout': 20.0, 'max_tokens': 4000}
+                     'timeout': 20.0, 'max_tokens': 4000, 'probe_points': 6, 'probe_max': 12, 't_max': 150.0}
 MAX_HINT = 500
 
 
@@ -423,6 +648,13 @@ def save_settings(path, value: dict) -> dict:
     # Reasoning models spend the budget on thinking before the JSON; a small cap cuts the plan off mid-answer.
     if type(merged['max_tokens']) is not int or not 256 <= merged['max_tokens'] <= 16000:
         raise AIPlanError('Batas token model harus 256 sampai 16000')
+    for key, low, high, message in (('probe_points', 2, 12, 'Jumlah titik uji harus 2 sampai 12'),
+                                    ('probe_max', 2, 20, 'Batas percobaan titik harus 2 sampai 20')):
+        if type(merged[key]) is not int or not low <= merged[key] <= high:
+            raise AIPlanError(message)
+    if merged['probe_max'] < merged['probe_points']:
+        raise AIPlanError('Batas percobaan titik harus 2 sampai 20')
+    merged['t_max'] = min(max(float(merged['t_max']), 30.0), 170.0)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix('.tmp')
     with open(temporary, 'w', encoding='utf-8', opener=lambda p, f: os.open(p, f, 0o600)) as handle:

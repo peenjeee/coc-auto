@@ -842,5 +842,9 @@
  "Isi base URL, nama model, dan API key sebelum menyalakan AI": "Fill in the base URL, model name and API key before switching the AI on",
  "Rencana AI: %s langkah, %s titik digeser ke zona deploy, %s dibuang": "AI plan: %s steps, %s points moved into the deploy zone, %s dropped",
  "Batas token model harus 256 sampai 16000": "Model token limit must be 256 to 16000",
- "Zona deploy tidak terbaca; pakai rencana bawaan": "Deploy zone could not be read; using the built-in plan"
+ "Zona deploy tidak terbaca; pakai rencana bawaan": "Deploy zone could not be read; using the built-in plan",
+ "Rencana AI harus berisi linimasa": "AI plan must contain a timeline",
+ "Rencana AI tidak diterima": "AI plan was not accepted",
+ "Jumlah titik uji harus 2 sampai 12": "Number of test points must be 2 to 12",
+ "Batas percobaan titik harus 2 sampai 20": "Test point attempt limit must be 2 to 20"
 }
