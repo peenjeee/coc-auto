@@ -35,17 +35,6 @@ SYSTEM_PROMPT = (
 )
 
 
-SPELL_PROMPT = (
-    'You place the remaining spells of a Clash of Clans attack that is already under way. You see the battle now: '
-    'the army has landed. Reply with JSON only, no prose: {"analysis": "<short>", "stages": [{"name": "<short>", '
-    '"wait_before": <seconds>, "actions": [{"card": "<spell id>", "place": [{"at": [x, y], "count": <int>}]}]}]}. '
-    'Coordinates are screen pixels of the 1280x720 frame. Spells may go anywhere, including over the base. Put '
-    'Rage and Heal on the troops where they are fighting now, Freeze on the defences the army is facing, '
-    'Lightning and Earthquake on defences or storages. Use only the spell ids listed and never more than the '
-    'count shown. Keep it to one or two stages.'
-)
-
-
 class AIPlanError(Exception):
     pass
 
@@ -363,13 +352,6 @@ class ChatClient:
         self.max_tokens, self.temperature = max_tokens, temperature
         self.transport = transport or _post
 
-    def with_timeout(self, timeout: float) -> 'ChatClient':
-        """The same client with another timeout (the spell checkpoint must not hold up the battle)."""
-        import copy
-        other = copy.copy(self)
-        other.timeout = min(max(float(timeout), 1.0), MAX_TIMEOUT)
-        return other
-
     def complete(self, messages: list) -> str:
         body = {'model': self.model, 'messages': messages, 'max_tokens': self.max_tokens,
                 'temperature': self.temperature}
@@ -395,42 +377,9 @@ def plan(client: ChatClient, goal: str, hint: str, image: np.ndarray, cards: dic
     return steps, stats, str(raw.get('analysis', ''))[:300]
 
 
-def split_spell_steps(steps: list, spell_x: set) -> tuple[list, list]:
-    """(other steps, spell steps): the steps whose card sits at one of the spell slots' x positions."""
-    spells = [step for step in steps if 'slot' in step and step['slot'][0] in spell_x]
-    return [step for step in steps if not any(step is spell for spell in spells)], spells
-
-
-def build_spell_messages(goal: str, hint: str, spells: dict, jpegs: list, focus: list | None) -> list:
-    """Chat messages for the checkpoint: the battle as it is now and the spells still in the bar."""
-    inventory = [{'id': sid, 'count': spell.get('count')} for sid, spell in spells.items()]
-    lines = [GOALS.get(goal, GOALS['loot'])]
-    if hint and hint.strip():
-        lines.append(f'Player note: {hint.strip()}')
-    if focus:
-        lines.append(f'The army was dropped around x={focus[0]}, y={focus[1]}.')
-    lines.append(f'Spells left: {json.dumps(inventory)}. Count null means unknown.')
-    content = [{'type': 'text', 'text': '\n'.join(lines)}]
-    for jpeg in jpegs:
-        url = 'data:image/jpeg;base64,' + base64.b64encode(jpeg).decode('ascii')
-        content.append({'type': 'image_url', 'image_url': {'url': url}})
-    return [{'role': 'system', 'content': SPELL_PROMPT}, {'role': 'user', 'content': content}]
-
-
-def spell_plan(client: ChatClient, goal: str, hint: str, image: np.ndarray, spells: dict, bounds: tuple,
-               focus: list | None = None) -> tuple:
-    """(steps, stats, analysis) for the spells still in the bar, from the battle frame; raises AIPlanError. Spells are
-    not kept out of the base, so no zone is applied."""
-    reply = client.complete(build_spell_messages(goal, hint, spells, [encode_jpeg(image)], focus))
-    raw = parse_reply(reply)
-    steps, stats = compile_plan(raw, spells, bounds, None)
-    return steps, stats, str(raw.get('analysis', ''))[:300]
-
-
 SETTINGS_FILE = 'ai.json'
 SETTINGS_DEFAULTS = {'enabled': False, 'base_url': '', 'api_key': '', 'model': '', 'goal': 'loot', 'hint': '',
-                     'timeout': 20.0, 'max_tokens': 4000, 'spell_checkpoint': True, 'checkpoint_wait': 10.0,
-                     'checkpoint_timeout': 15.0}
+                     'timeout': 20.0, 'max_tokens': 4000}
 MAX_HINT = 500
 
 
@@ -471,10 +420,6 @@ def save_settings(path, value: dict) -> dict:
     if merged['enabled'] and not (merged['base_url'] and merged['model'] and merged['api_key']):
         raise AIPlanError('Isi base URL, nama model, dan API key sebelum menyalakan AI')
     merged['timeout'] = min(max(float(merged['timeout']), 1.0), MAX_TIMEOUT)
-    if not isinstance(merged['spell_checkpoint'], bool):
-        raise AIPlanError('Pilihan cek ulang spell tidak valid')
-    merged['checkpoint_wait'] = min(max(float(merged['checkpoint_wait']), 0.0), 30.0)
-    merged['checkpoint_timeout'] = min(max(float(merged['checkpoint_timeout']), 1.0), MAX_TIMEOUT)
     # Reasoning models spend the budget on thinking before the JSON; a small cap cuts the plan off mid-answer.
     if type(merged['max_tokens']) is not int or not 256 <= merged['max_tokens'] <= 16000:
         raise AIPlanError('Batas token model harus 256 sampai 16000')
