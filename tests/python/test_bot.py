@@ -584,6 +584,30 @@ class BotTests(unittest.TestCase):
         first, second = (tuple(slot) for slot in camps['slots'][:2])
         self.assertEqual(device.inputs, [first, *[(10, 10)] * 4, second, *[(20, 20)] * 4])
 
+    def test_a_stage2_stack_lands_on_the_first_spread_point_and_stage1_keeps_its_deploy_point(self):
+        screen = {'deploy': [5, 50], 'auto': {'bar': [0, 0, 10, 10], 'points': [[40, 20], [60, 30]]}}
+        camps = {'slots': [[10, 80], [20, 80]], 'camps': True, 'points': None, 'sizes': [1, 1]}
+        hero = {'slot': [30, 80], 'count': 1}
+        for state, allowed, spot in (('builder_battle2', {'builder_stage2', 'builder_battle2'}, (40, 20)),
+                                     ('builder_battle', {'builder_scout', 'builder_battle'}, (5, 50))):
+            device = Device(self.frames, state)
+            device.tap = lambda point, device=device: device.inputs.append(tuple(point))
+            runner = bot.Bot(self.config, self.root, device, live=True, timeout=1, poll=0, builder_stack=True)
+            with self.subTest(state=state):
+                runner.deploy_card(screen, camps, allowed, {'builder_result'})
+                runner.deploy_card(screen, hero, allowed, {'builder_result'})
+                self.assertEqual(device.inputs, [(10, 80), spot, (20, 80), spot, (30, 80), spot])
+
+    def test_the_stage2_bar_is_read_once_its_reinforcements_have_slid_in(self):
+        runner = bot.Bot(self.config, self.root, Device(self.frames, 'builder_stage2'), live=True, timeout=1, poll=0.01)
+        runner.read_stable = lambda reader, limit: ['plan']
+        auto = {'bar': [0, 0, 10, 10], 'points': [[1, 1]]}
+        with patch('coc_auto.bot.time.sleep') as sleep:
+            self.assertEqual(runner.bar_plan(auto, {'builder_scout', 'builder_battle'}), ['plan'])
+            sleep.assert_not_called()
+            self.assertEqual(runner.bar_plan(auto, {'builder_stage2', 'builder_battle2'}), ['plan'])
+            sleep.assert_called_once_with(bot.BAR_SETTLE_SECONDS)
+
     def test_the_builder_hero_fires_again_only_once_its_ability_meter_is_full(self):
         root = RESOURCE_ROOT
         slot = [129, 128]

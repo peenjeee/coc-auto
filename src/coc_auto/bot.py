@@ -2309,6 +2309,9 @@ class Bot:
             return auto_plan(image, auto, self.ring, self.quake, self.digits(), self.builder_stack)
         if image is not None:
             return read(image)
+        if 'builder_stage2' in allowed and self.live and self.poll:
+            # Stage 2's reinforcement cards can pause mid-slide, and two frames in a row then show the same partial bar.
+            time.sleep(BAR_SETTLE_SECONDS)
         return self.read_stable(read, BAR_SETTLE_SECONDS if self.poll else 0)
 
     def hold_until_empty(self, troop: dict, location: list, allowed: set, terminal: set,
@@ -2374,10 +2377,13 @@ class Bot:
 
     def deploy_card(self, screen: dict, troop: dict, allowed: set, terminal: set) -> str:
         """Select the card and tap in bursts; the screen is checked after every burst."""
+        # Stacked, Builder Base stage 2 lands on its first spread point instead of the deploy point.
+        stage2_stack = self.builder_stack and 'builder_stage2' in allowed and screen.get('auto', {}).get('points')
+        spot = screen['auto']['points'][0] if stage2_stack else screen.get('deploy')
         if troop.get('camps'):
             # Every Builder Base camp in one go, each card then its point (all on the deploy point when stacked).
             if self.live:
-                spots = troop['points'] or [screen['deploy']] * len(troop['slots'])
+                spots = troop['points'] or [spot] * len(troop['slots'])
                 sizes = troop.get('sizes') or [1] * len(troop['slots'])
                 self.device.tap_many([tap for slot, spot, size in zip(troop['slots'], spots, sizes)
                                       for tap in (slot, *[spot] * size)])
@@ -2385,8 +2391,7 @@ class Bot:
         if troop.get('abilities'):
             # Every hero dropped at the deploy point, then each one's ability, with one look at the screen after.
             if self.live:
-                deploy = screen['deploy']
-                self.device.tap_many([tap for slot in troop['slots'] for tap in (slot, deploy)])
+                self.device.tap_many([tap for slot in troop['slots'] for tap in (slot, spot)])
                 self.device.tap_many(troop['slots'])
             return self.checked_state(allowed, terminal)[0]
         if troop.get('tap_only'):
@@ -2397,7 +2402,7 @@ class Bot:
             return self.checked_state(allowed, terminal)[0]
         if troop.get('fingers') and callable(getattr(self.device, 'hold_many', None)):
             return self.spread_hold(troop, allowed, terminal)
-        points = troop.get('points') or [troop.get('deploy', screen['deploy'])]
+        points = troop.get('points') or [troop.get('deploy', spot)]
         until_empty = troop.get('until_empty', False)
         if troop.get('hold') and callable(getattr(self.device, 'touch_down', None)) \
                 and getattr(self.device, 'touch', True):
