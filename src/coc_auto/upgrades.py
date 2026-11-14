@@ -529,6 +529,12 @@ def pause(runner: bot.Bot, seconds_left: int, reason: str) -> None:
     seconds_left = min(seconds_left, CLOSED_WAIT_MAX_SECONDS)
     if runner.stop_at is not None:
         seconds_left = max(0, min(seconds_left, round(runner.stop_at - time.monotonic())))
+    from . import upgrade_refresh
+    seconds_left = upgrade_refresh.before_wait(runner, seconds_left)
+    if runner.stop_at is not None:
+        seconds_left = max(0, min(seconds_left, round(runner.stop_at-time.monotonic())))
+    if seconds_left <= 0:
+        return
     closed = runner.live and seconds_left >= CLOSED_WAIT_MIN_SECONDS
     if not closed:
         seconds_left = min(seconds_left, buildings.WAIT_MAX_SECONDS)

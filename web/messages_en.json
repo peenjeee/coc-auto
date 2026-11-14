@@ -816,5 +816,7 @@
  "Invalid config.json": "Invalid config.json",
  "{}: {}": "{}: {}",
  "Bundled OCR missing": "Bundled OCR missing",
- "Packaged resources and OCR OK": "Packaged resources and OCR OK"
+ "Packaged resources and OCR OK": "Packaged resources and OCR OK",
+ "Sinkron otomatis: memperbarui timer upgrade yang perlu diperiksa": "Automatic sync: checking expired upgrade timers",
+ "Sinkron otomatis gagal (%s); dicoba lagi sebelum menunggu lama": "Automatic sync failed (%s); retrying before a long wait"
 }
