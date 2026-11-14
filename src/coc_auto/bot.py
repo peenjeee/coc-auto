@@ -357,8 +357,13 @@ def find_look(image: np.ndarray, root: Path, name: str, max_score: float, scales
 
 
 def text_shown(image: np.ndarray, root: Path, name: str, max_score: float) -> bool:
-    """The template's white text with its outline, or its English twin's, somewhere in image. The background
-    between the letters is left out: a tooltip sits over resource bars that fill up."""
+    return text_end(image, root, name, max_score) is not None
+
+
+def text_end(image: np.ndarray, root: Path, name: str, max_score: float) -> int | None:
+    """The column right after the template's white text with its outline, or its English twin's, where it shows
+    somewhere in image; None when it does not. The background between the letters is left out: a tooltip sits over
+    resource bars that fill up."""
     for look in (name, twin_name(root, name)):
         if not look:
             continue
@@ -367,10 +372,10 @@ def text_shown(image: np.ndarray, root: Path, name: str, max_score: float) -> bo
         # A template with hardly any white text is compared whole.
         mask = cv2.merge([text] * 3) if np.count_nonzero(text) >= TEXT_MASK_MIN * text.size else None
         scores = cv2.matchTemplate(image, template, cv2.TM_SQDIFF_NORMED, mask=mask)
-        scores = scores[np.isfinite(scores)]
+        scores = np.where(np.isfinite(scores), scores, np.inf)
         if scores.size and float(scores.min()) <= max_score:
-            return True
-    return False
+            return int(np.unravel_index(scores.argmin(), scores.shape)[1]) + template.shape[1]
+    return None
 
 
 def crop(image: np.ndarray, roi: list) -> np.ndarray:
@@ -2757,9 +2762,10 @@ class Bot:
             self.guarded_tap({village}, spec['tap'])
 
         def read_max(image: np.ndarray) -> int:
-            if not self.tooltip_open(image, spec):
+            region = self.tooltip_max(image, spec)
+            if region is None:
                 raise BotError('Tooltip gudang belum terbuka')
-            return read_number(crop(image, spec['max']), self.templates(), FRACTION_MIN_SCORE)
+            return read_number(crop(image, region), self.templates(), FRACTION_MIN_SCORE)
 
         maximum = self.read_until(read_max, TOOLTIP_SHOW_SECONDS)
         if maximum <= 0:
@@ -2777,15 +2783,27 @@ class Bot:
         return maximum
 
     def tooltip_open(self, image: np.ndarray, spec: dict) -> bool:
-        """With a 'Maks:' label template the tooltip is open only while the label is visible."""
+        return self.tooltip_max(image, spec) is not None
+
+    def tooltip_max(self, image: np.ndarray, spec: dict) -> list | None:
+        """Where the open tooltip shows its maximum; None while it is closed. With a 'Maks:' label template the
+        tooltip is open only while the label is visible. Its line is right-aligned, so the label of a small storage
+        (5 500) sits further right than the one calibrated on millions, inside spec['max']; the number is then read
+        from the label on."""
         label = spec.get('label')
+        x, y, w, h = spec['max']
         if not label:
             try:
                 read_number(crop(image, spec['max']), self.templates(), FRACTION_MIN_SCORE)
-                return True
+                return spec['max']
             except BotError:
-                return False
-        return text_shown(crop(image, label['region']), self.root, label['file'], label['max_score'])
+                return None
+        left, top, width, height = label['region']
+        end = text_end(image[top:top + height, left:max(left + width, x + w)], self.root, label['file'],
+                       label['max_score'])
+        if end is None:
+            return None
+        return [left + end, y, x + w - left - end, h] if x <= left + end < x + w else spec['max']
 
     def read_until(self, reader: Callable, limit: float):
         """Read from fresh screenshots until the value appears; no fixed wait."""

@@ -1676,6 +1676,16 @@ class BotTests(unittest.TestCase):
         with self.assertRaises(bot.BotError):
             bot.validate_config({**config, 'capacity': {'home': {'gold': {**cap, 'maximum': -5}}}}, self.root, 'both')
 
+    def test_a_small_storage_reads_its_maximum_from_the_tooltip_label_on(self):
+        config = self.bundled()[0]
+        # "Max: 5 500" on a new village's elixir tooltip, in a 1280x720 English game. The line is right-aligned, so
+        # the short number leaves the label further right than on the storages the regions were calibrated with.
+        tip = cv2.imread(str(FIXTURES / 'home-tooltip-max-5500-en.png'))
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+        frame[121:121 + tip.shape[0], 960:] = tip
+        runner = bot.Bot(config, RESOURCE_ROOT, Device({'home': frame}), timeout=1, poll=0)
+        self.assertEqual(runner.storage_max('home', 'elixir', config['capacity']['home']['elixir']), 5500)
+
     def test_read_number_threshold_is_adjustable(self):
         templates = self.digit_templates()
         image = self.rendered('7')
