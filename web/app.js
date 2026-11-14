@@ -11,7 +11,8 @@ import { setupSelects, refreshSelects } from './select.js?v=2';
 import { StatsPanel, previewStatistics } from './stats.js?v=17';
 import { DiscordPanel } from './discord.js?v=7';
 import { VisiblePoller } from './visible-poller.js?v=2';
-import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=22';
+import { BuildingsPanel, LISTS as BUILDING_LISTS } from './buildings.js?v=23';
+import { AccountsPanel } from './accounts.js?v=1';
 
 const DEMO = new URLSearchParams(location.search).get('preview') === '1';
 const ACK_MS = 10000;
@@ -40,6 +41,10 @@ let settings = null;
 let stats = null;
 let discord = null;
 let buildings = null;
+let accounts = null;
+// The player tag of the village the Upgrade page is about; undefined until the device has said.
+let currentAccount;
+let villageAsked = false;
 let settingsAsked = false;
 let currentNotice = null;
 let connectionProblem = null;
@@ -101,6 +106,7 @@ function addLines(lines) {
     row.textContent = translate(line);
     row.className = lineClass(line);
     fragment.append(row);
+    accounts?.seen(line);
   }
   view.append(fragment);
   while (view.childElementCount > MAX_LINES) view.firstElementChild.remove();
@@ -168,6 +174,26 @@ function showState(state) {
   $('host').textContent = typeof state.host === 'string' ? state.host : '-';
   $('bot-state').textContent = t(state.state === 'running' ? 'running' : 'standby');
   $('bot-args').textContent = Array.isArray(state.args) && state.args.length ? `python bot.py ${state.args.join(' ')}` : '-';
+  accounts?.running(state.state === 'running');
+}
+
+/** Which village the Upgrade page is about: its account's name from the Accounts page, else its player tag. */
+function showAccount() {
+  const line = $('upgrade-account');
+  const named = (accounts?.accounts ?? []).find((account) => account.tag === currentAccount);
+  line.hidden = !currentAccount;
+  if (currentAccount) line.textContent = t('upgrade_account', { name: named ? `${named.name} (${currentAccount})` : currentAccount });
+}
+
+/** The accounts a run would take turns on, under the run setup's switch. */
+function renderAccountTurns() {
+  const turns = accounts?.enabled() ?? [];
+  $('account-turns-note').textContent = turns.length ? turns.map((account) => account.name).join(' → ') : t('account_turns_none');
+}
+
+/** The rows of the village the device has just loaded. */
+function reloadVillage() {
+  setTimeout(async () => { for (const list of BUILDING_LISTS) await send('get_buildings', { list }, { quiet: true }); }, 0);
 }
 
 /** The dashboard's own words for a device answer; refusals and failures keep the device's detail. */
@@ -178,7 +204,8 @@ function resultText(result) {
   return text === key ? translate(String(result.source_message ?? result.message ?? '')) : text;
 }
 
-const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved', 'language_saved', 'buildings_saved', 'goblin_saved'];
+const SETTINGS_ANSWERS = ['settings_loaded', 'minimum_saved', 'setup_saved', 'language_saved', 'buildings_saved', 'goblin_saved',
+  'accounts_saved', 'account_switched'];
 const DISPLAY_ANSWERS = ['display_fitted', 'display_ok', 'display_restored', 'display_unchanged'];
 
 function handleResult(result, quiet = false) {
@@ -188,14 +215,24 @@ function handleResult(result, quiet = false) {
   if (result.code === 'stats_loaded') { stats.load(result.data); if (result.data.period === 'run') discord.stats(result.data); }
   else if (['discord_loaded','discord_saved','discord_tested'].includes(result.code)) { discord.load(result.data, result.code); refreshSelects(); }
   else if (result.code === 'deploy_loaded') editor.load(result.data);
-  else if (['buildings_scanned', 'buildings_loaded'].includes(result.code)) buildings.load(result.data);
+  else if (['buildings_scanned', 'buildings_loaded'].includes(result.code)) {
+    buildings.load(result.data);
+    // A sync reads whichever village the game has loaded: the page then shows that one's picks.
+    if (result.code === 'buildings_scanned') setTimeout(() => send('get_settings', {}, { quiet: true }), 0);
+  }
   else if (result.code === 'setup_checked') settings.checkedSetup(result.data);
   else if (result.code === 'setup_detected') settings.detected(result.data);
   else if (SETTINGS_ANSWERS.includes(result.code)) {
     settings.load(result.data);
     if (result.code === 'buildings_saved') buildings.acknowledge(result.data);
     if (result.code === 'goblin_saved') buildings.acknowledgeGoblin(result.data);
-    buildings.select(result.data);
+    // Another village on the Upgrade page: its own picks, never the unsaved edits of the last one.
+    const village = typeof result.data.account === 'string' ? result.data.account : null;
+    buildings.select(result.data, currentAccount !== undefined && village !== currentAccount);
+    currentAccount = buildings.account = village;
+    accounts.load(result.data);
+    showAccount();
+    if (result.code === 'account_switched') reloadVillage();
     if (result.code === 'settings_loaded' && !initialDisplayChecked) {
       initialDisplayChecked = true;
       if (!settings.displayMatches()) switchView('settings');
@@ -348,6 +385,13 @@ function readOptions() {
   if (['walls', 'farm', 'attack', 'buildings'].includes(task) && number('searches')) options.searches = number('searches');
   if (task === 'attack' || task === 'dry') options.village = data.get('village');
   if (task === 'attack') options.cycles = Math.max(1, number('cycles', 1));
+  // The accounts switched on in the Accounts page take turns at the task; the device checks each one again.
+  if (data.get('account_turns') && ['walls', 'farm', 'attack', 'buildings'].includes(task)) {
+    const turns = accounts?.enabled() ?? [];
+    if (turns.length) options.accounts = turns.map((account) => `${account.name}${account.tag}`).join(',');
+  }
+  // Rounds only mean something for turns a limit can end: one is the bot's own default.
+  if (options.accounts && task !== 'attack' && number('rounds', 1) !== 1) options.rounds = Math.max(0, number('rounds', 1));
   // The buildings task attacks too, when a pick is short of resources.
   if (['walls', 'farm', 'attack', 'buildings'].includes(task)) {
     if (data.get('surrender')) {
@@ -399,6 +443,8 @@ function previewArgs(options) {
   if (options.surrender_at !== undefined) args.push('--surrender-at', String(options.surrender_at));
   if (options.surrender_stars !== undefined) args.push('--surrender-stars', String(options.surrender_stars));
   if (options.trophy_floor) args.push('--trophy-floor', String(options.trophy_floor));
+  if (options.accounts) args.push(`--accounts="${options.accounts}"`);
+  if (options.rounds !== undefined) args.push('--rounds', String(options.rounds));
   return [...args, '--live'];
 }
 
@@ -439,6 +485,7 @@ function refreshOptions() {
     element.hidden = !element.dataset.for.split(' ').includes(options.task);
   }
   syncVillageControls();
+  renderAccountTurns();
   $('preview').textContent = `$ python bot.py ${previewArgs(options).join(' ')}`;
   const saved = {};
   for (const element of $('options').elements) {
@@ -467,6 +514,7 @@ function restoreOptions() {
 function setBusy(busy) {
   for (const button of document.querySelectorAll('#options button, #deploy-load, #deploy-save, .settings button')) button.disabled = busy;
   settings?.busy(busy);
+  accounts?.busy(busy);
   refreshSelects();
   if (!LOCAL) for (const b of document.querySelectorAll('#discord-form button')) b.disabled=true;
   if (discord?.saved) { $('discord-test').disabled=!LOCAL||!discord.saved.configured||discord.dirty; $('discord-remove').disabled=!LOCAL||!discord.saved.configured; }
@@ -539,6 +587,9 @@ function changeLanguage(language) {
   editor.render();
   settings.render();
   buildings.render();
+  accounts.render();
+  showAccount();
+  renderAccountTurns();
   for (const row of $('log').children) row.textContent = translate(row.sourceMessage);
   renderNotice();
   renderConnectionProblem();
@@ -580,6 +631,12 @@ function init() {
   settings = new SettingsPanel(send);
   $('setup-continue').addEventListener('click', () => switchView('overview'));
   buildings = new BuildingsPanel(send);
+  accounts = new AccountsPanel(send, () => { refreshOptions(); showAccount(); }, (tag) => {
+    // A running bot loaded another village: the Upgrade page follows it, once, however many lines say so.
+    if (tag === currentAccount || villageAsked || !online || !link || DEMO) return;
+    villageAsked = true;
+    setTimeout(async () => { await send('get_settings', {}, { quiet: true }); villageAsked = false; }, 0);
+  });
   changeLanguage();
   restoreOptions();
   refreshOptions();
@@ -683,7 +740,7 @@ function switchView(view) {
   }
   for (const panel of document.querySelectorAll('.page-panel')) panel.hidden = panel.id !== `view-${view}`;
   $('device-controls').hidden = view !== 'settings';
-  const key = view === 'stats' ? 'stats' : view === 'buildings' ? 'upgrades' : view === 'deploy' ? 'deployment' : view === 'settings' ? 'settings' : 'overview';
+  const key = view === 'stats' ? 'stats' : view === 'buildings' ? 'upgrades' : view === 'deploy' ? 'deployment' : view === 'settings' ? 'settings' : view === 'accounts' ? 'accounts' : 'overview';
   $('page-title').textContent = t(`${key}_title`);
   $('page-description').textContent = t(`${key}_description`);
   screenPoller.sync();
@@ -841,6 +898,9 @@ class DemoLink {
     this.minimum = {gold:1000000,elixir:1000000,dark:0};
     this.picks = {buildings:{targets:[{id:'archer_tower',name:'Archer Tower',level:8},{id:'spring_trap',name:'Spring Trap',level:null}],keep_builders:1},
       lab:{targets:[{id:'giant',name:'Giant',level:null}]}, pets:{targets:[]}};
+    this.accounts = [{name:'MainVillage',tag:'#PPPPPPPP',enabled:true},{name:'FarmAccount',tag:'#QQQQQQQQ',enabled:true},
+      {name:'Storage',tag:'#GGGGGGGG',enabled:false}];
+    this.account = '#PPPPPPPP';
     this.discord = {configured:false,enabled:false,ping_id:'',events:['ended','recovery','summary'],interval:30,status:'Not connected'};
   }
   async send(body) {
@@ -860,6 +920,8 @@ class DemoLink {
     else if (action === 'set_language') code='language_saved';
     else if (action === 'set_buildings') {this.picks[args.list]=args.buildings;code='buildings_saved';}
     else if (action === 'set_goblin') {this.picks.goblin=args.goblin;code='goblin_saved';}
+    else if (action === 'set_accounts') {this.accounts=args.accounts.map(account=>({...account,tag:`#${String(account.tag).replace(/^#/,'').toUpperCase()}`}));code='accounts_saved';}
+    else if (action === 'switch_account') {this.account=args.tag;code='account_switched';addLines([`INFO: Akun ${this.accounts.find(account=>account.tag===args.tag)?.name} (${args.tag}) dimuat`]);}
     else if (action === 'check_setup') {code='setup_checked';data={ready:true,screen:'home',display:this.display()};}
     else if (action === 'detect_setup') {code='setup_detected';data={folders:['Demo LDPlayer installation'],instances:[{index:0,name:'Demo device',running:true}],resolution:[1280,720],problems:[]};}
     else if (action === 'open_coc') code='coc_opened';
@@ -869,7 +931,8 @@ class DemoLink {
     else if (action === 'fit_display' || action === 'restore_display') {this.state.state='idle';code=action==='fit_display'?'display_ok':'display_unchanged';data=this.display();}
     else if (action === 'scan_buildings') {code='buildings_scanned';data={list:args.list,scanned_at:Date.now()/1000,rows:DEMO_SCANS[args.list]};}
     else if (action === 'get_buildings') {code='buildings_loaded';data={list:args.list,scanned_at:Date.now()/1000-240,rows:DEMO_SCANS[args.list]};}
-    if (SETTINGS_ANSWERS.includes(code)) data={minimum:this.minimum,setup:{adb:'C:\\LDPlayer\\adb.exe',ldconsole:'C:\\LDPlayer\\ldconsole.exe',serial:'emulator-5554',ld_index:0,touch_device:'/dev/input/event4'},language:document.documentElement.lang,display:this.display(),...this.picks};
+    if (SETTINGS_ANSWERS.includes(code)) data={minimum:this.minimum,setup:{adb:'C:\\LDPlayer\\adb.exe',ldconsole:'C:\\LDPlayer\\ldconsole.exe',serial:'emulator-5554',ld_index:0,touch_device:'/dev/input/event4'},language:document.documentElement.lang,display:this.display(),...this.picks,
+      accounts:this.accounts,account:this.account,account_targets:{'#PPPPPPPP':3,'#QQQQQQQQ':1}};
     return {ok:true,code,state:this.state,data};
   }
   display() {return {current:{width:1280,height:720,dpi:240},target:{width:1280,height:720,dpi:240},saved:false};}
@@ -887,6 +950,7 @@ async function openDemo() {
   setOnline(true); showState(link.state); $('notice').hidden=true;
   addLines([
     'REMOTE: Connected to LDPlayer 01',
+    'INFO: Giliran akun MainVillage (#PPPPPPPP)',
     'INFO: Wall upgraded with gold',
     'INFO: Wall upgraded with elixir',
     'INFO: Storage below target. Starting Home Village farming.',
@@ -902,6 +966,6 @@ async function openDemo() {
   for (const list of BUILDING_LISTS) handleResult(await link.send(JSON.stringify({action:'get_buildings',args:{list}})),true);
   discord.stats(previewStatistics());
   const previewView = new URLSearchParams(location.search).get('tab');
-  if (['overview', 'stats', 'buildings', 'deploy', 'settings'].includes(previewView)) switchView(previewView);
+  if (['overview', 'stats', 'buildings', 'accounts', 'deploy', 'settings'].includes(previewView)) switchView(previewView);
 }
 init();

@@ -51,6 +51,26 @@ def deadlines(root):
     return result
 
 
+def keep_scans(root, snapshot):
+    """An export's rows as the dashboard's last scan of every list."""
+    # Do not construct Statistics here: its startup recovery would mark
+    # the currently running worker interrupted. Only update scan rows.
+    with (
+        closing(
+            sqlite3.connect(
+                str(runtime_dir(root=root) / "stats.sqlite3"), timeout=3
+            )
+        ) as db,
+        db,
+    ):
+        for listing, rows in snapshot["lists"].items():
+            village = "builder" if listing in ("builder", "star") else "home"
+            db.execute(
+                "INSERT OR REPLACE INTO scans(village,list,scanned_at,rows) VALUES(?,?,?,?)",
+                (village, listing, snapshot["scanned_at"], json.dumps(rows)),
+            )
+
+
 def before_wait(runner, seconds):
     root = getattr(runner, "root", None)
     if not getattr(runner, "live", False) or root is None or seconds <= 0:
@@ -66,23 +86,7 @@ def before_wait(runner, seconds):
         if any(finish <= time.time() for finish in known):
             LOG.info("Sinkron otomatis: memperbarui timer upgrade yang perlu diperiksa")
             runner.wait({"home", "builder"}, set(), 30)
-            snapshot = village_export.scan(runner)
-            # Do not construct Statistics here: its startup recovery would mark
-            # the currently running worker interrupted. Only update scan rows.
-            with (
-                closing(
-                    sqlite3.connect(
-                        str(runtime_dir(root=root) / "stats.sqlite3"), timeout=3
-                    )
-                ) as db,
-                db,
-            ):
-                for listing, rows in snapshot["lists"].items():
-                    village = "builder" if listing in ("builder", "star") else "home"
-                    db.execute(
-                        "INSERT OR REPLACE INTO scans(village,list,scanned_at,rows) VALUES(?,?,?,?)",
-                        (village, listing, snapshot["scanned_at"], json.dumps(rows)),
-                    )
+            keep_scans(root, village_export.scan(runner))
             runner.upgrade_refresh_retry = 0
             runner.upgrade_busy_until = {}
             refreshed = True

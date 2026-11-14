@@ -301,6 +301,15 @@ class LimitReached(Exception):
     """A --hours/--minutes/--max-upgrades limit was reached between attacks or upgrades; a normal finish."""
 
 
+class TurnOver(Exception):
+    """--accounts: this account has nothing to do for that many seconds, its upgrades are running; the next account
+    takes its turn meanwhile."""
+
+    def __init__(self, seconds: float) -> None:
+        super().__init__(seconds)
+        self.seconds = seconds
+
+
 class SetupError(Exception):
     """The PC, LDPlayer or config cannot work for this account (taps that cannot land, ADB debugging off, a loot
     minimum no opponent meets); recovering would only repeat it, so the run stops with what to change."""
@@ -1808,8 +1817,10 @@ class Bot:
                  surrender_after: float = SURRENDER_DEFAULT_SECONDS, surrender_at: int = 0, ring: bool = False,
                  quake: bool = False, surrender_stars: int = 0, builder_stack: bool = False,
                  trophy_floor: int = 0, bulk_walls: bool = False, wall_every: int = 0,
-                 wall_resources: tuple = WALL_RESOURCES) -> None:
+                 wall_resources: tuple = WALL_RESOURCES, account: tuple = ()) -> None:
         self.config, self.device, self.live, self.root = config, device, live, root
+        # The Supercell ID account (name, player tag) this run is for; empty: whichever is loaded.
+        self.account = account
         self.surrender, self.surrender_after, self.surrender_at = surrender, surrender_after, surrender_at
         self.battle_deadline: float | None = None
         self.surrender_stars, self.builder_stack = surrender_stars, builder_stack
@@ -3669,6 +3680,10 @@ class Bot:
                     step()
                 step = None  # A later failure is in the job, not in the recovery step.
                 self.check_touch()
+                if self.account:
+                    # Loaded, or confirmed loaded, before every start of the job, after a recovery too.
+                    from . import accounts
+                    accounts.switch(self, *self.account)
                 return (job or self.run_until_full)(searches)
             except (MemoryError, cv2.error) as exc:
                 recoveries, progress = self.recoveries_since(recoveries, progress)
@@ -3995,6 +4010,14 @@ def main() -> int:
     parser.add_argument('--quake', action='store_true',
                         help=messages.translate('Desa asal: spell (gempa) 4 per titik di titik gempa atas, kanan, bawah, kiri base '
                              '(editor deploy), bukan disebar'))
+    parser.add_argument('--accounts', metavar='NAME#TAG,...',
+                        help=messages.translate('Kerjakan tugas ini bergiliran di tiap akun Supercell ID yang ditulis: nama di '
+                                                'daftar ganti akun dan tag pemain desanya, dipisah koma; akun lain tidak '
+                                                'pernah dipilih; butuh --live'))
+    parser.add_argument('--rounds', type=int, default=1,
+                        help=messages.translate('--accounts: akun yang gilirannya berakhir di batas (--hours/--minutes/'
+                                                '--max-upgrades) mendapat giliran lagi, sampai sekian putaran; 0 = terus '
+                                                'sampai tugas tiap akun selesai atau bot dihentikan'))
     parser.add_argument('--live', action='store_true', help=messages.translate('Izinkan input akun; risiko ban dan resource terpakai'))
     parser.add_argument('--agent', action='store_true',
                         help=messages.translate('Tanpa tugas: hanya tampilkan API key dan tunggu Start dari dashboard'))
@@ -4047,6 +4070,14 @@ def main() -> int:
         trophy_floor = integer(args.trophy_floor, 0, TROPHY_FLOOR_MAX, 'trophy_floor')
         if args.dark and (not args.until_full or args.builder is not None or args.home is not None):
             raise BotError('--dark hanya untuk --until-full tanpa --builder/--home (atau pakai --home gold,elixir,dark)')
+        turns = ()
+        if args.accounts is not None:
+            from . import accounts
+            turns = accounts.parse(args.accounts)
+            if not args.live:
+                raise BotError('--accounts butuh --live')
+        if integer(args.rounds, 0, 1000, 'rounds') != 1 and not turns:
+            raise BotError('--rounds hanya untuk --accounts')
         if not (args.worker or args.no_remote):
             from . import remote
             # The job runs as a child (--worker) under the dashboard link, which stays up after it ends.
@@ -4062,12 +4093,28 @@ def main() -> int:
         if args.buildings:
             if not args.live:
                 raise BotError('--buildings butuh --live')
+            from . import accounts
             from . import buildings
             from . import upgrades
-            chosen = buildings.validate(config, config_root(args.config))
+            from . import village_export
+            from .paths import runtime_dir
+            if not turns and isinstance(config.get('accounts'), list) and accounts.registry(config['accounts']):
+                # With accounts on the dashboard, picks belong to villages: this run upgrades the village on the
+                # Upgrade page, once the game shows it is the one loaded.
+                tag = village_export.current_tag(runtime_dir(args.config))
+                if not tag:
+                    raise BotError('Ada akun di dashboard, tapi desa yang dimuat belum diketahui; Sync di halaman '
+                                   'Upgrade dulu')
+                turns = (('', tag),)
+            if turns:
+                # Each account has its own picks, filed by the dashboard under its village's player tag.
+                picks = accounts.picks(config, config_root(args.config), turns)
+            else:
+                chosen = buildings.validate(config, config_root(args.config))
         # A --buildings run attacks in the villages of its picks when one is short of resources.
-        villages = walls or tuple(goals or ()) or (tuple(sorted({buildings.LISTS[name][0] for name in buildings.LISTS
-                                                                if chosen[name]['targets']})) if args.buildings else ())
+        villages = walls or tuple(goals or ()) or (tuple(sorted(
+            {buildings.LISTS[name][0] for own in (picks.values() if turns else [chosen]) for name in buildings.LISTS
+             if own[name]['targets']})) if args.buildings else ())
         mode = (villages[0] if len(villages) == 1 else 'both') if villages else args.mode
         validate_config(config, config_root(args.config), mode)
         validate_surrender(config, surrender)
@@ -4104,37 +4151,86 @@ def main() -> int:
             if args.bulk_walls and 'wall_bulk_confirm' not in config['screens']:
                 raise BotError('--bulk-walls butuh kalibrasi: wall_bulk_confirm')
         adb = executable(config.get('adb'), 'ADB')
-        # Loot is read with Tesseract only when no digit templates are configured.
-        if mode != 'builder' and any(config.get('minimum', {}).values()) and not config.get('digits'):
+        # Loot is read with Tesseract only when no digit templates are configured; an account's name always is.
+        if turns or (mode != 'builder' and any(config.get('minimum', {}).values()) and not config.get('digits')):
             executable(config.get('tesseract'), 'Tesseract')
         device = ADB(adb, config['serial'], config['resolution'], live=args.live,
                      touch=config.get('touch_device'))
         emulator = Emulator(executable(config['ldconsole'], 'ldconsole'), config.get('ld_index', 0))             if config.get('ldconsole') else None
         if emulator and args.live:
             check_adb_debugging(emulator.console, emulator.index)
-        runner = Bot(config, config_root(args.config), device, live=args.live, emulator=emulator, goals=goals, walls=walls,
-                     minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
-                     surrender_after=surrender_after, surrender_at=surrender_at, ring='home' in ring, quake=args.quake,
-                     surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor,
-                     bulk_walls=args.bulk_walls, wall_every=args.wall_every,
-                     wall_resources=WALL_RESOURCES if args.wall_resource == 'both' else (args.wall_resource,))
+        def new_runner(account: tuple = ()) -> Bot:
+            return Bot(config, config_root(args.config), device, live=args.live, emulator=emulator, goals=goals,
+                       walls=walls, minutes=minutes, max_upgrades=args.max_upgrades, surrender=surrender,
+                       surrender_after=surrender_after, surrender_at=surrender_at, ring='home' in ring, quake=args.quake,
+                       surrender_stars=surrender_stars, builder_stack='builder' in stack, trophy_floor=trophy_floor,
+                       bulk_walls=args.bulk_walls, wall_every=args.wall_every,
+                       wall_resources=WALL_RESOURCES if args.wall_resource == 'both' else (args.wall_resource,),
+                       account=account)
+
+        # --accounts: the task on each account in the order given; without it, once on the account loaded. A turn a
+        # limit ended is over: that account gets another one, with fresh limits, for up to --rounds turns. A turn its
+        # upgrades made wait is not: the account comes back once they are done, its limits still running.
+        waiting, limited, ready, runners = list(turns) or [()], {}, {}, {}
+        if args.buildings and turns:
+            for account in [account for account in waiting if account[1] not in picks]:
+                LOG.warning('Akun %s belum punya pilihan upgrade; dilewati', account[0] or account[1])
+                waiting.remove(account)
+        runner = runners[waiting[0]] = new_runner(waiting[0])
         if emulator and args.live and fit_screen(args.config):
             fitted = True
             runner.recover()
-        if walls:
-            runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
-        elif args.buildings:
-            runner.run_until_full_resilient(args.searches, args.max_recoveries,
-                                            job=lambda searches: upgrades.run(runner, chosen, searches))
-        elif until_full and args.live:
-            runner.run_until_full_resilient(args.searches, args.max_recoveries)
-        elif args.live:
-            # After a recovery the run picks up after the last battle whose troops went in, never playing it again.
-            runner.run_until_full_resilient(
-                args.searches, args.max_recoveries,
-                job=lambda searches: runner.run(args.mode, args.cycles, searches, done=runner.battles))
-        else:
-            runner.run(args.mode, args.cycles, args.searches)
+        while waiting:
+            for account in list(waiting):
+                if ready.get(account, 0) > time.monotonic():
+                    continue
+                if args.buildings and account:
+                    chosen = picks[account[1]]
+                # LDPlayer's memory clock carries on from turn to turn.
+                started = runner.emulator_started
+                if account not in runners:
+                    runners[account] = new_runner(account)
+                runner = runners[account]
+                runner.emulator_started = started
+                if account and account[0]:
+                    LOG.info('Giliran akun %s (%s)', *account)
+                try:
+                    if walls:
+                        runner.run_until_full_resilient(args.searches, args.max_recoveries, job=runner.run_walls)
+                    elif args.buildings:
+                        runner.run_until_full_resilient(args.searches, args.max_recoveries,
+                                                        job=lambda searches: upgrades.run(runner, chosen, searches))
+                    elif until_full and args.live:
+                        runner.run_until_full_resilient(args.searches, args.max_recoveries)
+                    elif args.live:
+                        # After a recovery the run picks up after the last battle whose troops went in, never playing
+                        # it again.
+                        runner.run_until_full_resilient(
+                            args.searches, args.max_recoveries,
+                            job=lambda searches: runner.run(args.mode, args.cycles, searches, done=runner.battles))
+                    else:
+                        runner.run(args.mode, args.cycles, args.searches)
+                    waiting.remove(account)
+                except LimitReached as exc:
+                    LOG.info('%s', exc)
+                    limited[account] = limited.get(account, 0) + 1
+                    runners.pop(account)
+                    if not account or (args.rounds and limited[account] >= args.rounds):
+                        waiting.remove(account)
+                except TurnOver as exc:
+                    ready[account] = time.monotonic() + exc.seconds
+                    LOG.info('Akun %s menunggu upgrade %s', account[0] or account[1], messages.duration(exc.seconds))
+            # Every account left is waiting for its upgrades: the game stays closed until the first of them is due.
+            due = min((ready.get(account, 0) for account in waiting), default=0) - time.monotonic()
+            if due > 0:
+                LOG.info('CoC ditutup selama menunggu; dibuka kembali dalam %s', messages.duration(due))
+                try:
+                    runner.device.stop_game()
+                except BotError:
+                    pass
+                wake = time.monotonic() + due
+                time.sleep(due if runner.poll else 0)
+                ready = {account: at for account, at in ready.items() if at > wake}
         return 0
     except KeyboardInterrupt:
         LOG.warning('Dihentikan; tidak ada input lanjutan')

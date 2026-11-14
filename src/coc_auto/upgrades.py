@@ -536,6 +536,9 @@ def pause(runner: bot.Bot, seconds_left: int, reason: str) -> None:
     if seconds_left <= 0:
         return
     closed = runner.live and seconds_left >= CLOSED_WAIT_MIN_SECONDS
+    if closed and getattr(runner, 'account', ()):
+        # --accounts: the next account works meanwhile; this one gets its turn again once the wait is over.
+        raise bot.TurnOver(seconds_left)
     if not closed:
         seconds_left = min(seconds_left, buildings.WAIT_MAX_SECONDS)
     LOG.info('Menunggu %s: %s', messages.duration(seconds_left), reason)

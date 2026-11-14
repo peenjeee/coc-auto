@@ -79,9 +79,9 @@ COMMAND_MAX_AGE_SECONDS = 120
 # Settings action -> its answer code; every one answers with the settings as they are now (or what was found).
 SETTINGS_ACTIONS = {'get_settings': 'settings_loaded', 'set_minimum': 'minimum_saved', 'detect_setup': 'setup_detected', 'check_setup': 'setup_checked',
                     'set_setup': 'setup_saved', 'set_language': 'language_saved', 'set_buildings': 'buildings_saved',
-                    'set_goblin': 'goblin_saved'}
+                    'set_goblin': 'goblin_saved', 'set_accounts': 'accounts_saved'}
 ACTIONS = ('get_stats', 'get_discord', 'set_discord', 'test_discord', 'get_screen', 'start', 'stop', 'restart', 'open_coc', 'close_coc', 'kill_ld', 'restart_ld', 'get_deploy', 'set_deploy',
-           'fit_display', 'restore_display', 'scan_buildings', 'get_buildings', *SETTINGS_ACTIONS)
+           'fit_display', 'restore_display', 'scan_buildings', 'get_buildings', 'switch_account', *SETTINGS_ACTIONS)
 # Reads that run outside the control lock (a slow one must not hold up Stop) and stay out of the log.
 READ_ONLY = ('get_screen', 'get_stats', 'get_discord', 'get_buildings')
 VILLAGE_CHOICES = ('home', 'builder', 'both')
@@ -103,12 +103,13 @@ ATTACK_OPTIONS = ('surrender', 'surrender_after', 'surrender_at', 'home_style', 
 STYLES = ('ring', 'stack')
 TASK_OPTIONS = {
     'walls': {'walls', 'first', 'searches', 'hours', 'minutes', 'max_upgrades', 'bulk_walls', 'wall_every',
-              'wall_resource', 'max_recoveries', *ATTACK_OPTIONS},
-    'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', *ATTACK_OPTIONS},
-    'attack': {'village', 'cycles', 'searches', *ATTACK_OPTIONS},
+              'wall_resource', 'max_recoveries', 'accounts', 'rounds', *ATTACK_OPTIONS},
+    'farm': {'home', 'builder', 'dark', 'first', 'searches', 'hours', 'minutes', 'max_recoveries', 'accounts',
+             'rounds', *ATTACK_OPTIONS},
+    'attack': {'village', 'cycles', 'searches', 'accounts', *ATTACK_OPTIONS},
     'dry': {'village'},
     # It attacks when a pick is short of resources.
-    'buildings': {'searches', 'hours', 'minutes', 'max_recoveries', *ATTACK_OPTIONS},
+    'buildings': {'searches', 'hours', 'minutes', 'max_recoveries', 'accounts', 'rounds', *ATTACK_OPTIONS},
 }
 # Deploy editor tab -> the deploy screen it is drawn on and the pins it moves: Home Village spells, its --ring
 # troop and spell pins and --quake pins, Builder Base troop points.
@@ -304,6 +305,20 @@ def build_args(options: dict) -> list[str]:
     floor = whole(options, 'trophy_floor', 0, 10_000)
     if floor:
         args += ['--trophy-floor', str(floor)]
+    if 'accounts' in options:
+        from . import accounts, bot
+        if not isinstance(options['accounts'], str):
+            raise CommandRefused('Pilihan accounts harus teks NamaSupercellID#TAGPEMAIN, dipisah koma')
+        try:
+            turns = accounts.parse(options['accounts'])
+        except bot.BotError as exc:
+            raise CommandRefused(str(exc)) from exc
+        # One argument, so a name that starts with a dash is never read as an option.
+        args.append('--accounts=' + ','.join(name + tag for name, tag in turns))
+    # One round is the bot's own default; 0 keeps the accounts taking turns.
+    rounds = whole(options, 'rounds', 0, 1000)
+    if rounds is not None and rounds != 1:
+        args += ['--rounds', str(rounds)]
     return args + ['--live']
 
 
@@ -420,17 +435,21 @@ class Settings:
         return bot.load_config(self.config_path)
 
     def read(self) -> dict:
+        from . import accounts
         from . import bot
         from . import buildings
+        from . import village_export
         config = self.config()
         minimum = config.get('minimum') or {}
-        picks = {}
-        for listing in SCAN_LISTS:
-            try:
-                picks[listing] = buildings.selection(config.get(listing), listing)
-            except bot.BotError:
-                # Never saved, or edited by hand into something --buildings refuses: the panel starts empty.
-                picks[listing] = {'targets': [], 'keep_builders': 0} if listing == 'buildings' else {'targets': []}
+        try:
+            registered = accounts.registry(config.get('accounts', []))
+        except bot.BotError:
+            # Edited by hand into something --accounts refuses: the page starts without accounts.
+            registered = []
+        # The Upgrade page is about the village exported last. With accounts on this device it shows that village's
+        # own picks, so an account never starts from another account's; without, the one pick there always was.
+        tag, filed = village_export.current_tag(runtime_dir(self.config_path)), self.filed(config)
+        picks = accounts.village_picks(filed.get(tag) if registered else config)
         try:
             goblin = buildings.goblin(config.get('goblin', buildings.GOBLIN_OFF))
         except bot.BotError:
@@ -438,7 +457,21 @@ class Settings:
             goblin = buildings.GOBLIN_OFF
         return {'minimum': {key: minimum.get(key, 0) for key in MINIMUM_KEYS},
                 'setup': {name: config.get(name) for name in SETUP_FIELDS}, 'language': config.get('language', 'id'),
-                'goblin': goblin, **picks}
+                'goblin': goblin, **picks, 'accounts': registered, 'account': tag,
+                'account_targets': {entry['tag']: self.targets(filed.get(entry['tag'])) for entry in registered}}
+
+    @staticmethod
+    def filed(config: dict) -> dict:
+        """Upgrade picks by village player tag (config.local.json 'account_picks')."""
+        value = config.get('account_picks')
+        return {tag: own for tag, own in value.items() if isinstance(own, dict)} if isinstance(value, dict) else {}
+
+    @staticmethod
+    def targets(own: object) -> int:
+        """How many upgrade targets a village has filed, over all its lists."""
+        lists = [own.get(listing) for listing in SCAN_LISTS] if isinstance(own, dict) else []
+        return sum(len(found['targets']) for found in lists
+                   if isinstance(found, dict) and isinstance(found.get('targets'), list))
 
     def detect(self, index: object = None) -> dict:
         config = self.config()
@@ -476,16 +509,52 @@ class Settings:
         save_local(self.config_path, {'language': language}, self.root, 'Bahasa')
         return language
 
-    def write_buildings(self, chosen: object, listing: str = 'buildings') -> None:
+    def write_buildings(self, chosen: object, listing: str = 'buildings', account: object = None) -> None:
         """One list's pick (a SCAN_LISTS name, saved under that key), first one first, each up to its level, that
-        --buildings works through: the buildings with the builders it leaves, or another list's rows."""
+        --buildings works through: the buildings with the builders it leaves, or another list's rows. With accounts
+        on this device it belongs to the village the page showed (account, its player tag), which must still be the
+        one exported last."""
         from . import bot
         from . import buildings
         try:
-            changes = {listing: buildings.selection(chosen, listing)}
+            checked = buildings.selection(chosen, listing)
         except bot.BotError as exc:
             raise CommandRefused(f'Pilihan bangunan ditolak: {exc}') from exc
+        shown = self.read()
+        if not shown['accounts']:
+            changes = {listing: checked}
+        elif not shown['account']:
+            raise CommandRefused('Sync di halaman Upgrade dulu: dengan akun, pilihan upgrade disimpan untuk desa yang '
+                                 'dimuat')
+        elif account != shown['account']:
+            raise CommandRefused(f'Halaman Upgrade menampilkan desa lain ({account if isinstance(account, str) else "-"}) '
+                                 f'dari yang dimuat sekarang ({shown["account"]}); pilihan tidak disimpan, buka lagi '
+                                 'halamannya')
+        else:
+            # Filed, whole, under that village: every account keeps its own picks.
+            changes = {'account_picks': {shown['account']: {**{name: shown[name] for name in SCAN_LISTS},
+                                                            listing: checked}}}
         save_local(self.config_path, changes, self.root, 'Pilihan bangunan')
+
+    def write_accounts(self, registered: object) -> None:
+        """This device's Supercell ID accounts, in the order they take turns; the enabled ones are worked on."""
+        from . import accounts
+        from . import bot
+        from . import village_export
+        try:
+            checked = accounts.registry(registered)
+        except bot.BotError as exc:
+            raise CommandRefused(f'Daftar akun ditolak: {exc}') from exc
+        changes = {'accounts': checked}
+        config, tag = self.config(), village_export.current_tag(runtime_dir(self.config_path))
+        before = accounts.village_picks(config)
+        if checked and not self.filed(config) and any(found['targets'] for found in before.values()):
+            # The picks made before there were accounts belong to the village the page showed them for.
+            if not tag:
+                raise CommandRefused('Sync di halaman Upgrade dulu, supaya pilihan upgrade yang ada tetap milik '
+                                     'desanya')
+            changes['account_picks'] = {tag: before}
+        save_local(self.config_path, changes, self.root, 'Daftar akun')
 
     def write_goblin(self, goblin: object) -> None:
         """The Goblin Builder and Goblin Researcher switches and the most gems one hire may cost: the only gems
@@ -737,6 +806,20 @@ class Supervisor:
                 from . import upgrade_history
                 scan = upgrade_history.project_scan(config_root(Path(config_path)), listing, scan)
             return 'buildings_loaded', '', {'list': listing, **scan}
+        if action == 'switch_account':
+            if self.settings is None:
+                raise CommandRefused('pengaturan tidak tersedia di perangkat ini')
+            # Switching taps the game; a running bot would fight it.
+            if self.running():
+                raise CommandRefused('hentikan bot dulu; ganti akun mengetuk layar game')
+            # Only an account the user put on this device's list is ever loaded.
+            known = {entry['tag']: entry['name'] for entry in self.settings.read()['accounts']}
+            tag = options.get('tag')
+            if not isinstance(tag, str) or tag not in known:
+                raise CommandRefused('akun itu tidak ada di daftar akun perangkat ini')
+            self.device.switch_account(known[tag], tag)
+            return 'account_switched', f'Akun {known[tag]} dimuat', {**self.settings.read(),
+                                                                     'display': self.display_data()}
         # Closing the game or the emulator under a running bot would only start its recovery.
         self.stop()
         if action == 'close_coc':
@@ -778,11 +861,15 @@ class Supervisor:
             messages.use(self.settings.write_language(options.get('language')))
             message = 'Bahasa tampilan disimpan; log langsung memakainya'
         elif action == 'set_buildings':
-            self.settings.write_buildings(options.get('buildings'), choice(options, 'list', SCAN_LISTS, 'buildings'))
+            self.settings.write_buildings(options.get('buildings'), choice(options, 'list', SCAN_LISTS, 'buildings'),
+                                          options.get('account'))
             message = 'Pilihan bangunan disimpan; berlaku saat Start berikutnya'
         elif action == 'set_goblin':
             self.settings.write_goblin(options.get('goblin'))
             message = 'Pengaturan Goblin disimpan; berlaku saat Start berikutnya'
+        elif action == 'set_accounts':
+            self.settings.write_accounts(options.get('accounts'))
+            message = 'Daftar akun disimpan; berlaku saat Start berikutnya'
         else:
             message = 'Pengaturan dimuat'
         return code, message, {**self.settings.read(), 'display': self.display_data()}

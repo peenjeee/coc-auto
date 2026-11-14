@@ -293,8 +293,22 @@ class Scanner:
                         raise
 
 
+def current_tag(folder: Path) -> str | None:
+    """The player tag of the village whose export this device kept last (in its runtime folder): the one the
+    dashboard shows."""
+    try:
+        tag = json.loads((folder/'village-export.json').read_text(encoding='utf-8')).get('tag')
+    except (OSError, ValueError, AttributeError):
+        return None
+    return tag if isinstance(tag, str) else None
+
+
 def scan(runner: bot.Bot) -> dict:
-    data = Scanner(runner).read()
+    return keep(runner, Scanner(runner).read())
+
+
+def keep(runner: bot.Bot, data: dict) -> dict:
+    """An export the game just copied becomes this device's village; its rows for the dashboard."""
     converted = rows(data,language=runner.config.get('language','en'))
     store = runtime_dir(root=runner.root)/'village-export.json'
     store.parent.mkdir(parents=True,exist_ok=True)

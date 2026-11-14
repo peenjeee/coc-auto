@@ -58,6 +58,8 @@ export class BuildingsPanel {
      * per list: the rows read (null while the device keeps no scan of it), when, and the pick, first one first */
     this.lists = Object.fromEntries(LISTS.map((list) => [list, { rows: null, scannedAt: Date.now(), targets: [] }]));
     this.list = 'buildings';
+    /** @type {string | null} the player tag of the village the page shows, as the device last said */
+    this.account = null;
     this.baselines = {};
     this.keep = 0;
     this.search = '';
@@ -95,7 +97,8 @@ export class BuildingsPanel {
       if (inputs.some((input) => !input.reportValidity())) return;
       const keep = Number.parseInt($('buildings-keep').value, 10);
       // Only buildings leave builders free; research and pets have their own queues.
-      send('set_buildings', { list: this.list, buildings: this.list === 'buildings'
+      // The village the page shows: with accounts, the device files the pick under it, or refuses if another is loaded.
+      send('set_buildings', { list: this.list, account: this.account, buildings: this.list === 'buildings'
         ? { targets: this.targets, keep_builders: Number.isInteger(keep) ? Math.min(MAX_KEEP, Math.max(0, keep)) : 0 }
         : { targets: this.targets } });
     });
@@ -150,8 +153,10 @@ export class BuildingsPanel {
   }
 
   /** @param {Record<string, {targets?: unknown, keep_builders?: unknown} | undefined> | undefined} saved the
-   * settings the device keeps, each list's pick under its name */
-  select(saved) {
+   * settings the device keeps, each list's pick under its name
+   * @param {boolean} fresh another village is on the page: its picks replace the last one's, unsaved edits too */
+  select(saved, fresh = false) {
+    if (fresh) this.baselines = {};
     for (const list of LISTS) {
       if (this.baselines[list] !== undefined && this.signature(list) !== this.baselines[list]) continue;
       const targets = Array.isArray(saved?.[list]?.targets) ? saved[list].targets : [];

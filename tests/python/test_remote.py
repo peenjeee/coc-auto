@@ -590,6 +590,123 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual((refused['ok'], refused['code']), (False, 'refused'))
         self.assertEqual(json.loads(self.config.with_name('config.local.json').read_text(encoding='utf-8')), local)
 
+    def export(self, tag):
+        """The village the Upgrade page is about: the one whose export the device kept last."""
+        store = self.config.parent / '.coc-auto' / 'village-export.json'
+        store.parent.mkdir(exist_ok=True)
+        store.write_text(json.dumps({'tag': tag}), encoding='utf-8')
+
+    def test_accounts_are_saved_in_turn_order_and_checked(self):
+        self.assertEqual(self.settings.read()['accounts'], [])
+        main = {'name': 'MainVillage', 'tag': '#PPPPPPPP', 'enabled': True}
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), settings=self.settings)
+        self.addCleanup(supervisor.statistics.db.close)
+        result = supervisor.command(*signed('set_accounts', {'accounts': [
+            main, {'name': ' Second One ', 'tag': 'qqqqqqqq', 'enabled': False}]}))
+        saved = [main, {'name': 'Second One', 'tag': '#QQQQQQQQ', 'enabled': False}]
+        self.assertEqual((result['ok'], result['code'], result['data']['accounts']), (True, 'accounts_saved', saved))
+        self.assertEqual(self.stored()['accounts'], saved)
+        local = self.config.with_name('config.local.json').read_text(encoding='utf-8')
+        for bad in (None, {}, [{'name': 'MainVillage', 'tag': '#PPPPPPPP'}], [{**main, 'enabled': 'yes'}],
+                    [{**main, 'tag': '#PPPPOPPP'}], [{**main, 'name': ''}], [{**main, 'extra': 1}],
+                    [main, {**main, 'name': 'mainvillage', 'tag': '#QQQQQQQQ'}],
+                    [main, {**main, 'name': 'Other'}], [main] * 21):
+            with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
+                self.settings.write_accounts(bad)
+        self.assertEqual(self.config.with_name('config.local.json').read_text(encoding='utf-8'), local)
+
+    def test_without_accounts_the_one_pick_is_kept_as_it_always_was(self):
+        lab = {'targets': [{'id': 'giant', 'name': 'Giant', 'level': None}]}
+        self.export('#PPPPPPPP')
+        self.settings.write_buildings(lab, 'lab')
+        self.assertNotIn('account_picks', self.stored())
+        self.assertEqual(self.stored()['lab'], lab)
+        # Another village synced shows the same pick: a device without accounts has one.
+        self.export('#QQQQQQQQ')
+        self.assertEqual((self.settings.read()['account'], self.settings.read()['lab']), ('#QQQQQQQQ', lab))
+
+    def test_with_accounts_each_village_on_the_upgrade_page_has_its_own_picks(self):
+        empty = {'targets': [], 'keep_builders': 0}
+        first = {'targets': [{'id': 'archer_tower', 'name': 'Archer Tower', 'level': 21}], 'keep_builders': 1}
+        lab = {'targets': [{'id': 'giant', 'name': 'Giant', 'level': None}]}
+        self.settings.write_buildings(lab, 'lab')
+        self.export('#PPPPPPPP')
+        # The picks made before there were accounts belong to the village the page showed them for.
+        self.settings.write_accounts([{'name': 'MainVillage', 'tag': '#PPPPPPPP', 'enabled': True},
+                                      {'name': 'SecondOne', 'tag': '#QQQQQQQQ', 'enabled': True}])
+        filed = self.stored()['account_picks']['#PPPPPPPP']
+        self.assertEqual((filed['buildings'], filed['lab'], filed['pets']), (empty, lab, {'targets': []}))
+        self.settings.write_buildings(first, 'buildings', '#PPPPPPPP')
+        data = self.settings.read()
+        self.assertEqual((data['account'], data['buildings'], data['lab']), ('#PPPPPPPP', first, lab))
+        self.assertEqual(data['account_targets'], {'#PPPPPPPP': 2, '#QQQQQQQQ': 0})
+        # The pick of the device as a whole is not touched: only a run without accounts used it.
+        self.assertNotIn('buildings', self.stored())
+        # Another village on the page starts without the first one's picks and keeps its own.
+        self.export('#QQQQQQQQ')
+        data = self.settings.read()
+        self.assertEqual((data['account'], data['buildings'], data['lab']), ('#QQQQQQQQ', empty, {'targets': []}))
+        second = {'targets': [{'id': 'cannon', 'name': 'Cannon', 'level': 5}], 'keep_builders': 0}
+        # A page still showing the first village, or one from before the device said which, saves nothing.
+        saved = self.config.with_name('config.local.json').read_text(encoding='utf-8')
+        for shown in ('#PPPPPPPP', None, ['#QQQQQQQQ']):
+            with self.subTest(shown=shown), self.assertRaisesRegex(remote.CommandRefused, 'desa lain'):
+                self.settings.write_buildings(second, 'buildings', shown)
+        self.assertEqual(self.config.with_name('config.local.json').read_text(encoding='utf-8'), saved)
+        self.settings.write_buildings(second, 'buildings', '#QQQQQQQQ')
+        self.assertEqual((self.settings.read()['buildings'], self.settings.read()['lab']), (second, {'targets': []}))
+        self.export('#PPPPPPPP')
+        data = self.settings.read()
+        self.assertEqual((data['buildings'], data['lab']), (first, lab))
+        self.assertEqual(data['account_targets'], {'#PPPPPPPP': 2, '#QQQQQQQQ': 1})
+        # Saving the accounts again never moves picks once they were filed.
+        self.export('#QQQQQQQQ')
+        self.settings.write_accounts([{'name': 'MainVillage', 'tag': '#PPPPPPPP', 'enabled': False}])
+        self.assertEqual(self.stored()['account_picks']['#QQQQQQQQ']['buildings'], second)
+        self.assertEqual(self.stored()['account_picks']['#PPPPPPPP']['buildings'], first)
+
+    def test_with_accounts_but_no_village_synced_yet_nothing_is_filed_or_moved(self):
+        lab = {'targets': [{'id': 'giant', 'name': 'Giant', 'level': None}]}
+        main = {'name': 'MainVillage', 'tag': '#PPPPPPPP', 'enabled': True}
+        self.settings.write_accounts([main])
+        # The page has no village to show picks for: a save waits for a sync.
+        self.assertEqual((self.settings.read()['account'], self.settings.read()['lab']), (None, {'targets': []}))
+        with self.assertRaisesRegex(remote.CommandRefused, 'Sync'):
+            self.settings.write_buildings(lab, 'lab', None)
+        # Picks made before there were accounts are never left without their village.
+        self.settings.write_accounts([])
+        self.settings.write_buildings(lab, 'lab')
+        with self.assertRaisesRegex(remote.CommandRefused, 'Sync'):
+            self.settings.write_accounts([main])
+        self.assertEqual(self.stored()['accounts'], [])
+        self.export('#PPPPPPPP')
+        self.settings.write_accounts([main])
+        self.assertEqual(self.stored()['account_picks']['#PPPPPPPP']['lab'], lab)
+
+    def test_only_an_account_on_the_devices_list_is_loaded_and_never_under_a_running_bot(self):
+        self.settings.write_accounts([{'name': 'MainVillage', 'tag': '#PPPPPPPP', 'enabled': False}])
+        child = Path(self.temp.name) / 'child.py'
+        child.write_text(CHILD, encoding='utf-8')
+        device = FakeDevice()
+        device.switch_account = Mock()
+        supervisor = remote.Supervisor(KEY, [sys.executable, str(child)], device, settings=self.settings)
+        self.addCleanup(supervisor.statistics.db.close)
+        self.addCleanup(supervisor.stop)
+        for tag in ('#QQQQQQQQ', None, 'MainVillage', ['#PPPPPPPP']):
+            refused = supervisor.command(*signed('switch_account', {'tag': tag}))
+            with self.subTest(tag=tag):
+                self.assertEqual((refused['ok'], refused['code']), (False, 'refused'))
+        supervisor.start(['--mode', 'home'])
+        self.assertTrue(until(lambda: supervisor.state()['state'] == 'running'))
+        refused = supervisor.command(*signed('switch_account', {'tag': '#PPPPPPPP'}))
+        self.assertEqual((refused['ok'], refused['code'], supervisor.state()['state']), (False, 'refused', 'running'))
+        device.switch_account.assert_not_called()
+        supervisor.stop()
+        result = supervisor.command(*signed('switch_account', {'tag': '#PPPPPPPP'}))
+        self.assertEqual((result['ok'], result['code']), (True, 'account_switched'), result)
+        device.switch_account.assert_called_once_with('MainVillage', '#PPPPPPPP')
+        self.assertEqual(result['data']['accounts'][0]['name'], 'MainVillage')
+
     def test_the_goblin_switches_start_off_and_are_saved_only_when_valid(self):
         self.assertEqual(self.settings.read()['goblin'], {'builder': False, 'researcher': False, 'max_gems': 0})
         supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], FakeDevice(), settings=self.settings)
@@ -989,6 +1106,29 @@ class BuildArgsTests(unittest.TestCase):
                     {'trophy_floor': 10_001}, {'trophy_floor': '2000'}):
             with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
                 remote.build_args({'task': 'farm', **bad})
+
+    def test_accounts_are_passed_on_checked_and_tidied(self):
+        self.assertEqual(remote.build_args({'task': 'farm', 'accounts': ' Main Village#pppppppp , SecondOne#QQQQQQQQ '}),
+                         ['--until-full', '--accounts=Main Village#PPPPPPPP,SecondOne#QQQQQQQQ', '--live'])
+        # One argument: a name that starts with a dash is not read as an option.
+        self.assertEqual(remote.build_args({'task': 'attack', 'village': 'home', 'accounts': '-Main#PPPPPPPP'}),
+                         ['--mode', 'home', '--cycles', '1', '--accounts=-Main#PPPPPPPP', '--live'])
+        for bad in ({'accounts': ['MainVillage#PPPPPPPP']}, {'accounts': 'MainVillage'}, {'accounts': ''},
+                    {'accounts': 'MainVillage#PPPPPPPP,mainvillage#QQQQQQQQ'}, {'accounts': 'A#PPPPPPPP; rm'}):
+            with self.subTest(bad=bad), self.assertRaises(remote.CommandRefused):
+                remote.build_args({'task': 'farm', **bad})
+        # Upgrades take turns too; one round is the bot's own default and is left out.
+        self.assertEqual(remote.build_args({'task': 'buildings', 'accounts': 'MainVillage#PPPPPPPP', 'rounds': 0}),
+                         ['--buildings', '--accounts=MainVillage#PPPPPPPP', '--rounds', '0', '--live'])
+        self.assertEqual(remote.build_args({'task': 'walls', 'walls': 'home', 'accounts': 'MainVillage#PPPPPPPP',
+                                            'rounds': 1}),
+                         ['--walls', 'home', '--accounts=MainVillage#PPPPPPPP', '--live'])
+        # A dry run sends no input, and an attack run's turns always finish.
+        for options in ({'task': 'dry', 'village': 'home', 'accounts': 'MainVillage#PPPPPPPP'},
+                        {'task': 'attack', 'village': 'home', 'rounds': 2}, {'task': 'farm', 'rounds': 1001},
+                        {'task': 'farm', 'rounds': '2'}):
+            with self.subTest(options=options), self.assertRaises(remote.CommandRefused):
+                remote.build_args(options)
 
     def test_anything_outside_the_commands_is_refused(self):
         for options in ({'task': 'shell'}, {'task': 'walls', 'walls': 'moon'}, {'task': 'walls', 'hours': -1},

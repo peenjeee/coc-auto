@@ -155,6 +155,19 @@ class DeviceActions:
         self.last_village_scan = snapshot
         return snapshot['lists'][listing]
 
+    def switch_account(self, name: str, tag: str) -> None:
+        """Load that Supercell ID account in the game, checked by its village's player tag as --accounts does; the
+        dashboard's Upgrade page is then about that village."""
+        from . import accounts
+        from . import bot
+        config, root = bot.load_config(self.config_path), config_root(self.config_path)
+        device = self.adb()
+        runner = bot.Bot(config, root, device, live=True)
+        if not device.game_in_front():
+            device.launch(bot.GAME_ACTIVITY)
+            runner.wait({'home', 'builder'}, set(), 60)
+        accounts.switch(runner, name, tag)
+
     def close_coc(self) -> None:
         self.adb().stop_game()
 

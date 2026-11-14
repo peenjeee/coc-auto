@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#45a8ee">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=buildings-17"><script type="module" src="app.js?v=buildings-28"></script>
+<link rel="stylesheet" href="style.css?v=accounts-1"><script type="module" src="app.js?v=accounts-1"></script>
 </head><body>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <header class="site-header"><div class="header-inner">
@@ -19,6 +19,7 @@
 <button id="tab-overview" role="tab" aria-selected="true" aria-controls="view-overview" data-view="overview" class="nav-tab active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span data-i18n="nav_overview"></span></button>
 <button id="tab-stats" role="tab" aria-selected="false" aria-controls="view-stats" data-view="stats" class="nav-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10m8 10V4m8 16v-7"/></svg><span data-i18n="stats_title">Village stats</span></button>
 <button id="tab-buildings" role="tab" aria-selected="false" aria-controls="view-buildings" data-view="buildings" class="nav-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21h14M12 17V4m-5 5 5-5 5 5"/></svg><span data-i18n="nav_buildings"></span></button>
+<button id="tab-accounts" role="tab" aria-selected="false" aria-controls="view-accounts" data-view="accounts" class="nav-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.2c2.6.5 4.5 2.9 4.5 5.8"/></svg><span data-i18n="nav_accounts"></span></button>
 <button id="tab-deploy" role="tab" aria-selected="false" aria-controls="view-deploy" data-view="deploy" class="nav-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg><span data-i18n="nav_deploy"></span></button>
 <button id="tab-settings" role="tab" aria-selected="false" aria-controls="view-settings" data-view="settings" class="nav-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg><span data-i18n="nav_settings"></span></button>
 <a class="source-link" href="https://github.com/peenjeee/coc-auto" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
@@ -82,6 +83,8 @@
             <label class="field-row" data-for="walls"><span data-i18n="max_upgrades"></span> <input name="max_upgrades" type="number" min="0" max="100000" value="0"></label>
             <label class="field-row" data-for="walls"><span data-i18n="wall_every"></span> <input name="wall_every" type="number" min="0" max="1000" value="0"></label>
             <label class="field-row" data-for="walls farm buildings"><span data-i18n="max_recoveries"></span> <input name="max_recoveries" type="number" min="0" max="1000" value="20"></label>
+            <div data-for="walls farm attack buildings" class="checks"><label><input type="checkbox" name="account_turns" value="yes" aria-describedby="account-turns-note"><span><span data-i18n="account_turns"></span><small id="account-turns-note" class="bulk-walls-description"></small></span></label></div>
+            <label class="field-row" data-for="walls farm buildings"><span data-i18n="rounds"></span> <input name="rounds" type="number" min="0" max="1000" value="1"></label>
           </fieldset></details><details class="advanced"><summary><span data-i18n="section_army"></span><span class="details-plus">+</span></summary><fieldset class="section" data-for="walls farm attack buildings">
 
             <label class="field-row"><span data-i18n="army"></span>
@@ -130,6 +133,7 @@
       <section id="view-stats" class="page-panel" role="tabpanel" aria-labelledby="tab-stats" hidden></section>
 <section id="view-buildings" class="panel settings page-panel" role="tabpanel" aria-labelledby="tab-buildings" hidden>
         <h2 id="buildings-title" class="upgrade-sr-only"></h2>
+        <p id="upgrade-account" class="upgrade-account" hidden></p>
         <div class="upgrade-view-switch" role="tablist" data-i18n-aria="ongoing_views" aria-label="Upgrade views">
           <button id="upgrade-plan-tab" type="button" role="tab" aria-controls="upgrade-planner" aria-selected="true" data-upgrade-view="plan"><span data-i18n="ongoing_plan"></span></button>
           <button id="upgrade-ongoing-tab" type="button" role="tab" aria-controls="ongoing-upgrades" aria-selected="false" data-upgrade-view="ongoing"><span data-i18n="ongoing_tab"></span><span id="ongoing-badge" class="upgrade-counter">0</span></button>
@@ -185,7 +189,26 @@
         </section>
 
       </section>
-<section id="view-deploy" class="panel deploy-editor page-panel" role="tabpanel" aria-labelledby="tab-deploy" hidden>
+<section id="view-accounts" class="panel settings page-panel" role="tabpanel" aria-labelledby="tab-accounts" hidden>
+        <div class="card-head">
+          <h2 class="card-title" data-i18n="accounts_prompt"></h2>
+          <button id="accounts-load" type="button" data-i18n="settings_load"></button>
+        </div>
+        <p class="hint" data-i18n="accounts_intro"></p>
+        <div class="settings-grid">
+          <form id="account-form" class="group">
+            <h3 data-i18n="account_add_title"></h3>
+            <p class="hint" data-i18n="account_add_hint"></p>
+            <label><span data-i18n="account_name"></span> <input name="name" type="text" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="MainVillage" required></label>
+            <label><span data-i18n="account_tag"></span> <input name="tag" type="text" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="#TAG" pattern="#?[0289PYLQGRJCUVpylqgrjcuv]{3,15}" required></label>
+            <div class="actions"><button type="submit" class="primary" data-i18n="account_add"></button></div>
+          </form>
+        </div>
+        <p id="accounts-empty" class="hint" data-i18n="accounts_empty"></p>
+        <p id="accounts-running" class="hint problem" data-i18n="accounts_running" hidden></p>
+        <div id="account-list" class="account-list" aria-live="polite"></div>
+      </section>
+      <section id="view-deploy" class="panel deploy-editor page-panel" role="tabpanel" aria-labelledby="tab-deploy" hidden>
         <div class="card-head">
           <h2 class="card-title" data-i18n="deploy_prompt"></h2>
           <button id="deploy-load" type="button" data-i18n="deploy_load"></button>

@@ -40,6 +40,7 @@ Your settings and statistics stay in `%LOCALAPPDATA%\CoC Auto`.
 
 - Farms Home Village and Builder Base resources separately.
 - Upgrades walls and queued buildings, research, pets, and equipment.
+- Works through several Supercell ID accounts in turn inside one LDPlayer.
 - Shows the live device screen, ongoing upgrades, and farming statistics.
 - Supports Discord notifications and an English/Indonesian dashboard.
 

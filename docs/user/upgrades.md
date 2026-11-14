@@ -73,7 +73,9 @@ python bot.py --buildings --hours 8 --live
 `--buildings` upgrades the rows picked on the dashboard's **Upgrade** page: in the Home Village buildings (saved as
 `buildings` in `config.local.json`, with `keep_builders`), Laboratory research (`lab`), pets (`pets`) and hero
 equipment (`gear`), in the Builder Base its buildings (`builder`) and Star Laboratory research (`star`), each the
-targets in priority order, `{"id", "name", "level"}` with `level` `null` for Max. Each round looks at every list with
+targets in priority order, `{"id", "name", "level"}` with `level` `null` for Max. With accounts on the dashboard's
+**Accounts** page, every village keeps its own picks (`account_picks` in `config.local.json`, by player tag), and the
+Upgrade page names the account it shows; see [Several accounts](farming.md#several-accounts). Each round looks at every list with
 targets in turn, Home Village buildings first. For each it reads the gold, elixir and dark elixir on
 hand from the resource bars (`capacity.home`) and the free builders from the village's "1/6" counter
 (`building_upgrade.free_builders`). A matching Goblin portrait excludes the paid Goblin slot from that count;

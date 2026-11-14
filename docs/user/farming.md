@@ -88,3 +88,76 @@ Home Village gold and dark elixir. The last fills everything in both villages, H
 be chosen (dark elixir needs a `capacity.home.dark` entry); the bot refuses to start otherwise. If the Elixir Cart
 cannot be found on 5 Builder Base visits in a row, its fill cannot be read, so `cart` counts as done for the rest of
 the run instead of keeping the bot attacking forever.
+
+## Several accounts
+
+The bot can work through several Supercell ID accounts in turn inside the one LDPlayer instance: farming, walls,
+attacks and building upgrades alike. It opens the game's own switch-account list (**Settings**, the button beside
+the Supercell ID **Open** button), loads the account, runs the task there, and moves on to the next account when
+that account's task ends.
+
+**On the dashboard**, the **Accounts** page keeps this PC's accounts, one card each:
+
+- **Add an account** with its Supercell ID name and its village's player tag (see below).
+- **Takes turns** switches an account in or out of the turns; **↑ / ↓** set the order.
+- **Load account** loads it in the game now (the bot must be stopped), checked the same way a run checks it. The
+  Upgrade page then shows that village and its own upgrade picks.
+- A card shows whether that village is the one **loaded**, which account a running bot is **playing now**, and how
+  many upgrade targets were picked for it.
+
+Then switch on **Run limits → Accounts take turns** in the run setup. The accounts that take turns are listed under
+it, and the command preview shows them as `--accounts`.
+
+**On the command line**, each account is written as `Name#TAG`, separated by commas:
+
+```bash
+python bot.py --until-full --accounts "MainVillage#PPPPPPPP,SecondOne#QQQQQQQQ" --live
+```
+
+- **Name** is the Supercell ID name on the account's card in the switch list (its bold first line), not the village
+  name under it. Spaces and capitals do not matter; every letter does.
+- **TAG** is that village's player tag: the `#` code under the village name in the Supercell ID bar of **Settings**
+  and on **My Profile**.
+
+How the bot stays on the right account:
+
+- A card is tapped only when its name reads exactly as an account you listed and no other card reads the same, and
+  only if the list still looks as it did when the names were read. An account you did not list is never chosen.
+  When the name is not found, the list is closed without choosing and the run stops.
+- Which village is loaded is told by its tag in the game's own data export (the export the Upgrade page syncs),
+  never by reading the screen: before a switch, so an account already loaded is left alone, and after it. If another
+  village comes up, the run stops there. After a recovery the account is confirmed again before the task goes on.
+
+When an account's turn ends:
+
+- The task finished (storages full, every wall maxed, the attacks played, every upgrade target reached): the account
+  is done.
+- A limit ended it (`--hours`, `--minutes`, `--max-upgrades`, which count for each turn): the next account plays.
+  `--rounds N` (**account rounds** on the dashboard) gives such an account up to N turns in all, each with fresh
+  limits; `0` keeps the accounts taking turns until every task is finished or the bot is stopped. The default, 1,
+  plays each account once.
+- Its building upgrades are running and nothing else can be done for 15 minutes or more: the next account plays
+  meanwhile, and this one comes back once its builders or laboratory are free, its time limit still running. When
+  every account is waiting, CoC is closed until the first of them is due.
+
+**Building upgrades per account.** With accounts on the Accounts page, each village keeps its own upgrade picks:
+load the account (Accounts page), pick its upgrades on the Upgrade page (it names the account at the top) and save.
+Picks made before there were accounts belong to the village that was synced when the accounts were added. A
+`--buildings` run then upgrades, on each account, that account's own picks; an account without picks is passed
+over. Without accounts taking turns, `--buildings` upgrades the village shown on the Upgrade page, once the game
+shows that this village is the one loaded.
+
+Good to know:
+
+- It needs `--live`, the 1280x720 screen, Tesseract (bundled in the Windows download) and LDPlayer clipboard
+  synchronization, like the Upgrade page's sync. Every check copies the export, so it replaces what is on the
+  Windows clipboard and takes about 10 seconds; a switch takes about 40.
+- The accounts must already be signed in on this LDPlayer. The switch list must show them without scrolling: up to
+  five accounts (the fifth runs off the bottom of the screen but its name still shows). Switching was tested live
+  with three accounts in the list.
+- After the last turn the bot stops with the last account loaded.
+- One calibration, loot minimum, army and deploy plan serve every account.
+- Nothing in the switch is read in the game's language: the list is found by the Supercell ID logo and the switch
+  icon, and the cards by their shape. It was tested live with the game in English and in Indonesian.
+- CoC sometimes closes itself while it loads another account. The bot opens it again and checks which village came
+  up; if the game came back on the account it had, the switch is made again.

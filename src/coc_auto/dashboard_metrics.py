@@ -108,6 +108,10 @@ class Statistics:
             # Spending must not make the next farming session's baseline hide its gains.
             with self.lock: self.baselines.setdefault(run, {}).clear()
             return 'upgrade' if upgrade else 'walls'
+        if re.fullmatch(r'(?:Akun .{1,60} \(#\w{3,15}\) dimuat|Account .{1,60} \(#\w{3,15}\) loaded)', text):
+            # --accounts loaded another village: its storages are not the last one's, so their difference is no gain.
+            with self.lock: self.baselines.setdefault(run, {}).clear()
+            return None
         if storage:
             try:
                 amounts = ast.literal_eval(storage[2])

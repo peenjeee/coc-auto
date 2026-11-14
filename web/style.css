@@ -342,8 +342,8 @@ button.ghost {
   text-shadow: 0 1px 0 var(--ink);
 }
 .field-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--text-dim); font-size: 14px; }
-/* Army and style names are long, so a select sits under its label at full width. */
-.field-row:has(select) { flex-direction: column; align-items: stretch; gap: 4px; }
+/* Army and style names are long, so a select sits under its label at full width; a line of text does too. */
+.field-row:has(select), .field-row:has(input[type="text"]) { flex-direction: column; align-items: stretch; gap: 4px; }
 .tasks { display: grid; grid-template-columns: 1fr 1fr; }
 .tasks label { justify-content: center; text-align: center; cursor: pointer; display: flex; align-items: center; }
 .tasks input { position: absolute; opacity: 0; pointer-events: none; }
@@ -429,6 +429,23 @@ button.ghost {
 .group input { width: 100%; min-width: 0; }
 .group > p { margin: 0; }
 .display b { color: var(--text); }
+/* Accounts: one card each, the loaded village and the one a running bot plays marked. */
+.account-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; align-items: start; }
+.account-card.loaded { border-color: var(--green-deep); box-shadow: inset 0 0 0 1px var(--green-deep); }
+.account-card.playing { border-color: var(--gold-shade); background: rgb(255 213 74 / 0.18); }
+.account-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.account-head h3 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.account-badge { padding: 2px 9px; border: 2px solid var(--ink); border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 0 var(--ink); }
+.account-badge.loaded { background: linear-gradient(180deg, var(--green), var(--green-deep)); }
+.account-badge.playing { background: linear-gradient(180deg, var(--gold), var(--gold-shade)); }
+.account-badge.skipped { background: var(--parchment-edge); color: var(--text); text-shadow: none; }
+.account-tag { margin: 0; font: 600 13px var(--mono); color: var(--text-dim); letter-spacing: 0.04em; }
+.account-card .checks label { display: inline-flex; grid-template-columns: none; gap: 7px; }
+.account-card .actions { gap: 8px; }
+.account-card .actions button { padding-inline: 10px; }
+.account-card .actions .account-move { min-width: 40px; padding-inline: 8px; }
+.upgrade-account { margin: 0 0 6px; font-weight: 700; color: var(--text); }
+#accounts-running { color: var(--gold-shade); font-weight: 700; }
 #display-note.ok { color: var(--green-shade); font-weight: 700; }
 #display-note.problem { color: var(--gold-shade); font-weight: 700; }
 .language-note { border-top: 2px dashed var(--parchment-edge); padding-top: 8px; color: var(--gold-shade); }

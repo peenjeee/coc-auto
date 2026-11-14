@@ -475,6 +475,22 @@ class RunTests(unittest.TestCase):
         self.assertEqual(events, ['stop', 7200, 'open', 'stop', upgrades.CLOSED_WAIT_MAX_SECONDS, 'open',
                                   buildings.WAIT_MAX_SECONDS])
 
+    def test_a_long_wait_ends_an_accounts_turn_so_the_next_account_plays_meanwhile(self):
+        events = []
+        device = SimpleNamespace(stop_game=lambda: events.append('stop'))
+        runner = SimpleNamespace(stop_at=None, poll=1, live=True, device=device, recover=lambda: events.append('open'),
+                                 account=('MainVillage', '#PPPPPPPP'))
+        with patch.object(upgrades.time, 'sleep', lambda seconds: events.append(seconds)):
+            with self.assertRaises(bot.TurnOver) as over:
+                upgrades.pause(runner, 2 * 3600, 'x')
+            self.assertEqual((over.exception.seconds, events), (7200, []))
+            with self.assertRaises(bot.TurnOver) as over:
+                upgrades.pause(runner, 5 * 86400, 'x')
+            self.assertEqual(over.exception.seconds, upgrades.CLOSED_WAIT_MAX_SECONDS)
+            # A short wait is spent inside the turn, with the game open.
+            upgrades.pause(runner, upgrades.CLOSED_WAIT_MIN_SECONDS - 1, 'x')
+        self.assertEqual(events, [buildings.WAIT_MAX_SECONDS])
+
 
 def frame(name):
     return cv2.imread(str(FIXTURES / f'{name}.png'))

@@ -14,7 +14,7 @@ class CloudRecoveryTests(unittest.TestCase):
     def runner(self, app_works=False, emulator_works=False, with_emulator=True):
         state = SimpleNamespace(cloud=False, front=True, up=True, elapsed=0, events=[], waits=[])
         runner = object.__new__(bot.Bot)
-        runner.live, runner.poll, runner.timeout, runner.progress = True, .05, 240, 0
+        runner.live, runner.poll, runner.timeout, runner.progress, runner.account = True, .05, 240, 0, ()
         runner.root, runner.config = Path('.'), {'resolution': [1280, 720], 'screens': {}}
         runner.check_touch = Mock()
         runner.release_touch = Mock(side_effect=lambda: state.events.append('release'))

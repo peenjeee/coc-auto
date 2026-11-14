@@ -35,6 +35,17 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(totals['gold'],1100)
         self.assertEqual(totals['dark'],50)
         self.assertEqual(totals['walls'],1)
+    def test_another_accounts_fuller_storages_are_not_counted_as_a_gain(self):
+        self.consume("INFO: Gudang home: {'gold': '1,000/2,000'}")
+        self.consume("INFO: Gudang home: {'gold': '1,400/2,000'}")
+        # Still the same village after a recovery: its gains go on counting.
+        self.consume('INFO: Akun MainVillage (#PPPPPPPP) sudah dimuat')
+        self.consume("INFO: Gudang home: {'gold': '1,500/2,000'}")
+        for loaded in ('INFO: Akun SecondOne (#QQQQQQQQ) dimuat', 'INFO: Account MainVillage (#PPPPPPPP) loaded'):
+            self.consume(loaded)
+            self.consume("INFO: Gudang home: {'gold': '9,000,000/10,000,000'}")
+            self.consume("INFO: Gudang home: {'gold': '9,000,300/10,000,000'}")
+        self.assertEqual(self.stats.snapshot()['totals']['gold'],1100)
     def test_confirmed_bulk_counts_and_recoveries(self):
         self.consume('INFO: 12 tembok di-upgrade sekaligus dengan elixir')
         self.consume('INFO: Serangan selesai: home (12)')
