@@ -155,6 +155,8 @@ Good to know:
 - The accounts must already be signed in on this LDPlayer. The switch list must show them without scrolling: up to
   five accounts (the fifth runs off the bottom of the screen but its name still shows). Switching was tested live
   with three accounts in the list.
+- A card's name is read with English OCR, so a Supercell ID name needs Latin letters, digits, spaces, `.`, `_` or
+  `-`. A name that cannot be read is never chosen: the list is closed and the run stops with the names it read.
 - After the last turn the bot stops with the last account loaded.
 - One calibration, loot minimum, army and deploy plan serve every account.
 - Nothing in the switch is read in the game's language: the list is found by the Supercell ID logo and the switch
