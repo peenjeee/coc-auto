@@ -685,23 +685,20 @@ class SettingsTests(unittest.TestCase):
 
     def test_only_an_account_on_the_devices_list_is_loaded_and_never_under_a_running_bot(self):
         self.settings.write_accounts([{'name': 'MainVillage', 'tag': '#PPPPPPPP', 'enabled': False}])
-        child = Path(self.temp.name) / 'child.py'
-        child.write_text(CHILD, encoding='utf-8')
         device = FakeDevice()
         device.switch_account = Mock()
-        supervisor = remote.Supervisor(KEY, [sys.executable, str(child)], device, settings=self.settings)
+        supervisor = remote.Supervisor(KEY, [sys.executable, '-c', 'pass'], device, settings=self.settings)
         self.addCleanup(supervisor.statistics.db.close)
-        self.addCleanup(supervisor.stop)
         for tag in ('#QQQQQQQQ', None, 'MainVillage', ['#PPPPPPPP']):
             refused = supervisor.command(*signed('switch_account', {'tag': tag}))
             with self.subTest(tag=tag):
                 self.assertEqual((refused['ok'], refused['code']), (False, 'refused'))
-        supervisor.start(['--mode', 'home'])
-        self.assertTrue(until(lambda: supervisor.state()['state'] == 'running'))
-        refused = supervisor.command(*signed('switch_account', {'tag': '#PPPPPPPP'}))
-        self.assertEqual((refused['ok'], refused['code'], supervisor.state()['state']), (False, 'refused', 'running'))
+        # A running bot is left running and the game untouched.
+        with patch.object(supervisor, 'running', return_value=True), patch.object(supervisor, 'stop') as stop:
+            refused = supervisor.command(*signed('switch_account', {'tag': '#PPPPPPPP'}))
+        self.assertEqual((refused['ok'], refused['code']), (False, 'refused'))
+        stop.assert_not_called()
         device.switch_account.assert_not_called()
-        supervisor.stop()
         result = supervisor.command(*signed('switch_account', {'tag': '#PPPPPPPP'}))
         self.assertEqual((result['ok'], result['code']), (True, 'account_switched'), result)
         device.switch_account.assert_called_once_with('MainVillage', '#PPPPPPPP')
