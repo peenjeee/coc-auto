@@ -144,6 +144,9 @@ BAR_CARD_WIDTH, BAR_CARD_COLOUR = (65, 98), 0.43
 BAR_CAMP_HEADER, BAR_SETTLE_SECONDS = 0.5, 3
 # White pixels of a Builder Base troop card's slot number (65+ seen); hero cards have none.
 BAR_CAMP_NUMBER = 30
+# In stage 2 a Builder Base hero that lived through stage 1 comes back under a health bar, which takes its card
+# below BAR_CARD_COLOUR (0.36 badly hurt to 0.43 seen); a camp that died is a plain grey card (0).
+BAR_CAMP_COLOUR = 0.30
 SPELL_TAPS, SPELL_ROUND = 30, 3
 # --ring: every troop card streams out of RING_FINGERS fingers held at once on ring pins spread apart, the fingers
 # moving one pin on round the ring each turn, until the card greys out. Without multi-touch the card is tapped
@@ -1506,7 +1509,8 @@ def event_bytes(events: list) -> bytes:
 def bar_cards(image: np.ndarray, region: list, colour: float = BAR_CARD_COLOUR) -> list:
     """(left, right) of every card in the bar. The bar behind the cards is a flat dark strip, so a card is a run of
     columns with contrast; this follows whatever army is trained instead of fixed slots. colour is the least share
-    of saturated pixels a card needs (a dark hero card on the home bar sits lower than a Builder Base dead machine)."""
+    of saturated pixels a card needs (a dark hero card on the home bar and a Builder Base hero under its stage 2
+    health bar sit below the default)."""
     x, y, w, h = region
     gray = cv2.cvtColor(image[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY).astype(np.float32)
     busy = gray.std(axis=0) > BAR_CARD_STD
@@ -1580,7 +1584,7 @@ def camp_plan(image: np.ndarray, auto: dict, stack: bool = False, templates: dic
     region, points = auto['bar'], auto['points']
     middle = region[1] + region[3] // 2
     heroes, camps, sizes = [], [], []
-    for card in bar_cards(image, region):
+    for card in bar_cards(image, region, BAR_CAMP_COLOUR):
         slot = [(card[0] + card[1]) // 2, middle]
         kind = card_kind(image, region, card, camps=True)
         if kind == 'hero':

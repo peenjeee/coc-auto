@@ -554,15 +554,16 @@ class BotTests(unittest.TestCase):
         self.assertEqual(len(bot.auto_plan(self.army_bar(['machine']), auto)), 2)
 
     def test_camps_carried_into_stage2_spread_like_new_ones_and_only_the_hero_drops_on_its_point(self):
-        root = RESOURCE_ROOT
-        kinds = {}
-        for stage in ('stage1', 'stage2'):
+        # Stage 1: the Battle Machine and six new Baby Dragon camps. Stage 2: the machine back under a health bar,
+        # the six camps that lived (dark blue headers) and two new ones (magenta). Stage 2 after a hard stage 1: a
+        # badly hurt machine, four camps that lived and two new ones; the two camps that died are grey cards.
+        for stage, alive in (('stage1', 6), ('stage2', 8), ('stage2-damaged', 6)):
             bar = cv2.imread(str(FIXTURES / f'builder-{stage}-bar.png'))
-            region = [0, 0, bar.shape[1], bar.shape[0]]
-            kinds[stage] = [bot.card_kind(bar, region, card, camps=True) for card in bot.bar_cards(bar, region)]
-        self.assertEqual(kinds['stage1'], ['hero'] + ['counted'] * 6)
-        # Six Baby Dragon camps that lived through stage 1 (dark blue headers) and two new ones (magenta).
-        self.assertEqual(kinds['stage2'], ['counted'] * 8)
+            auto = {'bar': [0, 0, bar.shape[1], bar.shape[0]], 'points': [[10, 10], [20, 20]]}
+            with self.subTest(stage=stage):
+                hero, ability, camps, abilities = bot.camp_plan(bar, auto)
+                self.assertEqual((hero['count'], ability['tap_only']), (1, True))
+                self.assertEqual((len(camps['slots']), len(abilities['slots'])), (alive, alive))
 
     def test_raged_barbarian_camps_get_one_tap_per_unit_on_their_spread_point(self):
         root = RESOURCE_ROOT
