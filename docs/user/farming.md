@@ -152,9 +152,11 @@ Good to know:
 - It needs `--live`, the 1280x720 screen, Tesseract (bundled in the Windows download) and LDPlayer clipboard
   synchronization, like the Upgrade page's sync. Every check copies the export, so it replaces what is on the
   Windows clipboard and takes about 10 seconds; a switch takes about 40.
-- The accounts must already be signed in on this LDPlayer. The switch list must show them without scrolling: up to
-  five accounts (the fifth runs off the bottom of the screen but its name still shows). Switching was tested live
-  with three accounts in the list.
+- The accounts must already be signed in on this LDPlayer. When an account is further down the switch list than the
+  screen shows, the bot scrolls the list with a finger on the empty strip left of the cards, never on a card, and
+  reads the cards again, until the account or the **Log in to Supercell ID** card at the end of the list shows. If
+  the list does not move, nothing is chosen and the run stops. Switching was tested live with three accounts in the
+  list, which fit on the screen; scrolling a longer list is covered by the tests only.
 - A card's name is read with English OCR, so a Supercell ID name needs Latin letters, digits, spaces, `.`, `_` or
   `-`. A name that cannot be read is never chosen: the list is closed and the run stops with the names it read.
 - After the last turn the bot stops with the last account loaded.

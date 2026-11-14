@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import cv2
 import numpy as np
@@ -115,6 +115,66 @@ class FakeGame:
         return [(x, y) for state, x, y in self.inputs if state == 'list' and x >= 576]
 
 
+# A switch list longer than the screen, with obviously made-up names and tags.
+LONG = [(f'Farm{number}', tag) for number, tag in
+        enumerate(('#PPP0', '#PPP2', '#PPP8', '#PPP9', '#PPPY', '#PPPL', '#PPPQ', '#PPPG'), 1)]
+
+
+class ScrollGame(FakeGame):
+    """A switch list longer than the screen. It moves only under a finger on the empty strip left of the cards; a
+    finger that lands on a card is taken for a tap on that card."""
+
+    PITCH, TOP, VIEW, HEIGHT = 129, 117, 100, 105
+
+    def __init__(self, listed, loaded, scrolls=True):
+        super().__init__(loaded=loaded)
+        self.listed, self.offset, self.scrolls, self.swipes = listed, 0, scrolls, []
+        # The log-in card under its heading, and how far the list scrolls until it shows above the bottom.
+        self.login = self.TOP + len(listed) * self.PITCH - 24 + 93
+        self.max_offset = max(0, self.login + self.HEIGHT + 42 - 720)
+
+    def list_frame(self):
+        frame = np.zeros((720, 1280, 3), np.uint8)
+        frame[:, 576:] = 240
+        logo = cv2.imread(str(ROOT / 'calibration/export/supercell.png'))
+        frame[334:334 + logo.shape[0], 162:162 + logo.shape[1]] = logo
+        for top in [self.TOP + index * self.PITCH for index in range(len(self.listed))] + [self.login]:
+            first, last = max(top - self.offset, self.VIEW), min(top - self.offset + self.HEIGHT, 720)
+            if first < last:
+                frame[first:last, 601:1255] = 255
+        return frame
+
+    def capture(self):
+        if self.state != 'list':
+            return super().capture()
+        self.seconds += .05
+        return self.list_frame()
+
+    def tap(self, point):
+        x, y = point
+        if self.state != 'list' or x < 601:
+            return super().tap(point)
+        self.inputs.append((self.state, x, y))
+        index, inside = divmod(y + self.offset - self.TOP, self.PITCH)
+        if y >= self.VIEW and inside < self.HEIGHT and 0 <= index < len(self.listed):
+            self.loaded, self.state = self.listed[index], 'loading'
+
+    def command(self, *args):
+        x1, y1, x2, y2 = map(int, args[3:7])
+        self.swipes.append((x1, y1, x2, y2))
+        if x1 >= 601 or x2 >= 601:
+            self.tap([x1, y1])
+        elif self.scrolls:
+            self.offset = min(self.max_offset, max(0, self.offset + y1 - y2))
+
+    def card_name(self, image, card, program):
+        # Only whole cards of the list at rest are read, never the log-in card.
+        assert self.state == 'list' and np.array_equal(image, self.list_frame())
+        index, inside = divmod(card[0] + self.offset - self.TOP, self.PITCH)
+        assert inside == 0 and 0 <= index < len(self.listed), card
+        return self.listed[index][0]
+
+
 class ParseTests(unittest.TestCase):
     def test_accounts_are_names_with_their_player_tags_in_the_order_given(self):
         self.assertEqual(accounts.parse(' Main Village#pppppppp , Second.One#QQQQQQQQ'),
@@ -180,12 +240,13 @@ class ListTests(unittest.TestCase):
     def test_only_the_one_card_with_exactly_that_name_is_picked(self):
         frame = FakeGame().frames['list']
         names = {117: 'MainVillage', 246: 'Main Village2', 375: 'mainvillage3'}
-        self.assertEqual(accounts.pick(frame, 'main village', lambda card: names[card[0]]), (117, 222))
+        self.assertEqual(accounts.pick(frame, 'main village', lambda card: names[card[0]]),
+                         ((117, 222), ['MainVillage', 'Main Village2', 'mainvillage3']))
         for wanted in ('MainVillag', 'MainVillage1', 'Village', ''):
-            with self.subTest(wanted=wanted), self.assertRaises(bot.BotError):
-                accounts.pick(frame, wanted, lambda card: names[card[0]])
+            with self.subTest(wanted=wanted):
+                self.assertIsNone(accounts.pick(frame, wanted, lambda card: names[card[0]])[0])
         twins = {117: 'Twin', 246: 'twin', 375: 'Other'}
-        with self.assertRaisesRegex(bot.BotError, 'tepat satu kali'):
+        with self.assertRaisesRegex(bot.BotError, 'lebih dari sekali'):
             accounts.pick(frame, 'Twin', lambda card: twins[card[0]])
 
     def test_a_band_of_another_height_or_a_wider_gap_ends_the_cards(self):
@@ -197,13 +258,35 @@ class ListTests(unittest.TestCase):
 
         self.assertEqual(accounts.cards(listing(117, 262)), [(117, 222), (262, 367)])
         self.assertEqual(accounts.cards(listing(117, 263)), [(117, 222)])
-        # A list that does not start with a whole card is not the calibrated one: nothing on it is a card.
+        # A band shorter than a card among the cards is no card, and nothing after it is.
         odd = listing(117, 246)
-        odd[40:80, 601:1255] = 255
-        self.assertEqual(accounts.cards(odd), [])
+        odd[375:415, 601:1255] = 255
+        odd[439:544, 601:1255] = 255
+        self.assertEqual(accounts.cards(odd), [(117, 222), (246, 351)])
         clipped = listing(117, 246)
         clipped[680:, 601:1255] = 255
         self.assertEqual(accounts.cards(clipped), [(117, 222), (246, 351)])
+
+    def test_a_card_scrolled_under_the_lists_top_edge_is_passed_over_and_the_lists_end_is_seen(self):
+        frame = np.full((720, 1280, 3), 240, np.uint8)
+        # Scrolled: a card's lower part shows under the top edge, then whole cards, the heading and the log-in card.
+        for top, bottom in ((100, 160), (184, 289), (313, 418), (511, 616)):
+            frame[top:bottom, 601:1255] = 255
+        self.assertEqual(accounts.cards(frame), [(184, 289), (313, 418)])
+        self.assertTrue(accounts.end_shown(frame))
+        # A whole card just under the header is read; one reaching up into the header is not tapped there.
+        frame = np.full((720, 1280, 3), 240, np.uint8)
+        frame[104:209, 601:1255] = 255
+        frame[233:338, 601:1255] = 255
+        self.assertEqual(accounts.cards(frame), [(104, 209), (233, 338)])
+        frame[60:104, 601:1255] = 255
+        self.assertEqual(accounts.cards(frame), [(233, 338)])
+        # Further up the list: cards to the bottom of the screen, no log-in card yet.
+        frame = np.full((720, 1280, 3), 240, np.uint8)
+        for top in (117, 246, 375, 504, 633):
+            frame[top:top + 105, 601:1255] = 255
+        self.assertFalse(accounts.end_shown(frame))
+        self.assertTrue(accounts.end_shown(FakeGame().frames['list']))
 
     def test_a_fifth_card_that_runs_off_the_screen_is_a_card_while_its_name_still_shows(self):
         frame = np.full((720, 1280, 3), 240, np.uint8)
@@ -228,10 +311,10 @@ class ListTests(unittest.TestCase):
 
 
 class SwitchTests(unittest.TestCase):
-    def game(self, **options):
+    def game(self, kind=FakeGame, **options):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        game = FakeGame(**options)
+        game = kind(**options)
         game.runner.root = Path(temporary.name)
         shutil.copytree(ROOT / 'calibration/export', game.runner.root / 'calibration/export')
         scanner = export.Scanner
@@ -269,7 +352,7 @@ class SwitchTests(unittest.TestCase):
     def test_two_cards_with_the_name_asked_for_choose_neither(self):
         game = self.game()
         game.names[246] = 'secondone'
-        with self.assertRaisesRegex(bot.BotError, 'tepat satu kali'):
+        with self.assertRaisesRegex(bot.BotError, 'lebih dari sekali'):
             accounts.switch(game.runner, *SECOND)
         self.assertEqual((game.card_taps(), game.loaded, game.state), ([], MAIN, 'home'))
 
@@ -313,6 +396,33 @@ class SwitchTests(unittest.TestCase):
         with self.assertRaisesRegex(bot.BotError, 'berubah'):
             accounts.switch(game.runner, *SECOND)
         self.assertEqual(game.inputs, [('home', 60, 60), ('profile', 1010, 60), ('settings', 844, 138)])
+
+    def test_an_account_further_down_a_long_list_is_scrolled_to_with_no_finger_on_a_card(self):
+        game = self.game(kind=ScrollGame, listed=LONG, loaded=LONG[0])
+        accounts.switch(game.runner, *LONG[6])
+        self.assertEqual((game.loaded, game.state, len(game.card_taps())), (LONG[6], 'home', 1))
+        self.assertTrue(game.swipes)
+        self.assertTrue(all(x1 < 601 and x2 < 601 for x1, _, x2, _ in game.swipes))
+
+    def test_a_long_list_that_does_not_move_under_the_finger_chooses_nothing(self):
+        game = self.game(kind=ScrollGame, listed=LONG, loaded=LONG[0], scrolls=False)
+        with self.assertRaisesRegex(bot.BotError, 'Farm7 tidak ada di daftar akun'):
+            accounts.switch(game.runner, *LONG[6])
+        self.assertEqual((len(game.swipes), game.card_taps(), game.loaded, game.state), (1, [], LONG[0], 'home'))
+
+    def test_a_name_on_no_card_of_a_long_list_is_looked_for_down_to_its_end(self):
+        game = self.game(kind=ScrollGame, listed=LONG, loaded=LONG[0])
+        with self.assertRaisesRegex(bot.BotError, r'Farm9 tidak ada di daftar akun \(Farm1, Farm2, .*Farm8\)'):
+            accounts.switch(game.runner, 'Farm9', '#PPPU')
+        self.assertEqual((game.card_taps(), game.loaded, game.offset), ([], LONG[0], game.max_offset))
+
+    def test_a_short_list_whose_end_shows_is_never_scrolled(self):
+        game = self.game()
+        game.names[375] = 'SecondOme'
+        game.command = Mock()
+        with self.assertRaisesRegex(bot.BotError, 'tidak ada di daftar akun'):
+            accounts.switch(game.runner, *SECOND)
+        game.command.assert_not_called()
 
     def test_a_game_that_closes_itself_while_loading_the_account_is_opened_again_and_checked(self):
         game = self.game()

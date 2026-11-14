@@ -29,9 +29,15 @@ PROFILE, SETTINGS, SETTINGS_CLOSE = [60, 60], [1010, 60], [1119, 56]
 # logo is in this box only once the list has stopped.
 SWITCH_ICON, LIST_LOGO, LIST_CLOSE = (800, 100, 90, 80), (158, 330, 260, 60), [42, 47]
 # The list's white account cards on its grey panel: a column clear of names and badges, a card's height, and the most
-# room between two account cards. The "Log in to Supercell ID" card sits further down, under its own heading. A fifth
-# card runs off the bottom of the screen; its name and this much of it still show.
+# room between two account cards. The "Log in to Supercell ID" card sits further down, under its own heading. A card
+# that runs off the bottom of the screen still shows its name and this much of itself.
 CARD_COLUMN, CARD_HEIGHT, CARD_GAP, CARD_WHITE, CARD_CUT = (1040, 1140), (90, 120), 40, 250, 60
+# More accounts than the screen holds: the list is scrolled by a finger on the empty strip left of the cards (from x, y
+# to x, y, in milliseconds: slow, so it does not fling), at most this many times. It moved when the cards' area
+# changed by this much (mean pixel difference). After a scroll, a band that starts above where the first card sits
+# runs under the list's top edge, its name hidden, unless it is a whole card below the list's header.
+SCROLL, SCROLL_MS, SCROLL_MAX, LIST_MOVED = (588, 640, 588, 240), 900, 10, 2.0
+LIST_AREA, LIST_EDGE, LIST_TOP = (slice(100, 720), slice(601, 1255)), 100, 117
 # A card's Supercell ID name, its bold first line: x, then y from the card's top, width and height. A card is tapped
 # in its empty middle, and only while its name still shows as it was read: the list at rest repeats pixel for pixel,
 # another name there differs by 15 and more (mean pixel difference).
@@ -100,21 +106,36 @@ def picks(config: dict, root, turns: tuple) -> dict:
     return found
 
 
-def cards(image: np.ndarray) -> list:
-    """(top, bottom) of the account cards, top to bottom: white bands across the card column, each a card high and
-    close after the last; the last may run off the bottom of the screen. A band of another height or a wider gap
-    ends them, so the log-in card under its heading is never one of them, and neither is anything on a list that
-    does not look as calibrated."""
+def bands(image: np.ndarray) -> list:
+    """(top, bottom) of every white band across the card column, top to bottom."""
     white = np.all(image[:, CARD_COLUMN[0]:CARD_COLUMN[1]] >= CARD_WHITE, axis=(1, 2))
     edges = np.flatnonzero(np.diff(np.concatenate(([False], white, [False])).astype(np.int8)))
+    return list(zip(edges[::2].tolist(), edges[1::2].tolist()))
+
+
+def cards(image: np.ndarray) -> list:
+    """(top, bottom) of the account cards, top to bottom: white bands across the card column, each a card high and
+    close after the last; the last may run off the bottom of the screen, and one cut by the list's top edge is passed
+    over. A band of another height or a wider gap ends them, so the log-in card under its heading is never one of
+    them, and neither is anything on a list that does not look as calibrated."""
     found = []
-    for top, bottom in zip(edges[::2].tolist(), edges[1::2].tolist()):
+    for top, bottom in bands(image):
+        if not found and top < LIST_TOP and (top < LIST_EDGE or bottom - top < CARD_HEIGHT[0]):
+            continue
         whole = CARD_HEIGHT[0] <= bottom - top <= CARD_HEIGHT[1]
-        cut = bottom == len(white) and CARD_CUT <= bottom - top < CARD_HEIGHT[0]
+        cut = bottom == image.shape[0] and CARD_CUT <= bottom - top < CARD_HEIGHT[0]
         if not (whole or cut) or (found and top - found[-1][1] > CARD_GAP):
             break
         found.append((top, bottom))
     return found
+
+
+def end_shown(image: np.ndarray) -> bool:
+    """The end of the list is on screen: the log-in card, a card high, further below the band above it than account
+    cards are apart."""
+    found = bands(image)
+    return any(CARD_HEIGHT[0] <= bottom - top <= CARD_HEIGHT[1] and top - above > CARD_GAP
+               for (_, above), (top, bottom) in zip(found, found[1:]))
 
 
 def same(read: str, name: str) -> bool:
@@ -123,13 +144,13 @@ def same(read: str, name: str) -> bool:
 
 
 def pick(image: np.ndarray, name: str, read) -> tuple:
-    """The one card whose name is that account; read(card) gives a card's name."""
+    """Of the cards on screen, the one whose name is that account, or None, and every name read; read(card) gives a
+    card's name. Two cards that read as that account choose neither."""
     names = [(card, read(card)) for card in cards(image)]
     matches = [card for card, text in names if same(text, name)]
-    if len(matches) != 1:
-        seen = ', '.join(text for _, text in names if text) or '-'
-        raise bot.BotError(f'Akun {name} tidak terbaca tepat satu kali di daftar akun ({seen}); tidak ada akun dipilih')
-    return matches[0]
+    if len(matches) > 1:
+        raise bot.BotError(f'Akun {name} terbaca lebih dari sekali di daftar akun; tidak ada akun dipilih')
+    return (matches[0] if matches else None), [text for _, text in names if text]
 
 
 def name_line(image: np.ndarray, card: tuple) -> np.ndarray:
@@ -205,9 +226,24 @@ def switch(runner: bot.Bot, name: str, tag: str) -> None:
     scanner.wait(listed, 'Daftar akun Supercell ID tidak terbuka; akun tidak diganti')
     image = scanner.settle()
     try:
-        if not listed(image):
-            raise bot.BotError('Daftar akun Supercell ID berubah; tidak ada akun dipilih')
-        card = pick(image, name, lambda row: card_name(image, row, program))
+        card, seen = None, []
+        for scrolled in range(SCROLL_MAX + 1):
+            if not listed(image):
+                raise bot.BotError('Daftar akun Supercell ID berubah; tidak ada akun dipilih')
+            card, names = pick(image, name, lambda row: card_name(image, row, program))
+            seen += [text for text in names if text not in seen]
+            if card or end_shown(image) or scrolled == SCROLL_MAX:
+                break
+            # More accounts further down: the list is scrolled with no finger on a card.
+            LOG.info('Akun %s belum terlihat; daftar akun digulir', name)
+            scanner.device.command('shell', 'input', 'swipe', *map(str, SCROLL), str(SCROLL_MS))
+            moved = scanner.settle()
+            if np.abs(moved[LIST_AREA].astype(np.int16) - image[LIST_AREA]).mean() < LIST_MOVED:
+                break
+            image = moved
+        if not card:
+            raise bot.BotError(f'Akun {name} tidak ada di daftar akun ({", ".join(seen) or "-"}); tidak ada akun '
+                               'dipilih')
         # Reading the names took a moment: the card is tapped only if the list is still the one they were read from.
         now = scanner.capture()
         moved = np.abs(name_line(now, card).astype(np.int16) - name_line(image, card)).mean()
